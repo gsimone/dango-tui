@@ -23,18 +23,18 @@ func TestStatusWordsKeepStatusColor(t *testing.T) {
 	}
 }
 
-func TestAdjacentLayerBallsUseDistinctLogoInks(t *testing.T) {
-	for n := 2; n <= 22; n++ {
-		prev := ""
-		for i := 0; i < n; i++ {
-			token := layerBallToken(i)
-			if !domain.IsLogoToken(token) {
-				t.Fatalf("layer %d token %q is not in the seven", i, token)
-			}
-			if i > 0 && token == prev {
-				t.Fatalf("adjacent visible balls share %s at %d/%d", token, i-1, i)
-			}
-			prev = token
+func TestLayerBallsUseStatusTokens(t *testing.T) {
+	auth := New(Options{StoryID: "mixed", Width: 120, Height: 30}).Stacks()[0]
+	want := []string{domain.Color("merged"), domain.Color("ready"), domain.Color("ciFailure")}
+	if len(auth.PRs) != 3 {
+		t.Fatalf("auth should have 3 layers, got %d", len(auth.PRs))
+	}
+	for i, pr := range auth.PRs {
+		if got := layerBallInk(pr); got != want[i] {
+			t.Fatalf("layer %d ink %s, want status %s", i, got, want[i])
+		}
+		if domain.IsLogoToken(domain.StateColorToken(domain.GetDisplayState(pr))) {
+			t.Fatalf("layer %d must not use a logo hue token", i)
 		}
 	}
 }

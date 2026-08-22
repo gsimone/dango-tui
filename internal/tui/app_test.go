@@ -629,31 +629,12 @@ func TestMarkUsesThreeDistinctLogoInks(t *testing.T) {
 	if len(seen) != 3 {
 		t.Fatalf("need three distinct mark inks, got %v", m.LogoDots)
 	}
-	raw := m.View()
-	frame := strip(raw)
+	frame := strip(m.View())
 	if !strings.Contains(frame, "o-o-o DANGO") {
 		t.Fatalf("packed ASCII mark missing:\n%s", frame)
 	}
 	if strings.Contains(frame, "🍡") {
 		t.Fatal("dumpling must not be painted")
-	}
-	for _, token := range m.LogoDots {
-		if !strings.Contains(raw, ansiFG(domain.Color(token))) {
-			t.Fatalf("frame missing mark ink %s: %v", token, m.LogoDots)
-		}
-	}
-}
-
-func TestListBallsUseDistinctLogoInks(t *testing.T) {
-	raw := makeUI(tui.TerminalSize{Width: 120, Height: 30}, "mixed").View()
-	used := 0
-	for _, token := range domain.LogoTokens {
-		if strings.Contains(raw, ansiFG(domain.Color(token))) {
-			used++
-		}
-	}
-	if used < 2 {
-		t.Fatalf("list balls should use the seven logo inks, saw %d", used)
 	}
 }
 

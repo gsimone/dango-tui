@@ -98,16 +98,8 @@ func (m Model) paintBrand(c *canvas, width int, surface, paper, meta, stick stri
 	c.text(PadX, PadTop+1, line2, meta, surface, innerWidth(width))
 }
 
-func layerBallToken(prIndex int) string {
-	n := len(domain.LogoTokens)
-	if n == 0 {
-		return "logoRed"
-	}
-	return domain.LogoTokens[prIndex%n]
-}
-
-func layerBallInk(prIndex int) string {
-	return domain.Color(layerBallToken(prIndex))
+func layerBallInk(pr domain.PullRequest) string {
+	return domain.Color(domain.StateColorToken(domain.GetDisplayState(pr)))
 }
 
 func (m Model) paintRule(c *canvas, top, bottom int, meta, surface string) {
@@ -271,7 +263,8 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 				c.text(x, y, "‹›", fg, rowBg, 2)
 				x += 2
 			} else if n <= 5 {
-				fg := layerBallInk(cell.pr)
+				pr := stack.PRs[cell.pr]
+				fg := layerBallInk(pr)
 				selected := selectedStack && cell.pr == sel.PRIndex
 				glyph := '○'
 				if selected {
@@ -280,7 +273,11 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 				c.set(x, y, glyph, fg, rowBg)
 				x++
 			} else {
-				fg := layerBallInk(cell.pr)
+				pr := stack.PRs[cell.pr]
+				fg := layerBallInk(pr)
+				if selectedStack && cell.pr == sel.PRIndex {
+					fg = paper
+				}
 				label := "(" + itoa(cell.pr+1) + ")"
 				c.text(x, y, label, fg, rowBg, displayWidth(label))
 				x += displayWidth(label)
