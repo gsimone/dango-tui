@@ -8,18 +8,29 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/gsimone/dango-tui/internal/cli"
 	"github.com/gsimone/dango-tui/internal/tui"
 )
 
 func main() {
-	frame := flag.String("frame", "", "print a fixture frame (WxH, e.g. 80x24) and exit")
-	story := flag.String("story", "", "fixture story id (pair, freight, chaos, mixed)")
-	flag.Parse()
+	args, err := cli.Parse(os.Args[1:])
+	if err == flag.ErrHelp {
+		fmt.Fprint(os.Stderr, helpText())
+		os.Exit(0)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "dango: %v\n", err)
+		os.Exit(2)
+	}
 
-	model := tui.New(tui.Options{StoryID: *story})
+	model := tui.New(tui.Options{
+		StoryID:  args.Story,
+		Repo:     args.Repo,
+		Provider: args.Provider,
+	})
 
-	if *frame != "" {
-		width, height, err := parseFrame(*frame)
+	if args.Frame != "" {
+		width, height, err := parseFrame(args.Frame)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "dango: %v\n", err)
 			os.Exit(2)
@@ -33,6 +44,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "dango: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func helpText() string {
+	return "Usage: dango --repo owner/name [--provider name@model]\n" +
+		"       dango -story mixed\n\n" +
+		"Live mode is flag-driven. Pass --repo (or -repo). No default repo.\n"
 }
 
 func parseFrame(spec string) (int, int, error) {

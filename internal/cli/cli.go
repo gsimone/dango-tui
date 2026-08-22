@@ -1,0 +1,104 @@
+package cli
+
+import (
+	"flag"
+	"fmt"
+	"io"
+	"net/url"
+	"strings"
+)
+
+// Args is the flag-driven launch config. Story forces fixtures. Repo fetches via gh.
+type Args struct {
+	Frame    string
+	Story    string
+	Repo     string
+	Provider Provider
+	NeedRepo bool
+}
+
+// Provider is --provider (example: codex@luna.medium). Stored for the existing
+// summary/codegen path. This is not a second provider system.
+type Provider struct {
+	Raw   string
+	Name  string
+	Model string
+}
+
+func ParseProvider(raw string) Provider {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return Provider{}
+	}
+	name, model, ok := strings.Cut(raw, "@")
+	if !ok {
+		return Provider{Raw: raw, Name: raw}
+	}
+	return Provider{Raw: raw, Name: strings.TrimSpace(name), Model: strings.TrimSpace(model)}
+}
+
+func Parse(args []string) (Args, error) {
+	return parse(args, io.Discard)
+}
+
+func parse(args []string, usage io.Writer) (Args, error) {
+	fs := flag.NewFlagSet("dango", flag.ContinueOnError)
+	fs.SetOutput(usage)
+	frame := fs.String("frame", "", "print one frame (WxH, e.g. 80x24) and exit")
+	story := fs.String("story", "", "fixture story id; ignores live fetch")
+	repo := fs.String("repo", "", "GitHub repo as owner/name; fetch live PRs via gh")
+	provider := fs.String("provider", "", "codegen provider (e.g. codex@luna.medium)")
+	fs.Usage = func() {
+		fmt.Fprintln(usage, "Usage: dango --repo owner/name [--provider name@model]")
+		fmt.Fprintln(usage, "       dango -story mixed")
+		fmt.Fprintln(usage, "")
+		fmt.Fprintln(usage, "Live mode is flag-driven. Pass --repo (or -repo). No default repo.")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return Args{}, err
+	}
+
+	out := Args{
+		Frame:    strings.TrimSpace(*frame),
+		Story:    strings.TrimSpace(*story),
+		Provider: ParseProvider(*provider),
+	}
+	if out.Story != "" {
+		return out, nil
+	}
+	if strings.TrimSpace(*repo) == "" {
+		out.NeedRepo = true
+		return out, nil
+	}
+	normalized, err := NormalizeRepo(*repo)
+	if err != nil {
+		return Args{}, err
+	}
+	out.Repo = normalized
+	return out, nil
+}
+
+func NormalizeRepo(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("pass --repo owner/name")
+	}
+	if strings.Contains(raw, "://") {
+		u, err := url.Parse(raw)
+		if err != nil || u.Path == "" {
+			return "", fmt.Errorf("repo must look like owner/name")
+		}
+		raw = strings.TrimPrefix(u.Path, "/")
+	}
+	raw = strings.TrimSuffix(raw, ".git")
+	raw = strings.TrimPrefix(raw, "github.com/")
+	parts := strings.Split(raw, "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", fmt.Errorf("repo must look like owner/name")
+	}
+	if strings.Contains(parts[0], " ") || strings.Contains(parts[1], " ") {
+		return "", fmt.Errorf("repo must look like owner/name")
+	}
+	return parts[0] + "/" + parts[1], nil
+}

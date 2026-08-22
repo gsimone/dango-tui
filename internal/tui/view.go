@@ -77,8 +77,6 @@ func (m Model) renderFrame(width, height int) string {
 	return c.render()
 }
 
-const repoSlug = "org/reponame"
-
 func (m Model) paintBrand(c *canvas, width int, surface, paper, meta, stick string) {
 	badge := m.fetchBadge()
 	c.text(width-PadX-displayWidth(badge), PadTop, badge, meta, surface, displayWidth(badge))
@@ -94,7 +92,7 @@ func (m Model) paintBrand(c *canvas, width int, surface, paper, meta, stick stri
 		x += 2
 	}
 	c.text(PadX+6, PadTop, "DANGO", paper, surface, displayWidth("DANGO"))
-	line2 := fmt.Sprintf("%s  •  %d stacks / %d layers", repoSlug, m.stackCount(), m.layerCount())
+	line2 := fmt.Sprintf("%s  •  %d stacks / %d layers", m.repoLabel(), m.stackCount(), m.layerCount())
 	c.text(PadX, PadTop+1, line2, meta, surface, innerWidth(width))
 }
 

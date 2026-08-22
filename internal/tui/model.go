@@ -6,14 +6,19 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gsimone/dango-tui/internal/app"
+	"github.com/gsimone/dango-tui/internal/cli"
 	"github.com/gsimone/dango-tui/internal/data"
 	"github.com/gsimone/dango-tui/internal/domain"
+	"github.com/gsimone/dango-tui/internal/live"
 )
 
 type Options struct {
-	StoryID string
-	Width   int
-	Height  int
+	StoryID  string
+	Repo     string
+	Provider cli.Provider
+	Width    int
+	Height   int
+	Fetch    live.FetchFunc
 }
 
 type Model struct {
@@ -26,7 +31,17 @@ type Model struct {
 	Fetching    bool
 	Fetched     string
 	feedbackSeq int
+	fetchSeq    int
 	LogoDots    [3]string
+	Repo        string
+	Provider    cli.Provider
+	Live        bool
+	NeedRepo    bool
+	stacks      []domain.Stack
+	cacheState  data.CacheState
+	fetchErr    error
+	fetchedAt   time.Time
+	fetch       live.FetchFunc
 }
 
 func New(opts Options) Model {
@@ -37,25 +52,57 @@ func New(opts Options) Model {
 	if height <= 0 {
 		height = 24
 	}
-	storyID := opts.StoryID
-	if storyID == "" {
-		storyID = "chaos"
+	m := Model{
+		Width:    width,
+		Height:   height,
+		State:    app.InitialState(),
+		LogoDots: domain.ProcessLogoDots(),
+		Provider: opts.Provider,
+		fetch:    opts.Fetch,
 	}
-	idx := 0
-	for i, story := range data.FixtureStories {
-		if story.ID == storyID {
-			idx = i
-			break
+	if m.fetch == nil {
+		m.fetch = live.Fetch
+	}
+
+	if opts.StoryID != "" {
+		idx := 0
+		for i, story := range data.FixtureStories {
+			if story.ID == opts.StoryID {
+				idx = i
+				break
+			}
 		}
+		story := data.FixtureStories[idx]
+		m.StoryIndex = idx
+		m.stacks = story.Stacks
+		m.cacheState = story.CacheState
+		m.Fetched = "last fetched 2 mins ago"
+		return m
 	}
-	return Model{
-		Width:      width,
-		Height:     height,
-		StoryIndex: idx,
-		State:      app.InitialState(),
-		Fetched:    "last fetched 2 mins ago",
-		LogoDots:   domain.ProcessLogoDots(),
+
+	if strings.TrimSpace(opts.Repo) == "" {
+		m.NeedRepo = true
+		return m
 	}
+
+	m.Live = true
+	m.Repo = strings.TrimSpace(opts.Repo)
+	m.loadLive()
+	return m
+}
+
+func (m *Model) loadLive() {
+	stacks, err := m.fetch(m.Repo)
+	m.fetchedAt = time.Now()
+	m.Fetched = relativeFetched(m.fetchedAt, m.fetchedAt)
+	if err != nil {
+		m.fetchErr = err
+		m.cacheState = data.CacheError
+		return
+	}
+	m.fetchErr = nil
+	m.stacks = stacks
+	m.cacheState = data.CacheCurrent
 }
 
 func (m Model) Init() tea.Cmd { return nil }
@@ -64,13 +111,43 @@ func (m Model) fetchBadge() string {
 	if m.Fetching {
 		return "⠋"
 	}
+	if m.NeedRepo {
+		return ""
+	}
 	if m.Fetched == "" {
 		return "last fetched 2 mins ago"
 	}
 	return m.Fetched
 }
 
+func relativeFetched(at, now time.Time) string {
+	if at.IsZero() {
+		return ""
+	}
+	mins := int(now.Sub(at).Minutes())
+	if mins <= 0 {
+		return "last fetched just now"
+	}
+	if mins == 1 {
+		return "last fetched 1 min ago"
+	}
+	return "last fetched " + itoa(mins) + " mins ago"
+}
+
+func (m Model) repoLabel() string {
+	if m.NeedRepo {
+		return "pass --repo owner/name"
+	}
+	if m.Live && m.Repo != "" {
+		return m.Repo
+	}
+	return "org/reponame"
+}
+
 func (m Model) Story() data.FixtureStory {
+	if m.Live || m.NeedRepo {
+		return data.FixtureStory{Stacks: m.stacks, CacheState: m.cacheState}
+	}
 	if m.StoryIndex < 0 || m.StoryIndex >= len(data.FixtureStories) {
 		return data.StoryByID("mixed")
 	}
@@ -78,7 +155,7 @@ func (m Model) Story() data.FixtureStory {
 }
 
 func (m Model) Stacks() []domain.Stack {
-	return app.FilterStacks(m.Story().Stacks, m.State.Query)
+	return app.FilterStacks(m.stacks, m.State.Query)
 }
 
 func (m Model) SelectedStack() (domain.Stack, bool) {
@@ -153,19 +230,31 @@ func (m Model) emptyMessage() string {
 	if strings.TrimSpace(m.State.Query) != "" {
 		return "No match."
 	}
-	if m.Story().CacheState == data.CacheError {
+	if m.NeedRepo {
+		return "Pass --repo owner/name to load live stacks."
+	}
+	if m.Live && m.fetchErr != nil {
+		return "Could not fetch " + m.Repo + "."
+	}
+	if m.cacheState == data.CacheError || m.Story().CacheState == data.CacheError {
+		if m.Live {
+			return "Refresh failed. No stacks are available."
+		}
 		return "Refresh failed in this fixture. No cached stacks are available."
+	}
+	if m.Live {
+		return "No open stacks in this repository."
 	}
 	return "No open stacks in this fixture repository."
 }
 
 func (m Model) stackCount() int {
-	return len(m.Story().Stacks)
+	return len(m.stacks)
 }
 
 func (m Model) layerCount() int {
 	n := 0
-	for _, stack := range m.Story().Stacks {
+	for _, stack := range m.stacks {
 		n += len(stack.PRs)
 	}
 	return n

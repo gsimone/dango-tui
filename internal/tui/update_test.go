@@ -5,12 +5,26 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gsimone/dango-tui/internal/domain"
 )
 
 var ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\x07]*(?:\x07|\x1b\\)`)
+
+func TestRelativeFetched(t *testing.T) {
+	at := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
+	if got := relativeFetched(at, at); got != "last fetched just now" {
+		t.Fatalf("just now: %q", got)
+	}
+	if got := relativeFetched(at, at.Add(time.Minute)); got != "last fetched 1 min ago" {
+		t.Fatalf("one min: %q", got)
+	}
+	if got := relativeFetched(at, at.Add(2*time.Minute)); got != "last fetched 2 mins ago" {
+		t.Fatalf("two mins: %q", got)
+	}
+}
 
 func TestStatusWordsKeepStatusColor(t *testing.T) {
 	auth := New(Options{StoryID: "mixed", Width: 120, Height: 30}).Stacks()[0]

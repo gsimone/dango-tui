@@ -6,9 +6,17 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gsimone/dango-tui/internal/app"
+	"github.com/gsimone/dango-tui/internal/data"
+	"github.com/gsimone/dango-tui/internal/domain"
 )
 
-type fetchDoneMsg struct{}
+type fetchDoneMsg struct {
+	stacks []domain.Stack
+	err    error
+	at     time.Time
+	token  int
+	live   bool
+}
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -25,9 +33,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	case fetchDoneMsg:
+		if msg.live && msg.token != m.fetchSeq {
+			return m, nil
+		}
 		m.Fetching = false
-		m.Fetched = "last fetched 2 mins ago"
 		m.State.Feedback = ""
+		if msg.live {
+			m.fetchedAt = msg.at
+			if msg.at.IsZero() {
+				m.fetchedAt = time.Now()
+			}
+			m.Fetched = relativeFetched(m.fetchedAt, time.Now())
+			if msg.err != nil {
+				m.fetchErr = msg.err
+				m.cacheState = data.CacheError
+			} else {
+				m.fetchErr = nil
+				m.stacks = msg.stacks
+				m.cacheState = data.CacheCurrent
+				m.clamp()
+			}
+		} else {
+			m.Fetched = "last fetched 2 mins ago"
+		}
 		return m, nil
 	case openResultMsg:
 		if strings.HasPrefix(m.State.Feedback, "Opening ") {
@@ -94,9 +122,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "a":
 		m.State.Feedback = "add · not wired"
 	case "r":
-		m.Fetching = true
-		m.State.Feedback = ""
-		return m, tea.Tick(400*time.Millisecond, func(time.Time) tea.Msg { return fetchDoneMsg{} })
+		return m.refresh()
 	case "/":
 		m.Help = false
 		m.State.Query = ""
@@ -117,6 +143,22 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m, nil
+}
+
+func (m Model) refresh() (tea.Model, tea.Cmd) {
+	m.Fetching = true
+	m.State.Feedback = ""
+	if !m.Live {
+		return m, tea.Tick(400*time.Millisecond, func(time.Time) tea.Msg { return fetchDoneMsg{} })
+	}
+	m.fetchSeq++
+	token := m.fetchSeq
+	repo := m.Repo
+	fetch := m.fetch
+	return m, func() tea.Msg {
+		stacks, err := fetch(repo)
+		return fetchDoneMsg{stacks: stacks, err: err, at: time.Now(), token: token, live: true}
+	}
 }
 
 func (m Model) handleMouse(msg tea.MouseMsg) Model {
