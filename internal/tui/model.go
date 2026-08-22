@@ -50,7 +50,7 @@ func New(opts Options) Model {
 		Height:     height,
 		StoryIndex: idx,
 		State:      app.InitialState(),
-		Fetched:    "20:42",
+		Fetched:    "last fetched 2 mins ago",
 	}
 }
 
@@ -61,7 +61,7 @@ func (m Model) fetchBadge() string {
 		return "⠋"
 	}
 	if m.Fetched == "" {
-		return "20:42"
+		return "last fetched 2 mins ago"
 	}
 	return m.Fetched
 }
