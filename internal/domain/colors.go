@@ -84,19 +84,18 @@ var OKLCHTokens = map[string]OKLCH{
 	"merged":        {0.65, 0.145, 305},
 	"success":       {0.76, 0.13, 145},
 	"warning":       {0.8, 0.14, 88},
-	"postcard":      {0.84, 0.045, 82},
-	"postcardInk":   {0.24, 0.03, 68},
-	"postcardMuted": {0.45, 0.028, 70},
-	"postcardEdge":  {0.58, 0.055, 72},
 }
 
 // ChromeHex locks the field, selected row, type, and connectors to the mark.
-// Status tokens are not listed here and keep their OKLCH hues.
+// Readable type is paper or meta only. Status tokens keep their OKLCH hues.
 var ChromeHex = map[string]string{
 	"surface":       "#14120f",
 	"surfaceRaised": "#242018",
-	"text":          "#efeae2",
-	"focus":         "#efeae2",
+	"paper":         "#f2ebe0",
+	"text":          "#f2ebe0",
+	"meta":          "#9a8f82",
+	"muted":         "#9a8f82",
+	"focus":         "#f2ebe0",
 	"stick":         "#8f8678",
 	"border":        "#8f8678",
 }

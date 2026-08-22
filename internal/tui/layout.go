@@ -14,13 +14,22 @@ type RowLayout struct {
 
 const (
 	RootPaddingX = 1
-	ListStartY   = 3
+	HeaderRows   = 2
+	AirRows      = 2
+	ListStartY   = HeaderRows + AirRows
 )
 
 func GetRowLayout(width int, prCount int) RowLayout {
+	return rowLayout(width, prCount, width <= 50)
+}
+
+func GetListRowLayout(listWidth, termWidth, prCount int) RowLayout {
+	return rowLayout(listWidth, prCount, termWidth <= 50)
+}
+
+func rowLayout(width int, prCount int, compact bool) RowLayout {
 	contentWidth := max(1, width-RootPaddingX*2)
 	ballsWidth := prCount * 2
-	compact := width <= 50
 	desiredName := 22
 	if compact {
 		desiredName = 14
@@ -35,8 +44,30 @@ func GetRowLayout(width int, prCount int) RowLayout {
 	}
 }
 
+func InspectorColumnWidth(width int) int {
+	if width <= 50 {
+		return max(14, min(16, max(1, width-2)/2))
+	}
+	if width >= 100 {
+		return min(48, max(40, width*38/100))
+	}
+	return max(36, min(40, width-42))
+}
+
+func ListTerminalWidth(termWidth int, inspectorWidth int) int {
+	if inspectorWidth <= 0 {
+		inspectorWidth = InspectorColumnWidth(termWidth)
+	}
+	left := termWidth - 1 - inspectorWidth
+	if left < 1 {
+		left = 1
+	}
+	return max(12, left-1)
+}
+
 func GetBallPoint(size TerminalSize, stackIndex, prIndex, prCount int) struct{ X, Y int } {
-	layout := GetRowLayout(size.Width, prCount)
+	listWidth := ListTerminalWidth(size.Width, InspectorColumnWidth(size.Width))
+	layout := GetListRowLayout(listWidth, size.Width, prCount)
 	return struct{ X, Y int }{
 		X: RootPaddingX + layout.NameWidth + 1 + prIndex*2,
 		Y: ListStartY + stackIndex,
@@ -51,67 +82,40 @@ type CardPlacement struct {
 	Compact bool
 }
 
-// GetInspectorSize is a stable inspector pane: alongside the list when there
-// is room, below it otherwise.
 func GetInspectorSize(size TerminalSize) CardPlacement {
-	compact := size.Width <= 50
-	width := max(16, size.Width-2)
-	if !compact && size.Width >= 100 {
-		width = min(48, max(40, size.Width*38/100))
+	width := InspectorColumnWidth(size.Width)
+	left := size.Width - 1 - width
+	if left < 1 {
+		left = 1
 	}
-	height := 9
-	if compact {
-		height = 8
+	return CardPlacement{
+		Left:    left,
+		Top:     ListStartY,
+		Width:   width,
+		Height:  max(3, size.Height-2-ListStartY),
+		Compact: size.Width <= 50,
 	}
-	return CardPlacement{Width: width, Height: height, Compact: compact}
 }
 
-// ClampCardPlacement keeps a sibling overlay inside the usable terminal,
-// clear of status/footer.
-func ClampCardPlacement(size TerminalSize, anchor struct{ X, Y int }) CardPlacement {
-	compact := size.Width <= 50
-	maxCard := 56
-	if compact {
-		maxCard = 38
+func ClampCardPlacement(size TerminalSize, _ struct{ X, Y int }) CardPlacement {
+	place := GetInspectorSize(size)
+	if place.Left < 1 {
+		place.Left = 1
 	}
-	cardWidth := max(16, min(maxCard, size.Width-2))
-	cardHeight := 9
-	if compact {
-		cardHeight = 8
-	}
-	maxLeft := max(1, size.Width-cardWidth-1)
-	usableBottom := max(1, size.Height-2)
-	below := anchor.Y + 1
-	top := below
-	if below+cardHeight > usableBottom {
-		top = max(1, anchor.Y-cardHeight)
-	}
-	place := CardPlacement{
-		Left:    min(max(1, anchor.X+2), maxLeft),
-		Top:     top,
-		Width:   cardWidth,
-		Height:  min(cardHeight, max(3, usableBottom-top)),
-		Compact: compact,
-	}
-	if place.Left+place.Width > size.Width-1 {
-		place.Width = max(16, size.Width-1-place.Left)
-	}
-	if place.Top+place.Height > usableBottom {
-		place.Height = max(3, usableBottom-place.Top)
+	if place.Left+place.Width > size.Width {
+		place.Width = max(1, size.Width-place.Left)
 	}
 	if place.Top < 1 {
 		place.Top = 1
+	}
+	if place.Top+place.Height > size.Height-2 {
+		place.Height = max(3, size.Height-2-place.Top)
 	}
 	return place
 }
 
 func IsWide(width int) bool    { return width >= 100 }
 func IsCompact(width int) bool { return width <= 50 }
-
-func ListTerminalWidth(termWidth int, _ int) int {
-	// The postcard overlays the field; do not reserve a chrome column.
-	return termWidth
-}
 
 func min(a, b int) int {
 	if a < b {

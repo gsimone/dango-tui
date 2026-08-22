@@ -29,67 +29,67 @@ func (m Model) renderFrame(width, height int) string {
 	}
 	surface := domain.Color("surface")
 	raised := domain.Color("surfaceRaised")
-	border := domain.Color("border")
-	text := domain.Color("text")
-	muted := domain.Color("muted")
-	focus := domain.Color("focus")
+	paper := domain.Color("paper")
+	meta := domain.Color("meta")
 	stick := domain.Color("stick")
 
 	c := newCanvas(width, height, surface)
-	compact := IsCompact(width)
-	listWidth := width
-
-	badge := "fixture"
-	title := m.title()
-	if !compact {
-		title = title + " / example/stacks"
-	}
+	insp := GetInspectorSize(TerminalSize{Width: width, Height: height})
+	listWidth := ListTerminalWidth(width, insp.Width)
 	inner := max(1, width-2)
-	c.text(1, 0, title, text, surface, inner-displayWidth(badge)-1)
-	c.text(width-1-displayWidth(badge), 0, badge, muted, surface, displayWidth(badge))
 
-	meta := fmt.Sprintf("%d stacks / %d layers · local deterministic data", m.stackCount(), m.layerCount())
-	c.text(1, 1, meta, muted, surface, inner)
-
-	col := "STACK · BASE → HEAD"
-	if !compact {
-		col = "STACK                         LAYERS · BASE → HEAD"
-	}
-	c.text(1, 2, col, border, surface, inner)
+	m.paintBrand(c, width, surface, meta, stick)
+	metaLine := fmt.Sprintf("%d stacks / %d layers · local deterministic data", m.stackCount(), m.layerCount())
+	c.text(1, 1, metaLine, meta, surface, inner)
+	// y=2 and y=3 stay empty: two blank rows of air.
 
 	statusY := height - 2
 	footerY := height - 1
-	mainTop := 3
+	mainTop := ListStartY
 	mainBottom := statusY
 	if mainBottom < mainTop {
 		mainBottom = mainTop
 	}
 
-	m.paintList(c, listWidth, mainTop, mainBottom, surface, raised, text, muted, stick)
-	m.paintPostcard(c)
+	m.paintList(c, listWidth, mainTop, mainBottom, surface, raised, paper, meta, stick)
+	m.paintInspectorPane(c, insp, surface, paper, meta)
 
 	if m.State.Searching {
 		c.fill(1, statusY, inner, 1, raised)
 		query := m.State.Query
 		placeholder := "filter stacks, PR titles, branches, numbers, author"
 		if query == "" {
-			c.text(1, statusY, placeholder, muted, raised, inner)
+			c.text(1, statusY, placeholder, meta, raised, inner)
 		} else {
-			c.text(1, statusY, query, text, raised, inner)
+			c.text(1, statusY, query, paper, raised, inner)
 		}
-		c.text(1, footerY, "type to filter  backspace edits  esc clears / exits", muted, surface, inner)
+		c.text(1, footerY, "type to filter  backspace edits  esc clears / exits", meta, surface, inner)
 	} else {
 		status := m.sourceState()
-		statusFg := muted
+		statusFg := meta
 		if m.State.Feedback != "" {
 			status = m.State.Feedback
-			statusFg = focus
+			statusFg = paper
 		}
 		c.text(1, statusY, status, statusFg, surface, inner)
-		c.text(1, footerY, m.footer(), muted, surface, inner)
+		c.text(1, footerY, m.footer(), meta, surface, inner)
 	}
 
 	return c.render()
+}
+
+func (m Model) paintBrand(c *canvas, width int, surface, meta, stick string) {
+	badge := "fixture"
+	c.text(width-1-displayWidth(badge), 0, badge, meta, surface, displayWidth(badge))
+	// Packed balls are the mark. Color only on the balls; no wordmark.
+	hues := []string{"ready", "open", "queued"}
+	for i, token := range hues {
+		x := 1 + i*2
+		c.set(x, 0, '○', domain.Color(token), surface)
+		if i < len(hues)-1 {
+			c.set(x+1, 0, '-', stick, surface)
+		}
+	}
 }
 
 func (m Model) footer() string {
@@ -110,10 +110,10 @@ func (m Model) footer() string {
 	return full
 }
 
-func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised, text, muted, stick string) {
+func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised, paper, meta, stick string) {
 	stacks := m.Stacks()
 	if len(stacks) == 0 {
-		c.text(1, top, m.emptyMessage(), muted, surface, max(1, listWidth-2))
+		c.text(1, top, m.emptyMessage(), meta, surface, max(1, listWidth-2))
 		return
 	}
 	sel := app.ClampSelection(m.State.Selection, stacks)
@@ -123,13 +123,13 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 			break
 		}
 		y := top + i
-		layout := GetRowLayout(listWidth, len(stack.PRs))
+		layout := GetListRowLayout(listWidth, m.Width, len(stack.PRs))
 		rowBg := surface
-		nameFg := muted
+		nameFg := meta
 		selectedStack := i == sel.StackIndex
 		if selectedStack {
 			rowBg = raised
-			nameFg = text
+			nameFg = paper
 			c.fill(1, y, max(1, listWidth-2), 1, rowBg)
 		}
 		marker := "· "
@@ -144,22 +144,25 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 			fg := domain.Color(domain.StateColorToken(state))
 			selected := selectedStack && prIndex == sel.PRIndex
 			glyph := '○'
-			bg := rowBg
 			if selected {
 				glyph = '●'
 			}
-			c.set(ballX+prIndex*2, y, glyph, fg, bg)
+			c.set(ballX+prIndex*2, y, glyph, fg, rowBg)
 			connector := '-'
 			if prIndex == len(stack.PRs)-1 {
 				connector = ' '
 			}
-			c.set(ballX+prIndex*2+1, y, connector, stick, bg)
+			c.set(ballX+prIndex*2+1, y, connector, stick, rowBg)
 		}
 
 		if !layout.Compact {
 			descX := ballX + layout.BallsWidth + 1
-			remain := max(0, (listWidth-1)-descX)
-			c.text(descX, y, clip(stackHealth(stack)+" · "+stack.Description, remain), muted, rowBg, remain)
+			remain := max(0, listWidth-1-descX)
+			descFg := meta
+			if selectedStack {
+				descFg = paper
+			}
+			c.text(descX, y, clip(stackHealth(stack)+" · "+stack.Description, remain), descFg, rowBg, remain)
 		}
 	}
 }
@@ -187,117 +190,53 @@ func stackHealth(stack domain.Stack) string {
 	}
 }
 
-func (m Model) postcardPlace() (CardPlacement, bool) {
-	anchor, ok := m.selectedBallAnchor()
-	if !ok {
-		return CardPlacement{}, false
+func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper, meta string) {
+	x, y, w, h := place.Left, place.Top, place.Width, place.Height
+	if w < 1 || h < 1 {
+		return
 	}
-	size := TerminalSize{Width: m.Width, Height: m.Height}
-	afterBalls := 0
-	for _, stack := range m.Stacks() {
-		layout := GetRowLayout(size.Width, len(stack.PRs))
-		edge := RootPaddingX + layout.NameWidth + 1 + layout.BallsWidth + 1
-		if edge > afterBalls {
-			afterBalls = edge
-		}
-	}
-	compact := IsCompact(size.Width)
-	cardWidth := max(16, min(func() int {
-		if compact {
-			return 38
-		}
-		return 56
-	}(), size.Width-2))
-	cardHeight := 9
-	if compact {
-		cardHeight = 8
-	}
-	usableBottom := max(1, size.Height-2)
-	listBottom := ListStartY + len(m.Stacks())
-
-	// Prefer a postcard on the field below the stacks so the ball chain stays intact.
-	if listBottom+cardHeight <= usableBottom {
-		return keepCardOnScreen(size, CardPlacement{Left: 1, Top: listBottom, Width: cardWidth, Height: cardHeight, Compact: compact}), true
-	}
-	if afterBalls+cardWidth <= size.Width-1 {
-		top := anchor.Y
-		if top+cardHeight > usableBottom {
-			top = max(1, usableBottom-cardHeight)
-		}
-		return keepCardOnScreen(size, CardPlacement{Left: afterBalls, Top: top, Width: cardWidth, Height: cardHeight, Compact: compact}), true
-	}
-	return ClampCardPlacement(size, anchor), true
-}
-
-func keepCardOnScreen(size TerminalSize, place CardPlacement) CardPlacement {
-	usableBottom := max(1, size.Height-2)
-	if place.Left < 1 {
-		place.Left = 1
-	}
-	if place.Left+place.Width > size.Width-1 {
-		place.Width = max(16, size.Width-1-place.Left)
-	}
-	if place.Top < 1 {
-		place.Top = 1
-	}
-	if place.Top+place.Height > usableBottom {
-		place.Height = max(3, usableBottom-place.Top)
-	}
-	return place
-}
-
-func (m Model) selectedBallAnchor() (struct{ X, Y int }, bool) {
-	stack, ok := m.SelectedStack()
-	if !ok {
-		return struct{ X, Y int }{}, false
-	}
-	sel := app.ClampSelection(m.State.Selection, m.Stacks())
-	return GetBallPoint(TerminalSize{Width: m.Width, Height: m.Height}, sel.StackIndex, sel.PRIndex, len(stack.PRs)), true
-}
-
-func (m Model) paintPostcard(c *canvas) {
+	c.fill(x, y, w, h, surface)
 	pr, ok := m.SelectedPR()
 	if !m.State.CardVisible || !ok {
 		return
 	}
-	place, ok := m.postcardPlace()
-	if !ok {
-		return
-	}
-	x, y, w, h := place.Left, place.Top, place.Width, place.Height
-	if w < 2 || h < 2 {
-		return
-	}
 
-	paper := domain.Color("postcard")
-	ink := domain.Color("postcardInk")
-	quiet := domain.Color("postcardMuted")
-	edge := domain.Color("postcardEdge")
-	c.box(x, y, w, h, edge, paper, ink)
-
-	maxLine := max(8, w-4)
+	maxLine := max(8, w)
 	state := domain.GetDisplayState(pr)
-	stateFg := domain.Color(domain.StateColorToken(state))
 	headline := domain.DisplayStateLabel[state] + " · " + domain.DisplayStateDetail(pr)
-	c.text(x+2, y+1, "#"+itoa(pr.Number)+" "+pr.Title, ink, paper, maxLine)
-	c.text(x+2, y+2, headline, stateFg, paper, maxLine)
+	c.text(x, y, "#"+itoa(pr.Number)+" "+pr.Title, paper, surface, maxLine)
+	if h < 2 {
+		return
+	}
+	c.text(x, y+1, headline, meta, surface, maxLine)
 
 	ci := ciLine(pr)
 	review := reviewLine(pr)
 	diff := fmt.Sprintf("+%d −%d · %d files", pr.Additions, pr.Deletions, pr.ChangedFiles)
 	hint := "o open"
 	if place.Compact {
-		c.text(x+2, y+3, ci+" · "+review, quiet, paper, maxLine)
-		c.text(x+2, y+4, diff, ink, paper, maxLine)
-		c.text(x+2, y+5, pr.Branch, quiet, paper, maxLine)
-		c.text(x+2, y+6, hint, ink, paper, maxLine)
+		if h > 2 {
+			c.text(x, y+2, ci+" · "+review, meta, surface, maxLine)
+		}
+		if h > 3 {
+			c.text(x, y+3, diff, meta, surface, maxLine)
+		}
+		if h > 4 {
+			c.text(x, y+4, pr.Branch, meta, surface, maxLine)
+		}
+		if h > 5 {
+			c.text(x, y+5, hint, meta, surface, maxLine)
+		}
 		return
 	}
-	c.text(x+2, y+3, ci, quiet, paper, maxLine)
-	c.text(x+2, y+4, review, quiet, paper, maxLine)
-	c.text(x+2, y+5, diff, ink, paper, maxLine)
-	c.text(x+2, y+6, pr.Branch, quiet, paper, maxLine)
-	c.text(x+2, y+7, hint, ink, paper, maxLine)
+	lines := []string{ci, review, diff, pr.Branch, hint}
+	for i, line := range lines {
+		row := y + 2 + i
+		if row >= y+h {
+			break
+		}
+		c.text(x, row, line, meta, surface, maxLine)
+	}
 }
 
 func ciLine(pr domain.PullRequest) string {
@@ -347,18 +286,16 @@ func (m Model) ballHit(x, y int) (stackIndex, prIndex int, ok bool) {
 	if len(stacks) == 0 {
 		return 0, 0, false
 	}
-	listWidth := ListTerminalWidth(m.Width, 0)
-	statusY := m.Height - 2
-	mainTop := ListStartY
-	if y < mainTop || y >= statusY {
+	listWidth := ListTerminalWidth(m.Width, InspectorColumnWidth(m.Width))
+	if y < ListStartY || y >= m.Height-2 || x >= listWidth {
 		return 0, 0, false
 	}
-	stackIndex = y - mainTop
+	stackIndex = y - ListStartY
 	if stackIndex < 0 || stackIndex >= len(stacks) {
 		return 0, 0, false
 	}
 	stack := stacks[stackIndex]
-	layout := GetRowLayout(listWidth, len(stack.PRs))
+	layout := GetListRowLayout(listWidth, m.Width, len(stack.PRs))
 	ballX := RootPaddingX + layout.NameWidth + 1
 	if x < ballX || x >= ballX+layout.BallsWidth {
 		return 0, 0, false

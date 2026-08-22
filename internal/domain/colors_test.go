@@ -62,7 +62,10 @@ func TestChromeHexLocks(t *testing.T) {
 	want := map[string]string{
 		"surface":       "#14120f",
 		"surfaceRaised": "#242018",
-		"text":          "#efeae2",
+		"paper":         "#f2ebe0",
+		"text":          "#f2ebe0",
+		"meta":          "#9a8f82",
+		"muted":         "#9a8f82",
 		"stick":         "#8f8678",
 	}
 	for name, hex := range want {
@@ -70,30 +73,16 @@ func TestChromeHexLocks(t *testing.T) {
 			t.Fatalf("%s: got %s want %s", name, got, hex)
 		}
 	}
+	if domain.Color("paper") == domain.Color("meta") {
+		t.Fatal("paper and meta must stay distinct")
+	}
+	if domain.Color("muted") != domain.Color("meta") {
+		t.Fatal("dim copy must be meta, not a third gray")
+	}
 	if _, ok := domain.ChromeHex["ready"]; ok {
 		t.Fatal("ready must not be chrome-locked")
 	}
 	if domain.Color("ready") == domain.Color("stick") {
 		t.Fatal("status color collided with connector")
-	}
-}
-
-func TestPostcardIsNotListGround(t *testing.T) {
-	if _, ok := domain.ChromeHex["postcard"]; ok {
-		t.Fatal("postcard must not be chrome-locked to the list field")
-	}
-	if domain.Color("postcard") == domain.Color("surface") {
-		t.Fatal("postcard fill must not match the list field")
-	}
-	if domain.Color("postcard") == domain.Color("surfaceRaised") {
-		t.Fatal("postcard fill must not match the selected-row lift")
-	}
-	if domain.Color("postcardInk") == domain.Color("text") {
-		t.Fatal("postcard ink should sit on paper, not cream-on-field type")
-	}
-	paper := domain.OKLCHTokens["postcard"]
-	field := domain.OKLCHTokens["surface"]
-	if paper[0] <= field[0]+0.4 {
-		t.Fatalf("postcard should be a lifted paper surface, lightness %v vs field %v", paper[0], field[0])
 	}
 }

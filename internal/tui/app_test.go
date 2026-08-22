@@ -19,13 +19,20 @@ func strip(s string) string {
 	return ansi.ReplaceAllString(s, "")
 }
 
-func ansiBG(hex string) string {
-	if len(hex) != 7 || hex[0] != '#' {
-		return ""
-	}
+func ansiRGB(hex string) (int, int, int) {
 	var r, g, b int
 	fmt.Sscanf(hex, "#%02x%02x%02x", &r, &g, &b)
+	return r, g, b
+}
+
+func ansiBG(hex string) string {
+	r, g, b := ansiRGB(hex)
 	return fmt.Sprintf("48;2;%d;%d;%d", r, g, b)
+}
+
+func ansiFG(hex string) string {
+	r, g, b := ansiRGB(hex)
+	return fmt.Sprintf("38;2;%d;%d;%d", r, g, b)
 }
 
 func makeUI(size tui.TerminalSize, storyID string) tui.Model {
@@ -95,13 +102,13 @@ func TestDeterministicFramesAtCanonicalSizes(t *testing.T) {
 	for _, size := range []tui.TerminalSize{{Width: 40, Height: 20}, {Width: 80, Height: 24}, {Width: 120, Height: 30}} {
 		m := makeUI(size, "mixed")
 		frame := frameOf(m)
-		if !strings.Contains(frame, "STACKS") {
-			t.Fatalf("%dx%d missing title:\n%s", size.Width, size.Height, frame)
+		if !strings.Contains(frame, "○-○-○") {
+			t.Fatalf("%dx%d missing brand mark:\n%s", size.Width, size.Height, frame)
 		}
 		if !strings.Contains(frame, "3 stacks / 8 layers") {
 			t.Fatalf("%dx%d missing story label:\n%s", size.Width, size.Height, frame)
 		}
-		if !strings.Contains(frame, "auth cleanup") {
+		if !strings.Contains(frame, "auth clean") {
 			t.Fatalf("%dx%d missing stack:\n%s", size.Width, size.Height, frame)
 		}
 		if !strings.Contains(frame, "●") {
@@ -115,7 +122,7 @@ func TestKeyboardAndHoverRevealTheSameInspector(t *testing.T) {
 	size := tui.TerminalSize{Width: 80, Height: 24}
 	m := applyKey(makeUI(size, "mixed"), key("right"))
 	keyboard := frameOf(m)
-	if !strings.Contains(keyboard, "#185 Keep service identity explicit") {
+	if !strings.Contains(keyboard, "#185 Keep service identity") {
 		t.Fatalf("keyboard inspector:\n%s", keyboard)
 	}
 	if !strings.Contains(keyboard, "○-●-○") {
@@ -126,7 +133,7 @@ func TestKeyboardAndHoverRevealTheSameInspector(t *testing.T) {
 	point := tui.GetBallPoint(size, 0, 1, len(first.PRs))
 	hovered, _ := makeUI(size, "mixed").Update(mouseMove(point.X, point.Y))
 	hover := frameOf(hovered.(tui.Model))
-	if !strings.Contains(hover, "#185 Keep service identity explicit") {
+	if !strings.Contains(hover, "#185 Keep service identity") {
 		t.Fatalf("hover inspector:\n%s", hover)
 	}
 	if !strings.Contains(hover, "ready to merge") {
@@ -137,12 +144,12 @@ func TestKeyboardAndHoverRevealTheSameInspector(t *testing.T) {
 func TestCompactCardAndHomeEnd(t *testing.T) {
 	size := tui.TerminalSize{Width: 40, Height: 20}
 	m := applyKey(applyKey(makeUI(size, "mixed"), key("down")), key("end"))
-	if !strings.Contains(frameOf(m), "#213 Prepare token migration") {
+	if !strings.Contains(frameOf(m), "#213 Prepare to") {
 		t.Fatalf("end of second stack:\n%s", frameOf(m))
 	}
 	m = applyKey(m, key("home"))
 	frame := frameOf(m)
-	if !strings.Contains(frame, "#211 Add token catalogue") {
+	if !strings.Contains(frame, "#211 Add token") {
 		t.Fatalf("home:\n%s", frame)
 	}
 	if !strings.Contains(frame, "o open") {
@@ -178,7 +185,7 @@ func TestLocalFilter(t *testing.T) {
 		m = applyKey(m, key(string(r)))
 	}
 	frame := frameOf(m)
-	if !strings.Contains(frame, "Add ontology tokens to email") {
+	if !strings.Contains(frame, "composer tokens") {
 		t.Fatalf("filtered stack missing:\n%s", frame)
 	}
 	if strings.Contains(frame, "Simplify authentication boundaries") {
@@ -192,11 +199,11 @@ func TestFixtureCacheAndEmptyStates(t *testing.T) {
 		t.Fatalf("stale:\n%s", stale)
 	}
 	empty := frameOf(makeUI(tui.TerminalSize{Width: 80, Height: 24}, "all-merged"))
-	if !strings.Contains(empty, "No open stacks in this fixture repository.") {
+	if !strings.Contains(empty, "No open stacks in this fixture") {
 		t.Fatalf("empty:\n%s", empty)
 	}
 	errFrame := frameOf(makeUI(tui.TerminalSize{Width: 80, Height: 24}, "ci-failing"))
-	if !strings.Contains(errFrame, "Refresh failed in this fixture. No cached stacks are available.") {
+	if !strings.Contains(errFrame, "Refresh failed in this fixture.") {
 		t.Fatalf("error empty:\n%s", errFrame)
 	}
 	if !strings.Contains(errFrame, "fixture refresh failed · no cached stacks") {
@@ -248,26 +255,19 @@ func TestResizeAndCardClamp(t *testing.T) {
 		next, _ := m.Update(tea.WindowSizeMsg{Width: size.Width, Height: size.Height})
 		m = next.(tui.Model)
 		frame := frameOf(m)
-		if !strings.Contains(frame, "STACKS") {
-			t.Fatalf("%dx%d missing title:\n%s", size.Width, size.Height, frame)
+		if !strings.Contains(frame, "○-○-○") {
+			t.Fatalf("%dx%d missing brand mark:\n%s", size.Width, size.Height, frame)
 		}
 		assertFits(t, frame, size.Width)
-		for _, anchor := range []struct{ X, Y int }{
-			{0, 0},
-			{size.Width - 1, 1},
-			{size.Width - 1, size.Height - 3},
-			{1, size.Height - 3},
-		} {
-			placement := tui.ClampCardPlacement(size, anchor)
-			if placement.Left < 1 || placement.Top < 1 {
-				t.Fatalf("placement underflow at %+v: %+v", anchor, placement)
-			}
-			if placement.Left+placement.Width > size.Width-1 {
-				t.Fatalf("placement overflows right at %+v: %+v", anchor, placement)
-			}
-			if placement.Top+placement.Height > size.Height-2 {
-				t.Fatalf("placement overflows bottom at %+v: %+v", anchor, placement)
-			}
+		placement := tui.GetInspectorSize(size)
+		if placement.Left < 1 || placement.Top < 1 {
+			t.Fatalf("inspector underflow at %dx%d: %+v", size.Width, size.Height, placement)
+		}
+		if placement.Left+placement.Width > size.Width-1 {
+			t.Fatalf("inspector overflows right at %dx%d: %+v", size.Width, size.Height, placement)
+		}
+		if placement.Top+placement.Height > size.Height-2 {
+			t.Fatalf("inspector overflows bottom at %dx%d: %+v", size.Width, size.Height, placement)
 		}
 	}
 	large := data.StoryByID("large-stack").Stacks[0]
@@ -302,45 +302,62 @@ func TestSimulatedActionsStayHonest(t *testing.T) {
 	}
 }
 
-func TestPostcardOverlaysAsACard(t *testing.T) {
-	m := makeUI(tui.TerminalSize{Width: 120, Height: 30}, "mixed")
+func TestInspectorIsARightColumn(t *testing.T) {
+	size := tui.TerminalSize{Width: 120, Height: 30}
+	m := makeUI(size, "mixed")
 	raw := m.View()
 	wide := strip(raw)
 	if !strings.Contains(wide, "#184 Split auth scope from session checks") {
-		t.Fatalf("postcard missing title:\n%s", wide)
+		t.Fatalf("inspector missing title:\n%s", wide)
 	}
-	if !strings.Contains(wide, "┌") || !strings.Contains(wide, "└") {
-		t.Fatalf("postcard should have card chrome:\n%s", wide)
+	if strings.Contains(wide, "┌") || strings.Contains(wide, "└") {
+		t.Fatalf("inspector must be a pane, not a postcard:\n%s", wide)
 	}
-	if !strings.Contains(wide, "○-○-○") {
-		t.Fatalf("postcard should sit off the packed balls, not cut them:\n%s", wide)
+	lines := strings.Split(wide, "\n")
+	if len(lines) < 6 {
+		t.Fatalf("short frame:\n%s", wide)
 	}
-	paperBG := ansiBG(domain.Color("postcard"))
+	if strings.TrimSpace(lines[2]) != "" || strings.TrimSpace(lines[3]) != "" {
+		t.Fatalf("expected two blank rows after the header:\n%s", wide)
+	}
+	place := tui.GetInspectorSize(size)
+	if place.Left < 60 {
+		t.Fatalf("inspector should be a right-hand column, left=%d", place.Left)
+	}
 	fieldBG := ansiBG(domain.Color("surface"))
-	if !strings.Contains(raw, paperBG) {
-		t.Fatalf("postcard paper fill missing from frame: %s", paperBG)
-	}
 	if !strings.Contains(raw, fieldBG) {
 		t.Fatalf("list field missing from frame: %s", fieldBG)
 	}
-	if paperBG == fieldBG {
-		t.Fatal("postcard and list share a background")
+	if strings.Contains(raw, ansiBG("#d9c8aa")) {
+		t.Fatal("tan postcard fill should be gone")
 	}
 }
 
-func TestHoverShowsPostcardWithoutClick(t *testing.T) {
+func TestHoverFillsBallAndShowsInspector(t *testing.T) {
 	size := tui.TerminalSize{Width: 80, Height: 24}
 	first := data.FixtureStories[0].Stacks[0]
 	point := tui.GetBallPoint(size, 0, 1, len(first.PRs))
 	m, _ := makeUI(size, "mixed").Update(mouseMove(point.X, point.Y))
 	frame := frameOf(m.(tui.Model))
-	if !strings.Contains(frame, "┌") {
-		t.Fatalf("hover should lift a postcard:\n%s", frame)
+	if strings.Contains(frame, "┌") {
+		t.Fatalf("hover must not drop a postcard on the list:\n%s", frame)
 	}
-	if !strings.Contains(frame, "#185 Keep service identity explicit") {
-		t.Fatalf("hover postcard:\n%s", frame)
+	if !strings.Contains(frame, "#185 Keep service identity") {
+		t.Fatalf("hover inspector:\n%s", frame)
 	}
 	if !strings.Contains(frame, "○-●-○") {
 		t.Fatalf("hover should fill the focused ball:\n%s", frame)
+	}
+}
+
+func TestTypeIsPaperOrMeta(t *testing.T) {
+	raw := makeUI(tui.TerminalSize{Width: 80, Height: 24}, "mixed").View()
+	paper := ansiFG(domain.Color("paper"))
+	meta := ansiFG(domain.Color("meta"))
+	if !strings.Contains(raw, paper) {
+		t.Fatal("selected row / head title must use paper ink")
+	}
+	if !strings.Contains(raw, meta) {
+		t.Fatal("dim copy must use meta")
 	}
 }
