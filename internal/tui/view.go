@@ -164,10 +164,10 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 			state := domain.GetDisplayState(pr)
 			fg := domain.Color(domain.StateColorToken(state))
 			selected := selectedStack && prIndex == sel.PRIndex
-			glyph := '●'
+			glyph := '○'
 			bg := rowBg
 			if selected {
-				glyph = '◉'
+				glyph = '●'
 			}
 			c.set(ballX+prIndex*2, y, glyph, fg, bg)
 			connector := '—'

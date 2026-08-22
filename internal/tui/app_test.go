@@ -107,7 +107,7 @@ func TestKeyboardAndHoverRevealTheSameInspector(t *testing.T) {
 	if !strings.Contains(keyboard, "#185 Keep service identity explicit") {
 		t.Fatalf("keyboard inspector:\n%s", keyboard)
 	}
-	if !strings.Contains(keyboard, "●—◉—●") {
+	if !strings.Contains(keyboard, "○—●—○") {
 		t.Fatalf("keyboard selection glyph:\n%s", keyboard)
 	}
 
@@ -215,7 +215,7 @@ func TestEightyColumnFooterAndFocus(t *testing.T) {
 	m := makeUI(tui.TerminalSize{Width: 80, Height: 24}, "mixed")
 	raw := m.View()
 	frame := strip(raw)
-	if !strings.Contains(frame, "◉") {
+	if !strings.Contains(frame, "●") {
 		t.Fatalf("focused layer:\n%s", frame)
 	}
 	if !strings.Contains(frame, "? help · q quit") {
