@@ -14,9 +14,6 @@ func TestParseRepoAndProvider(t *testing.T) {
 	if args.Repo != "gsimone/leva-2" {
 		t.Fatalf("repo %q", args.Repo)
 	}
-	if args.NeedRepo {
-		t.Fatal("repo was set")
-	}
 	if args.Provider.Raw != "codex@luna.medium" || args.Provider.Name != "codex" || args.Provider.Model != "luna.medium" {
 		t.Fatalf("provider %+v", args.Provider)
 	}
@@ -53,18 +50,28 @@ func TestParseStoryIgnoresRepo(t *testing.T) {
 	if args.Repo != "" {
 		t.Fatalf("story must ignore live repo, got %q", args.Repo)
 	}
-	if args.NeedRepo {
-		t.Fatal("story is not the empty path")
-	}
 }
 
-func TestParseNeitherAsksForRepo(t *testing.T) {
+func TestParseNeitherIsFixturePath(t *testing.T) {
 	args, err := Parse(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !args.NeedRepo || args.Repo != "" || args.Story != "" {
-		t.Fatalf("want empty/help, got %+v", args)
+	if args.Repo != "" || args.Story != "" {
+		t.Fatalf("no --repo means fixtures, got %+v", args)
+	}
+}
+
+func TestParseRepoDoesNotRequireProvider(t *testing.T) {
+	args, err := Parse([]string{"--repo", "owner/name"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if args.Repo != "owner/name" {
+		t.Fatalf("repo %q", args.Repo)
+	}
+	if args.Provider.Raw != "" {
+		t.Fatalf("provider must stay optional, got %+v", args.Provider)
 	}
 }
 

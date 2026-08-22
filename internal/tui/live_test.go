@@ -10,27 +10,24 @@ import (
 	"github.com/gsimone/dango-tui/internal/tui"
 )
 
-func TestNeedRepoAsksForFlag(t *testing.T) {
+func TestNoRepoUsesFixture(t *testing.T) {
 	m := tui.New(tui.Options{
 		Width:  80,
 		Height: 24,
 		Fetch: func(string) ([]domain.Stack, error) {
-			t.Fatal("empty path must not fetch")
+			t.Fatal("fixture path must not fetch")
 			return nil, nil
 		},
 	})
-	if !m.NeedRepo || m.Live {
-		t.Fatalf("want empty/help, live=%v need=%v", m.Live, m.NeedRepo)
+	if m.Live {
+		t.Fatal("no --repo is fixtures")
 	}
 	frame := frameOf(m)
-	if !strings.Contains(frame, "pass --repo owner/name") {
-		t.Fatalf("header should tell the user to pass --repo:\n%s", frame)
+	if !strings.Contains(frame, "org/reponame") {
+		t.Fatalf("fixture header slug:\n%s", frame)
 	}
-	if !strings.Contains(frame, "Pass --repo owner/name to load live stacks.") {
-		t.Fatalf("empty help:\n%s", frame)
-	}
-	if strings.Contains(frame, "org/reponame") {
-		t.Fatalf("do not invent a default repo:\n%s", frame)
+	if strings.Contains(frame, "pass --repo") {
+		t.Fatalf("no empty/help when fixtures load:\n%s", frame)
 	}
 }
 
@@ -45,7 +42,7 @@ func TestStoryIgnoresLiveFetch(t *testing.T) {
 			return nil, nil
 		},
 	})
-	if m.Live || m.NeedRepo {
+	if m.Live {
 		t.Fatal("story is fixture path")
 	}
 	frame := frameOf(m)
@@ -60,10 +57,9 @@ func TestStoryIgnoresLiveFetch(t *testing.T) {
 func TestLiveRepoHeaderAndTwoColumns(t *testing.T) {
 	fetches := 0
 	m := tui.New(tui.Options{
-		Repo:     "gsimone/leva-2",
-		Provider: cli.ParseProvider("codex@luna.medium"),
-		Width:    120,
-		Height:   30,
+		Repo:   "gsimone/leva-2",
+		Width:  120,
+		Height: 30,
 		Fetch: func(repo string) ([]domain.Stack, error) {
 			fetches++
 			if repo != "gsimone/leva-2" {
@@ -85,8 +81,8 @@ func TestLiveRepoHeaderAndTwoColumns(t *testing.T) {
 	if !m.Live || m.Repo != "gsimone/leva-2" {
 		t.Fatalf("live %+v repo %q", m.Live, m.Repo)
 	}
-	if m.Provider.Name != "codex" || m.Provider.Model != "luna.medium" {
-		t.Fatalf("provider %+v", m.Provider)
+	if m.Provider.Raw != "" {
+		t.Fatalf("provider is optional, got %+v", m.Provider)
 	}
 	frame := frameOf(m)
 	if !strings.Contains(frame, "gsimone/leva-2  •  1 stacks / 2 layers") {
@@ -131,6 +127,40 @@ func TestLiveRepoHeaderAndTwoColumns(t *testing.T) {
 	}
 	if !strings.Contains(frameOf(m), "last fetched just now") {
 		t.Fatalf("relative fetch:\n%s", frameOf(m))
+	}
+}
+
+func TestProviderIsStoredAndIgnoredOnScreen(t *testing.T) {
+	with := tui.New(tui.Options{
+		Repo:     "owner/name",
+		Provider: cli.ParseProvider("codex@luna.medium"),
+		Width:    80,
+		Height:   24,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{{
+				ID:   "s",
+				Name: "chain",
+				PRs:  []domain.PullRequest{{Number: 1, Title: "one", Branch: "a"}},
+			}}, nil
+		},
+	})
+	if with.Provider.Name != "codex" || with.Provider.Model != "luna.medium" {
+		t.Fatalf("store provider, got %+v", with.Provider)
+	}
+	plain := tui.New(tui.Options{
+		Repo:   "owner/name",
+		Width:  80,
+		Height: 24,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{{
+				ID:   "s",
+				Name: "chain",
+				PRs:  []domain.PullRequest{{Number: 1, Title: "one", Branch: "a"}},
+			}}, nil
+		},
+	})
+	if strip(with.View()) != strip(plain.View()) {
+		t.Fatal("provider must not change the frame")
 	}
 }
 

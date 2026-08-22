@@ -8,13 +8,12 @@ import (
 	"strings"
 )
 
-// Args is the flag-driven launch config. Story forces fixtures. Repo fetches via gh.
+// Args is the flag-driven launch config. --repo fetches via gh. No repo or -story is fixtures.
 type Args struct {
 	Frame    string
 	Story    string
 	Repo     string
 	Provider Provider
-	NeedRepo bool
 }
 
 // Provider is --provider (example: codex@luna.medium). Stored for the existing
@@ -50,9 +49,10 @@ func parse(args []string, usage io.Writer) (Args, error) {
 	provider := fs.String("provider", "", "codegen provider (e.g. codex@luna.medium)")
 	fs.Usage = func() {
 		fmt.Fprintln(usage, "Usage: dango --repo owner/name [--provider name@model]")
-		fmt.Fprintln(usage, "       dango -story mixed")
+		fmt.Fprintln(usage, "       dango [-story mixed]")
 		fmt.Fprintln(usage, "")
-		fmt.Fprintln(usage, "Live mode is flag-driven. Pass --repo (or -repo). No default repo.")
+		fmt.Fprintln(usage, "Live fetch requires --repo owner/name. No baked-in repo.")
+		fmt.Fprintln(usage, "--provider is optional and is not required to fetch.")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -68,7 +68,6 @@ func parse(args []string, usage io.Writer) (Args, error) {
 		return out, nil
 	}
 	if strings.TrimSpace(*repo) == "" {
-		out.NeedRepo = true
 		return out, nil
 	}
 	normalized, err := NormalizeRepo(*repo)

@@ -36,7 +36,6 @@ type Model struct {
 	Repo        string
 	Provider    cli.Provider
 	Live        bool
-	NeedRepo    bool
 	stacks      []domain.Stack
 	cacheState  data.CacheState
 	fetchErr    error
@@ -64,24 +63,8 @@ func New(opts Options) Model {
 		m.fetch = live.Fetch
 	}
 
-	if opts.StoryID != "" {
-		idx := 0
-		for i, story := range data.FixtureStories {
-			if story.ID == opts.StoryID {
-				idx = i
-				break
-			}
-		}
-		story := data.FixtureStories[idx]
-		m.StoryIndex = idx
-		m.stacks = story.Stacks
-		m.cacheState = story.CacheState
-		m.Fetched = "last fetched 2 mins ago"
-		return m
-	}
-
-	if strings.TrimSpace(opts.Repo) == "" {
-		m.NeedRepo = true
+	if opts.StoryID != "" || strings.TrimSpace(opts.Repo) == "" {
+		m.loadFixture(opts.StoryID)
 		return m
 	}
 
@@ -89,6 +72,24 @@ func New(opts Options) Model {
 	m.Repo = strings.TrimSpace(opts.Repo)
 	m.loadLive()
 	return m
+}
+
+func (m *Model) loadFixture(storyID string) {
+	if storyID == "" {
+		storyID = "chaos"
+	}
+	idx := 0
+	for i, story := range data.FixtureStories {
+		if story.ID == storyID {
+			idx = i
+			break
+		}
+	}
+	story := data.FixtureStories[idx]
+	m.StoryIndex = idx
+	m.stacks = story.Stacks
+	m.cacheState = story.CacheState
+	m.Fetched = "last fetched 2 mins ago"
 }
 
 func (m *Model) loadLive() {
@@ -111,9 +112,6 @@ func (m Model) fetchBadge() string {
 	if m.Fetching {
 		return "⠋"
 	}
-	if m.NeedRepo {
-		return ""
-	}
 	if m.Fetched == "" {
 		return "last fetched 2 mins ago"
 	}
@@ -135,9 +133,6 @@ func relativeFetched(at, now time.Time) string {
 }
 
 func (m Model) repoLabel() string {
-	if m.NeedRepo {
-		return "pass --repo owner/name"
-	}
 	if m.Live && m.Repo != "" {
 		return m.Repo
 	}
@@ -145,7 +140,7 @@ func (m Model) repoLabel() string {
 }
 
 func (m Model) Story() data.FixtureStory {
-	if m.Live || m.NeedRepo {
+	if m.Live {
 		return data.FixtureStory{Stacks: m.stacks, CacheState: m.cacheState}
 	}
 	if m.StoryIndex < 0 || m.StoryIndex >= len(data.FixtureStories) {
@@ -229,9 +224,6 @@ func (m Model) sourceState() string {
 func (m Model) emptyMessage() string {
 	if strings.TrimSpace(m.State.Query) != "" {
 		return "No match."
-	}
-	if m.NeedRepo {
-		return "Pass --repo owner/name to load live stacks."
 	}
 	if m.Live && m.fetchErr != nil {
 		return "Could not fetch " + m.Repo + "."
