@@ -96,6 +96,12 @@ func TestDeterministicFramesAtCanonicalSizes(t *testing.T) {
 		if !strings.Contains(frame, "●") {
 			t.Fatalf("%dx%d missing balls:\n%s", size.Width, size.Height, frame)
 		}
+		if strings.Contains(frame, "● - ") || strings.Contains(frame, " - ●") || strings.Contains(frame, "●—") {
+			t.Fatalf("%dx%d padded layer chain:\n%s", size.Width, size.Height, frame)
+		}
+		if !strings.Contains(frame, "◉-●") && !strings.Contains(frame, "●-●") && !strings.Contains(frame, "●-◉") {
+			t.Fatalf("%dx%d missing packed layer chain:\n%s", size.Width, size.Height, frame)
+		}
 		assertFits(t, frame, size.Width)
 	}
 }
@@ -107,7 +113,7 @@ func TestKeyboardAndHoverRevealTheSameInspector(t *testing.T) {
 	if !strings.Contains(keyboard, "#185 Keep service identity explicit") {
 		t.Fatalf("keyboard inspector:\n%s", keyboard)
 	}
-	if !strings.Contains(keyboard, "●—◉—●") {
+	if !strings.Contains(keyboard, "●-◉-●") {
 		t.Fatalf("keyboard selection glyph:\n%s", keyboard)
 	}
 
@@ -223,6 +229,9 @@ func TestEightyColumnFooterAndFocus(t *testing.T) {
 	}
 	if !strings.Contains(raw, "38;2;") {
 		t.Fatal("expected truecolor OKLCH palette in the fixture frame")
+	}
+	if strings.Contains(raw, "48;2;20;18;15") || strings.Contains(raw, "38;2;239;234;226") {
+		t.Fatal("cream/navy chrome should not paint over the terminal")
 	}
 }
 

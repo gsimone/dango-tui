@@ -15,9 +15,10 @@ func init() {
 }
 
 type cell struct {
-	r  rune
-	fg string
-	bg string
+	r       rune
+	fg      string
+	bg      string
+	reverse bool
 }
 
 type canvas struct {
@@ -56,17 +57,14 @@ func (c *canvas) set(x, y int, r rune, fg, bg string) {
 	if x < 0 || y < 0 || x >= c.width || y >= c.height {
 		return
 	}
-	cell := c.cells[y][x]
-	if r != 0 {
-		cell.r = r
+	c.cells[y][x] = cell{r: r, fg: fg, bg: bg}
+}
+
+func (c *canvas) setReverse(x, y int, r rune) {
+	if x < 0 || y < 0 || x >= c.width || y >= c.height {
+		return
 	}
-	if fg != "" {
-		cell.fg = fg
-	}
-	if bg != "" {
-		cell.bg = bg
-	}
-	c.cells[y][x] = cell
+	c.cells[y][x] = cell{r: r, reverse: true}
 }
 
 func (c *canvas) text(x, y int, value string, fg, bg string, maxWidth int) {
@@ -80,6 +78,21 @@ func (c *canvas) text(x, y int, value string, fg, bg string, maxWidth int) {
 			break
 		}
 		c.set(x+i, y, r, fg, bg)
+		i++
+	}
+}
+
+func (c *canvas) textReverse(x, y int, value string, maxWidth int) {
+	if maxWidth <= 0 || y < 0 || y >= c.height {
+		return
+	}
+	clipped := clip(value, maxWidth)
+	i := 0
+	for _, r := range clipped {
+		if i >= maxWidth || x+i >= c.width {
+			break
+		}
+		c.setReverse(x+i, y, r)
 		i++
 	}
 }
@@ -114,14 +127,23 @@ func (c *canvas) render() string {
 		for x < c.width {
 			cur := c.cells[y][x]
 			j := x + 1
-			for j < c.width && c.cells[y][j].fg == cur.fg && c.cells[y][j].bg == cur.bg {
+			for j < c.width && c.cells[y][j].fg == cur.fg && c.cells[y][j].bg == cur.bg && c.cells[y][j].reverse == cur.reverse {
 				j++
 			}
 			var text strings.Builder
 			for i := x; i < j; i++ {
 				text.WriteRune(c.cells[y][i].r)
 			}
-			style := lipgloss.NewStyle().Foreground(lipgloss.Color(cur.fg)).Background(lipgloss.Color(cur.bg))
+			style := lipgloss.NewStyle()
+			if cur.fg != "" {
+				style = style.Foreground(lipgloss.Color(cur.fg))
+			}
+			if cur.bg != "" {
+				style = style.Background(lipgloss.Color(cur.bg))
+			}
+			if cur.reverse {
+				style = style.Reverse(true)
+			}
 			b.WriteString(style.Render(text.String()))
 			x = j
 		}

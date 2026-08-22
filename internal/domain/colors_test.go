@@ -19,6 +19,9 @@ func TestOKLCHNeutralEndpoints(t *testing.T) {
 		t.Fatalf("ready hex %s", domain.OKLCHToHex(domain.OKLCHTokens["ready"]))
 	}
 	for name, value := range domain.TerminalColors {
+		if value == "" {
+			continue
+		}
 		if !hex.MatchString(value) {
 			t.Fatalf("%s is not a terminal hex color: %s", name, value)
 		}
@@ -58,22 +61,25 @@ func abs(v float64) float64 {
 	return v
 }
 
-func TestChromeHexLocks(t *testing.T) {
-	want := map[string]string{
-		"surface":       "#14120f",
-		"surfaceRaised": "#242018",
-		"text":          "#efeae2",
-		"stick":         "#8f8678",
-	}
-	for name, hex := range want {
-		if got := domain.Color(name); got != hex {
-			t.Fatalf("%s: got %s want %s", name, got, hex)
+func TestChromeInheritsTerminal(t *testing.T) {
+	for _, name := range []string{"surface", "surfaceRaised", "text", "focus"} {
+		if got := domain.Color(name); got != "" {
+			t.Fatalf("%s should inherit the terminal, got %s", name, got)
 		}
+	}
+	if got := domain.Color("muted"); got != "#808080" {
+		t.Fatalf("muted: got %s want #808080", got)
+	}
+	if got := domain.Color("stick"); got != "#808080" {
+		t.Fatalf("stick: got %s want #808080", got)
 	}
 	if _, ok := domain.ChromeHex["ready"]; ok {
 		t.Fatal("ready must not be chrome-locked")
 	}
 	if domain.Color("ready") == domain.Color("stick") {
 		t.Fatal("status color collided with connector")
+	}
+	if domain.Color("ready") == "#14120f" || domain.Color("text") == "#efeae2" {
+		t.Fatal("cream/navy chrome must not be painted")
 	}
 }

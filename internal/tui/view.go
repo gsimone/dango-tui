@@ -32,7 +32,6 @@ func (m Model) renderFrame(width, height int) string {
 	border := domain.Color("border")
 	text := domain.Color("text")
 	muted := domain.Color("muted")
-	focus := domain.Color("focus")
 	stick := domain.Color("stick")
 
 	c := newCanvas(width, height, surface)
@@ -47,7 +46,8 @@ func (m Model) renderFrame(width, height int) string {
 		title = title + " / example/stacks"
 	}
 	inner := max(1, width-2)
-	c.text(1, 0, title, focus, surface, inner-displayWidth(badge)-1)
+	titleX := paintHanami(c, 1, 0)
+	c.text(titleX, 0, title, text, surface, max(1, inner-displayWidth(badge)-1-(titleX-1)))
 	c.text(width-1-displayWidth(badge), 0, badge, muted, surface, displayWidth(badge))
 
 	meta := fmt.Sprintf("%d stacks / %d layers · local deterministic data", m.stackCount(), m.layerCount())
@@ -86,8 +86,8 @@ func (m Model) renderFrame(width, height int) string {
 		listBottom = inspY
 	}
 
-	m.paintList(c, listWidth, mainTop, listBottom, surface, raised, text, muted, stick)
-	m.paintInspector(c, inspX, inspY, inspW, inspH, insp.Compact, raised, focus, text, muted, surface)
+	m.paintList(c, listWidth, mainTop, listBottom, surface, text, muted, stick)
+	m.paintInspector(c, inspX, inspY, inspW, inspH, insp.Compact, raised, text, muted, surface)
 
 	if m.State.Searching {
 		c.fill(1, statusY, inner, 1, raised)
@@ -98,40 +98,122 @@ func (m Model) renderFrame(width, height int) string {
 		} else {
 			c.text(1, statusY, query, text, raised, inner)
 		}
-		c.text(1, footerY, "type to filter  backspace edits  esc clears / exits", muted, surface, inner)
+		m.paintSearchFooter(c, 1, footerY, inner, text, muted, surface)
 	} else {
 		status := m.sourceState()
 		statusFg := muted
 		if m.State.Feedback != "" {
 			status = m.State.Feedback
-			statusFg = focus
+			statusFg = text
 		}
 		c.text(1, statusY, status, statusFg, surface, inner)
-		c.text(1, footerY, m.footer(), muted, surface, inner)
+		m.paintFooter(c, 1, footerY, inner, text, muted, surface)
 	}
 
 	return c.render()
 }
 
-func (m Model) footer() string {
-	compact := IsCompact(m.Width)
-	if m.Help {
-		if compact {
-			return "enter go · o open · r sync · esc · q quit"
-		}
-		return "enter checkout · o open · r refresh · esc close · q quit"
-	}
-	full := "↑↓ stack  ←→ layer  enter checkout  o open  r refresh  / filter  esc close  ? help  q quit"
-	if compact {
-		return "↑↓ stack · ←→ layer · / find · ? help"
-	}
-	if m.Width <= 90 {
-		return "↑↓ stack · ←→ layer · enter checkout · / filter · ? help · q quit"
-	}
-	return full
+type helpItem struct {
+	key    string
+	action string
+	cta    bool
 }
 
-func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised, text, muted, stick string) {
+func (m Model) paintSearchFooter(c *canvas, x, y, maxWidth int, text, muted, surface string) {
+	paintHelp(c, x, y, maxWidth, "  ", []helpItem{
+		{key: "type", action: " to filter"},
+		{key: "backspace", action: " edits"},
+		{key: "esc", action: " clears / exits"},
+	}, text, muted, surface)
+}
+
+func (m Model) paintFooter(c *canvas, x, y, maxWidth int, text, muted, surface string) {
+	compact := IsCompact(m.Width)
+	sep := " · "
+	var items []helpItem
+	switch {
+	case m.Help && compact:
+		items = []helpItem{
+			{key: "enter", action: " go", cta: true},
+			{key: "o", action: " open"},
+			{key: "r", action: " sync"},
+			{key: "esc"},
+			{key: "q", action: " quit"},
+		}
+	case m.Help:
+		items = []helpItem{
+			{key: "enter", action: " checkout", cta: true},
+			{key: "o", action: " open"},
+			{key: "r", action: " refresh"},
+			{key: "esc", action: " close"},
+			{key: "q", action: " quit"},
+		}
+	case compact:
+		items = []helpItem{
+			{key: "↑↓", action: " stack"},
+			{key: "←→", action: " layer"},
+			{key: "/", action: " find"},
+			{key: "?", action: " help"},
+		}
+	case m.Width <= 90:
+		items = []helpItem{
+			{key: "↑↓", action: " stack"},
+			{key: "←→", action: " layer"},
+			{key: "enter", action: " checkout", cta: true},
+			{key: "/", action: " filter"},
+			{key: "?", action: " help"},
+			{key: "q", action: " quit"},
+		}
+	default:
+		sep = "  "
+		items = []helpItem{
+			{key: "↑↓", action: " stack"},
+			{key: "←→", action: " layer"},
+			{key: "enter", action: " checkout", cta: true},
+			{key: "o", action: " open"},
+			{key: "r", action: " refresh"},
+			{key: "/", action: " filter"},
+			{key: "esc", action: " close"},
+			{key: "?", action: " help"},
+			{key: "q", action: " quit"},
+		}
+	}
+	paintHelp(c, x, y, maxWidth, sep, items, text, muted, surface)
+}
+
+func paintHelp(c *canvas, x, y, maxWidth int, sep string, items []helpItem, text, muted, surface string) {
+	limit := x + maxWidth
+	for i, item := range items {
+		if x >= limit {
+			return
+		}
+		if i > 0 {
+			c.text(x, y, sep, muted, surface, limit-x)
+			x += displayWidth(sep)
+		}
+		token := item.key + item.action
+		if item.cta {
+			c.textReverse(x, y, token, limit-x)
+			x += displayWidth(clip(token, limit-x))
+			continue
+		}
+		c.text(x, y, item.key, text, surface, limit-x)
+		x += displayWidth(clip(item.key, limit-x))
+		if item.action != "" && x < limit {
+			c.text(x, y, item.action, muted, surface, limit-x)
+			x += displayWidth(clip(item.action, limit-x))
+		}
+	}
+}
+
+func paintHanami(c *canvas, x, y int) int {
+	for i, token := range []string{"ready", "queued", "merged"} {
+		c.set(x+i, y, '●', domain.Color(token), "")
+	}
+	return x + 4
+}
+
+func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, text, muted, stick string) {
 	stacks := m.Stacks()
 	if len(stacks) == 0 {
 		c.text(1, top, m.emptyMessage(), muted, surface, max(1, listWidth-2))
@@ -149,9 +231,7 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 		nameFg := muted
 		selectedStack := i == sel.StackIndex
 		if selectedStack {
-			rowBg = raised
 			nameFg = text
-			c.fill(1, y, max(1, listWidth-2), 1, rowBg)
 		}
 		marker := "· "
 		if selectedStack {
@@ -165,16 +245,15 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 			fg := domain.Color(domain.StateColorToken(state))
 			selected := selectedStack && prIndex == sel.PRIndex
 			glyph := '●'
-			bg := rowBg
 			if selected {
 				glyph = '◉'
 			}
-			c.set(ballX+prIndex*2, y, glyph, fg, bg)
-			connector := '—'
+			c.set(ballX+prIndex*2, y, glyph, fg, rowBg)
+			connector := '-'
 			if prIndex == len(stack.PRs)-1 {
 				connector = ' '
 			}
-			c.set(ballX+prIndex*2+1, y, connector, stick, bg)
+			c.set(ballX+prIndex*2+1, y, connector, stick, rowBg)
 		}
 
 		if !layout.Compact {
@@ -217,7 +296,7 @@ func stackHealth(stack domain.Stack) string {
 	}
 }
 
-func (m Model) paintInspector(c *canvas, x, y, w, h int, compact bool, raised, focus, text, muted, surface string) {
+func (m Model) paintInspector(c *canvas, x, y, w, h int, compact bool, raised, text, muted, surface string) {
 	if w < 1 || h < 1 {
 		return
 	}
@@ -234,30 +313,35 @@ func (m Model) paintInspector(c *canvas, x, y, w, h int, compact bool, raised, f
 
 	cardW := min(w, GetInspectorSize(TerminalSize{Width: m.Width, Height: m.Height}).Width)
 	cardH := min(h, GetInspectorSize(TerminalSize{Width: m.Width, Height: m.Height}).Height)
-	c.box(x, y, cardW, cardH, focus, raised, text)
+	c.box(x, y, cardW, cardH, domain.Color("border"), raised, text)
 	maxLine := max(8, cardW-4)
 	state := domain.GetDisplayState(pr)
-	stateFg := domain.Color(domain.StateColorToken(state))
 	headline := domain.DisplayStateLabel[state] + " · " + domain.DisplayStateDetail(pr)
 	c.text(x+2, y+1, "#"+itoa(pr.Number)+" "+pr.Title, text, raised, maxLine)
-	c.text(x+2, y+2, headline, stateFg, raised, maxLine)
+	c.text(x+2, y+2, headline, muted, raised, maxLine)
 
 	ci := ciLine(pr)
 	review := reviewLine(pr)
 	diff := fmt.Sprintf("+%d −%d · %d files", pr.Additions, pr.Deletions, pr.ChangedFiles)
-	hint := "click checkout · o open"
 	if compact {
 		c.text(x+2, y+3, ci+" · "+review, muted, raised, maxLine)
 		c.text(x+2, y+4, diff, text, raised, maxLine)
 		c.text(x+2, y+5, pr.Branch, muted, raised, maxLine)
-		c.text(x+2, y+6, hint, focus, raised, maxLine)
+		paintHint(c, x+2, y+6, maxLine, text, muted, raised)
 		return
 	}
 	c.text(x+2, y+3, ci, muted, raised, maxLine)
 	c.text(x+2, y+4, review, muted, raised, maxLine)
 	c.text(x+2, y+5, diff, text, raised, maxLine)
 	c.text(x+2, y+6, pr.Branch, muted, raised, maxLine)
-	c.text(x+2, y+7, hint, focus, raised, maxLine)
+	paintHint(c, x+2, y+7, maxLine, text, muted, raised)
+}
+
+func paintHint(c *canvas, x, y, maxWidth int, text, muted, surface string) {
+	paintHelp(c, x, y, maxWidth, " · ", []helpItem{
+		{key: "click", action: " checkout"},
+		{key: "o", action: " open"},
+	}, text, muted, surface)
 }
 
 func ciLine(pr domain.PullRequest) string {

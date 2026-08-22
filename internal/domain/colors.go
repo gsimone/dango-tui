@@ -67,7 +67,7 @@ func sprintfHex(r, g, b int) string {
 	return string(out[:])
 }
 
-// Status colors start life as an OKLCH triple. Chrome is hex-locked below.
+// Status colors start life as an OKLCH triple. Field and type inherit the terminal.
 var OKLCHTokens = map[string]OKLCH{
 	"surface":       {0.18, 0.025, 260},
 	"surfaceRaised": {0.235, 0.03, 260},
@@ -86,21 +86,24 @@ var OKLCHTokens = map[string]OKLCH{
 	"warning":       {0.8, 0.14, 88},
 }
 
-// ChromeHex locks the field, selected row, type, and connectors to the mark.
+// InheritChrome leaves the field and primary type to the terminal theme.
+var InheritChrome = []string{"surface", "surfaceRaised", "text", "focus"}
+
+// ChromeHex is the single mid-gray used for labels, meta, and connectors.
 // Status tokens are not listed here and keep their OKLCH hues.
 var ChromeHex = map[string]string{
-	"surface":       "#14120f",
-	"surfaceRaised": "#242018",
-	"text":          "#efeae2",
-	"focus":         "#efeae2",
-	"stick":         "#8f8678",
-	"border":        "#8f8678",
+	"muted":  "#808080",
+	"stick":  "#808080",
+	"border": "#808080",
 }
 
 var TerminalColors = func() map[string]string {
-	out := make(map[string]string, len(OKLCHTokens)+len(ChromeHex))
+	out := make(map[string]string, len(OKLCHTokens)+len(ChromeHex)+len(InheritChrome))
 	for name, token := range OKLCHTokens {
 		out[name] = OKLCHToHex(token)
+	}
+	for _, name := range InheritChrome {
+		out[name] = ""
 	}
 	for name, hex := range ChromeHex {
 		out[name] = hex
