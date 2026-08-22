@@ -174,8 +174,8 @@ func TestBallHitCellsCheckout(t *testing.T) {
 	if !strings.Contains(frameOf(m.(tui.Model)), "Checked out gm/stacks-186 · fixture simulation") {
 		t.Fatalf("head trailing cell click:\n%s", frameOf(m.(tui.Model)))
 	}
-	if tui.GetRowLayout(80, len(first.PRs)).BallsWidth != len(first.PRs)*2 {
-		t.Fatal("each layer should own two cells")
+	if tui.GetRowLayout(80, len(first.PRs)).BallsWidth != tui.BallColW {
+		t.Fatal("ball column should stay locked")
 	}
 }
 

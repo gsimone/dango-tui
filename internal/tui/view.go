@@ -122,17 +122,10 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 		return
 	}
 	sel := app.ClampSelection(m.State.Selection, stacks)
-	nameW := 8
-	for _, stack := range stacks {
-		n := displayWidth("· " + stack.Name)
-		if n > nameW {
-			nameW = n
-		}
-	}
-	statusW := 8
-	ballColW := 13
-	nameW = min(nameW, max(8, listWidth-statusW-ballColW-2))
-	statusX := PadX + nameW + 1 + ballColW + 1
+	layout := GetListRowLayout(listWidth, m.Width, 0)
+	nameW := layout.NameWidth
+	statusW := layout.StatusWidth
+	statusX := PadX + nameW + 1 + layout.BallsWidth + 1
 	start := m.listOrigin(len(stacks), sel.StackIndex, top, bottom)
 	y := top
 	for i := start; i < len(stacks); i++ {
@@ -185,7 +178,7 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 		if tail {
 			c.text(x, y, "...", meta, rowBg, 3)
 		}
-		remain := max(0, PadX+listWidth-statusX)
+		remain := min(statusW, max(0, PadX+listWidth-statusX))
 		if remain >= 4 {
 			c.text(statusX, y, clip(stackHealth(stack), remain), meta, rowBg, remain)
 		}
