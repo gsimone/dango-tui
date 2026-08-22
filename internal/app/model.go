@@ -36,15 +36,13 @@ func FilterStacks(stacks []domain.Stack, query string) []domain.Stack {
 	}
 	out := make([]domain.Stack, 0, len(stacks))
 	for _, stack := range stacks {
-		stackText := strings.ToLower(itoa(stack.Number) + " " + stack.Name + " " + stack.Description + " " + stack.BaseRef)
-		if strings.Contains(stackText, needle) {
+		if strings.Contains(strings.ToLower(stack.Name), needle) {
 			out = append(out, stack)
 			continue
 		}
 		matched := false
 		for _, pr := range stack.PRs {
-			prText := strings.ToLower(itoa(pr.Number) + " " + pr.Title + " " + pr.Branch + " " + pr.Author)
-			if strings.Contains(prText, needle) {
+			if strings.Contains(strings.ToLower(pr.Title), needle) {
 				matched = true
 				break
 			}

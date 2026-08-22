@@ -60,12 +60,11 @@ func (m Model) renderFrame(width, height int) string {
 	}
 
 	if m.State.Searching {
-		c.fill(PadX, footerY, inner, 1, raised)
 		query := m.State.Query
 		if query == "" {
-			c.text(PadX, footerY, "type to filter  backspace edits  esc clears / exits", meta, raised, inner)
+			c.text(PadX, footerY, "/", meta, surface, inner)
 		} else {
-			c.text(PadX, footerY, query, meta, raised, inner)
+			c.text(PadX, footerY, "/"+query, meta, surface, inner)
 		}
 	} else if m.State.Feedback != "" {
 		c.text(PadX, footerY, m.State.Feedback, meta, surface, inner)

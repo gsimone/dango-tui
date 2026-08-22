@@ -114,7 +114,7 @@ func (m Model) sourceState() string {
 
 func (m Model) emptyMessage() string {
 	if strings.TrimSpace(m.State.Query) != "" {
-		return "No fixture stack matches this filter."
+		return "No match."
 	}
 	if m.Story().CacheState == data.CacheError {
 		return "Refresh failed in this fixture. No cached stacks are available."

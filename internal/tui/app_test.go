@@ -217,8 +217,11 @@ func TestFixtureCacheAndEmptyStates(t *testing.T) {
 func TestSearchOwnsFooterAndQIsQuery(t *testing.T) {
 	m := applyKey(makeUI(tui.TerminalSize{Width: 80, Height: 24}, "mixed"), key("/"))
 	searching := frameOf(m)
-	if !strings.Contains(strings.Join(strings.Fields(searching), " "), "type to filter backspace edits esc clears / exits") {
-		t.Fatalf("search footer:\n%s", searching)
+	if !strings.Contains(searching, "/") {
+		t.Fatalf("search field:\n%s", searching)
+	}
+	if strings.Contains(searching, "type to filter") {
+		t.Fatalf("search should not be a help modal:\n%s", searching)
 	}
 	if strings.Contains(searching, "q quit") {
 		t.Fatalf("q quit leaked into search:\n%s", searching)
