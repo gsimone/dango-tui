@@ -35,13 +35,14 @@ func (m Model) renderFrame(width, height int) string {
 
 	c := newCanvas(width, height, surface)
 	insp := GetInspectorSize(TerminalSize{Width: width, Height: height})
-	listWidth := ListTerminalWidth(width, insp.Width)
-	inner := max(1, width-2)
+	listWidth := ListPaneWidth(width)
+	inner := innerWidth(width)
 
+	// y=0 is the one blank row at the top.
 	m.paintBrand(c, width, surface, meta, stick)
 	metaLine := fmt.Sprintf("%d stacks / %d layers · local deterministic data", m.stackCount(), m.layerCount())
-	c.text(1, 1, metaLine, meta, surface, inner)
-	// y=2 and y=3 stay empty: two blank rows of air.
+	c.text(PadX, PadTop+1, metaLine, meta, surface, inner)
+	// two blank rows of air before the list (y=3,4).
 
 	footerY := height - 1
 	mainTop := ListStartY
@@ -51,20 +52,21 @@ func (m Model) renderFrame(width, height int) string {
 	}
 
 	m.paintList(c, listWidth, mainTop, mainBottom, surface, raised, paper, meta, stick)
+	m.paintRule(c, mainTop, mainBottom, meta, surface)
 	m.paintInspectorPane(c, insp, surface, paper, meta)
 
 	if m.State.Searching {
-		c.fill(1, footerY, inner, 1, raised)
+		c.fill(PadX, footerY, inner, 1, raised)
 		query := m.State.Query
 		if query == "" {
-			c.text(1, footerY, "type to filter  backspace edits  esc clears / exits", meta, raised, inner)
+			c.text(PadX, footerY, "type to filter  backspace edits  esc clears / exits", meta, raised, inner)
 		} else {
-			c.text(1, footerY, query, meta, raised, inner)
+			c.text(PadX, footerY, query, meta, raised, inner)
 		}
 	} else if m.State.Feedback != "" {
-		c.text(1, footerY, m.State.Feedback, meta, surface, inner)
+		c.text(PadX, footerY, m.State.Feedback, meta, surface, inner)
 	} else {
-		c.text(1, footerY, m.footer(), meta, surface, inner)
+		c.text(PadX, footerY, m.footer(), meta, surface, inner)
 	}
 
 	return c.render()
@@ -72,15 +74,23 @@ func (m Model) renderFrame(width, height int) string {
 
 func (m Model) paintBrand(c *canvas, width int, surface, meta, stick string) {
 	badge := "fixture"
-	c.text(width-1-displayWidth(badge), 0, badge, meta, surface, displayWidth(badge))
-	// Packed balls are the mark. Color only on the balls; no wordmark.
+	c.text(width-PadX-displayWidth(badge), PadTop, badge, meta, surface, displayWidth(badge))
 	hues := []string{"ready", "open", "queued"}
+	x := PadX
 	for i, token := range hues {
-		x := 1 + i*2
-		c.set(x, 0, '○', domain.Color(token), surface)
+		c.set(x, PadTop, '●', domain.Color(token), surface)
 		if i < len(hues)-1 {
-			c.set(x+1, 0, '-', stick, surface)
+			c.set(x+1, PadTop, '-', stick, surface)
 		}
+		x += 2
+	}
+	c.text(PadX+6, PadTop, "DANGO", meta, surface, 5)
+}
+
+func (m Model) paintRule(c *canvas, top, bottom int, meta, surface string) {
+	x := RuleX(m.Width)
+	for y := top; y < bottom; y++ {
+		c.set(x, y, '│', meta, surface)
 	}
 }
 
@@ -104,7 +114,7 @@ func (m Model) footer() string {
 func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised, paper, meta, stick string) {
 	stacks := m.Stacks()
 	if len(stacks) == 0 {
-		c.text(1, top, m.emptyMessage(), meta, surface, max(1, listWidth-2))
+		c.text(PadX, top, m.emptyMessage(), meta, surface, max(1, listWidth))
 		return
 	}
 	sel := app.ClampSelection(m.State.Selection, stacks)
@@ -121,15 +131,15 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 		if selectedStack {
 			rowBg = raised
 			nameFg = paper
-			c.fill(1, y, max(1, listWidth-2), 1, rowBg)
+			c.fill(PadX, y, listWidth, 1, rowBg)
 		}
 		marker := "· "
 		if selectedStack {
 			marker = "▸ "
 		}
-		c.text(1, y, clip(marker+stack.Name, layout.NameWidth), nameFg, rowBg, layout.NameWidth)
+		c.text(PadX, y, clip(marker+stack.Name, layout.NameWidth), nameFg, rowBg, layout.NameWidth)
 
-		ballX := 1 + layout.NameWidth + 1
+		ballX := PadX + layout.NameWidth + 1
 		for prIndex, pr := range stack.PRs {
 			state := domain.GetDisplayState(pr)
 			fg := domain.Color(domain.StateColorToken(state))
@@ -148,7 +158,7 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 
 		if !layout.Compact {
 			descX := ballX + layout.BallsWidth + 1
-			remain := max(0, listWidth-1-descX)
+			remain := max(0, PadX+listWidth-descX)
 			c.text(descX, y, clip(stackHealth(stack)+" · "+stack.Description, remain), meta, rowBg, remain)
 		}
 	}
@@ -273,8 +283,8 @@ func (m Model) ballHit(x, y int) (stackIndex, prIndex int, ok bool) {
 	if len(stacks) == 0 {
 		return 0, 0, false
 	}
-	listWidth := ListTerminalWidth(m.Width, InspectorColumnWidth(m.Width))
-	if y < ListStartY || y >= m.Height-1 || x >= listWidth {
+	listWidth := ListPaneWidth(m.Width)
+	if y < ListStartY || y >= m.Height-1 || x < PadX || x >= PadX+listWidth {
 		return 0, 0, false
 	}
 	stackIndex = y - ListStartY
@@ -283,7 +293,7 @@ func (m Model) ballHit(x, y int) (stackIndex, prIndex int, ok bool) {
 	}
 	stack := stacks[stackIndex]
 	layout := GetListRowLayout(listWidth, m.Width, len(stack.PRs))
-	ballX := RootPaddingX + layout.NameWidth + 1
+	ballX := PadX + layout.NameWidth + 1
 	if x < ballX || x >= ballX+layout.BallsWidth {
 		return 0, 0, false
 	}

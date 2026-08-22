@@ -102,7 +102,7 @@ func TestDeterministicFramesAtCanonicalSizes(t *testing.T) {
 	for _, size := range []tui.TerminalSize{{Width: 40, Height: 20}, {Width: 80, Height: 24}, {Width: 120, Height: 30}} {
 		m := makeUI(size, "mixed")
 		frame := frameOf(m)
-		if !strings.Contains(frame, "○-○-○") {
+		if !strings.Contains(frame, "●-●-● DANGO") {
 			t.Fatalf("%dx%d missing brand mark:\n%s", size.Width, size.Height, frame)
 		}
 		if !strings.Contains(frame, "3 stacks / 8 layers") {
@@ -144,12 +144,12 @@ func TestKeyboardAndHoverRevealTheSameInspector(t *testing.T) {
 func TestCompactCardAndHomeEnd(t *testing.T) {
 	size := tui.TerminalSize{Width: 40, Height: 20}
 	m := applyKey(applyKey(makeUI(size, "mixed"), key("down")), key("end"))
-	if !strings.Contains(frameOf(m), "#213 Prepare to") {
+	if !strings.Contains(frameOf(m), "#213 Prepare") {
 		t.Fatalf("end of second stack:\n%s", frameOf(m))
 	}
 	m = applyKey(m, key("home"))
 	frame := frameOf(m)
-	if !strings.Contains(frame, "#211 Add token") {
+	if !strings.Contains(frame, "#211 Add") {
 		t.Fatalf("home:\n%s", frame)
 	}
 	if !strings.Contains(frame, "o open") {
@@ -261,18 +261,18 @@ func TestResizeAndCardClamp(t *testing.T) {
 		next, _ := m.Update(tea.WindowSizeMsg{Width: size.Width, Height: size.Height})
 		m = next.(tui.Model)
 		frame := frameOf(m)
-		if !strings.Contains(frame, "○-○-○") {
+		if !strings.Contains(frame, "●-●-● DANGO") {
 			t.Fatalf("%dx%d missing brand mark:\n%s", size.Width, size.Height, frame)
 		}
 		assertFits(t, frame, size.Width)
 		placement := tui.GetInspectorSize(size)
-		if placement.Left < 1 || placement.Top < 1 {
+		if placement.Left < tui.PadX || placement.Top < 1 {
 			t.Fatalf("inspector underflow at %dx%d: %+v", size.Width, size.Height, placement)
 		}
-		if placement.Left+placement.Width > size.Width-1 {
+		if placement.Left+placement.Width > size.Width-tui.PadX {
 			t.Fatalf("inspector overflows right at %dx%d: %+v", size.Width, size.Height, placement)
 		}
-		if placement.Top+placement.Height > size.Height-2 {
+		if placement.Top+placement.Height > size.Height-1 {
 			t.Fatalf("inspector overflows bottom at %dx%d: %+v", size.Width, size.Height, placement)
 		}
 	}
@@ -319,11 +319,17 @@ func TestInspectorIsARightColumn(t *testing.T) {
 	if strings.Contains(wide, "┌") || strings.Contains(wide, "└") {
 		t.Fatalf("inspector must be a pane, not a postcard:\n%s", wide)
 	}
+	if !strings.Contains(wide, "│") {
+		t.Fatalf("inspector pane needs one vertical rule:\n%s", wide)
+	}
 	lines := strings.Split(wide, "\n")
-	if len(lines) < 6 {
+	if len(lines) < 7 {
 		t.Fatalf("short frame:\n%s", wide)
 	}
-	if strings.TrimSpace(lines[2]) != "" || strings.TrimSpace(lines[3]) != "" {
+	if strings.TrimSpace(lines[0]) != "" {
+		t.Fatalf("expected one blank row at the top:\n%s", wide)
+	}
+	if strings.TrimSpace(lines[3]) != "" || strings.TrimSpace(lines[4]) != "" {
 		t.Fatalf("expected two blank rows after the header:\n%s", wide)
 	}
 	place := tui.GetInspectorSize(size)
