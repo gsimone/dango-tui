@@ -104,17 +104,17 @@ func (m Model) footer() string {
 	compact := IsCompact(m.Width)
 	if m.Help {
 		if compact {
-			return "↑↓ stack  enter  o  r  esc  q"
+			return "↑↓ stack  enter  o  .  r  esc  q"
 		}
-		return "↑↓ stack  enter checkout  o open  r refresh  esc  q"
+		return "↑↓ stack  enter checkout  o open  . copy  r refresh  esc  q"
 	}
 	if compact {
-		return "↑↓ stack  ←→ layer  /  ?  q"
+		return "↑↓ stack  ←→ layer  . copy  /  ?  q"
 	}
 	if m.Width <= 90 {
-		return "↑↓ stack  ←→ layer  enter checkout  o open  /  ?  q"
+		return "↑↓ stack  ←→ layer  enter checkout  o open  . copy  /  ?  q"
 	}
-	return "↑↓ stack  ←→ layer  enter checkout  o open  a add  r refresh  / filter  esc  ?  q"
+	return "↑↓ stack  ←→ layer  enter checkout  o open  . copy  a add  r refresh  / filter  esc  ?  q"
 }
 
 func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised, paper, meta, stick string) {
@@ -206,7 +206,6 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 		}
 	}
 }
-
 
 func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper, meta string) {
 	x, y, w, h := place.Left, place.Top, place.Width, place.Height

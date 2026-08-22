@@ -17,7 +17,7 @@ func (m *Model) open(pr domain.PullRequest) tea.Cmd {
 	m.State.CardVisible = true
 	if pr.URL == "" {
 		m.State.Feedback = "No URL on #" + itoa(pr.Number)
-		return nil
+		return m.clearFeedback()
 	}
 	m.State.Feedback = "Opening " + pr.URL
 	return openURLCmd(pr.URL)

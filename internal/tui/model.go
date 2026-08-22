@@ -2,6 +2,7 @@ package tui
 
 import (
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gsimone/dango-tui/internal/app"
@@ -16,14 +17,15 @@ type Options struct {
 }
 
 type Model struct {
-	Width      int
-	Height     int
-	StoryIndex int
-	State      app.State
-	Help       bool
-	quitting   bool
-	Fetching   bool
-	Fetched    string
+	Width       int
+	Height      int
+	StoryIndex  int
+	State       app.State
+	Help        bool
+	quitting    bool
+	Fetching    bool
+	Fetched     string
+	feedbackSeq int
 }
 
 func New(opts Options) Model {
@@ -108,6 +110,26 @@ func (m *Model) choose(next app.Selection, reveal bool) {
 func (m *Model) checkout(pr domain.PullRequest) {
 	m.State.Feedback = "Checked out " + pr.Branch + " · fixture simulation"
 	m.State.CardVisible = true
+}
+
+type clearFeedbackMsg struct{ token int }
+
+func (m *Model) copyBranch(pr domain.PullRequest) tea.Cmd {
+	if pr.Branch == "" {
+		m.State.Feedback = "No branch on #" + itoa(pr.Number)
+		return m.clearFeedback()
+	}
+	copyText(pr.Branch)
+	m.State.Feedback = "Copied " + pr.Branch
+	return m.clearFeedback()
+}
+
+func (m *Model) clearFeedback() tea.Cmd {
+	m.feedbackSeq++
+	token := m.feedbackSeq
+	return tea.Tick(900*time.Millisecond, func(time.Time) tea.Msg {
+		return clearFeedbackMsg{token: token}
+	})
 }
 
 func (m *Model) clamp() {

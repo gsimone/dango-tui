@@ -155,7 +155,7 @@ func TestCompactCardAndHomeEnd(t *testing.T) {
 	if !strings.Contains(frame, "o open") {
 		t.Fatalf("compact card hint:\n%s", frame)
 	}
-	if !strings.Contains(frame, "↑↓ stack  ←→ layer  /  ?  q") {
+	if !strings.Contains(frame, "↑↓ stack  ←→ layer  . copy  /  ?  q") {
 		t.Fatalf("compact footer:\n%s", frame)
 	}
 	assertFits(t, frame, 40)
@@ -242,7 +242,7 @@ func TestEightyColumnFooterAndFocus(t *testing.T) {
 	if !strings.Contains(frame, "●") {
 		t.Fatalf("focused layer:\n%s", frame)
 	}
-	if !strings.Contains(frame, "↑↓ stack  ←→ layer") {
+	if !strings.Contains(frame, "↑↓ stack  ←→ layer  enter checkout  o open  . copy") {
 		t.Fatalf("80-col footer should be a key strip:\n%s", frame)
 	}
 	if strings.Contains(frame, "fixture cache ·") || strings.Contains(frame, " · ") && strings.Contains(frame, "q quit") {

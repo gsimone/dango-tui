@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -29,8 +30,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.State.Feedback = ""
 		return m, nil
 	case openResultMsg:
-		if msg.err != nil {
-			m.State.Feedback = "Could not open " + msg.url
+		if strings.HasPrefix(m.State.Feedback, "Opening ") {
+			m.State.Feedback = ""
+		}
+		return m, nil
+	case clearFeedbackMsg:
+		if msg.token == m.feedbackSeq {
+			m.State.Feedback = ""
 		}
 		return m, nil
 	}
@@ -84,6 +90,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "o":
 		if pr, ok := m.SelectedPR(); ok {
 			return m, m.open(pr)
+		}
+	case ".":
+		if pr, ok := m.SelectedPR(); ok {
+			return m, m.copyBranch(pr)
 		}
 	case "a":
 		m.State.Feedback = "add · not wired"
