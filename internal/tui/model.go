@@ -26,6 +26,7 @@ type Model struct {
 	Fetching    bool
 	Fetched     string
 	feedbackSeq int
+	LogoDots    [3]string
 }
 
 func New(opts Options) Model {
@@ -53,6 +54,7 @@ func New(opts Options) Model {
 		StoryIndex: idx,
 		State:      app.InitialState(),
 		Fetched:    "last fetched 2 mins ago",
+		LogoDots:   domain.ProcessLogoDots(),
 	}
 }
 

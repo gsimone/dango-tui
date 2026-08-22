@@ -558,6 +558,33 @@ func TestStackedCardIsInsetBox(t *testing.T) {
 	}
 }
 
+func TestBrandDotsUseDistinctLogoTokens(t *testing.T) {
+	m := makeUI(tui.TerminalSize{Width: 80, Height: 24}, "mixed")
+	seen := map[string]bool{}
+	for _, token := range m.LogoDots {
+		if !domain.IsLogoToken(token) {
+			t.Fatalf("brand dot %q is not in the seven", token)
+		}
+		if seen[token] {
+			t.Fatalf("brand dots are not distinct: %v", m.LogoDots)
+		}
+		seen[token] = true
+	}
+	if len(seen) != 3 {
+		t.Fatalf("need three distinct logo dots, got %v", m.LogoDots)
+	}
+	raw := m.View()
+	for _, token := range m.LogoDots {
+		if !strings.Contains(raw, ansiFG(domain.Color(token))) {
+			t.Fatalf("frame missing logo ink %s: %v", token, m.LogoDots)
+		}
+	}
+	again := makeUI(tui.TerminalSize{Width: 120, Height: 30}, "freight")
+	if again.LogoDots != m.LogoDots {
+		t.Fatalf("logo dots must be picked once per process: %v vs %v", m.LogoDots, again.LogoDots)
+	}
+}
+
 func TestFooterHasNoEnter(t *testing.T) {
 	for _, size := range []tui.TerminalSize{{Width: 40, Height: 20}, {Width: 80, Height: 24}, {Width: 120, Height: 30}} {
 		frame := frameOf(makeUI(size, "mixed"))

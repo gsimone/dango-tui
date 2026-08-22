@@ -86,3 +86,68 @@ func TestChromeHexLocks(t *testing.T) {
 		t.Fatal("status color collided with connector")
 	}
 }
+
+func TestLogoTokensExact(t *testing.T) {
+	want := map[string]domain.OKLCH{
+		"logoRed":    {0.63, 0.22, 25},
+		"logoOrange": {0.72, 0.18, 55},
+		"logoYellow": {0.85, 0.16, 95},
+		"logoGreen":  {0.72, 0.18, 145},
+		"logoBlue":   {0.62, 0.16, 250},
+		"logoPurple": {0.60, 0.20, 310},
+		"logoPink":   {0.70, 0.18, 350},
+	}
+	if len(domain.LogoTokens) != 7 {
+		t.Fatalf("logo set must be seven tokens, got %d", len(domain.LogoTokens))
+	}
+	for name, token := range want {
+		got, ok := domain.OKLCHTokens[name]
+		if !ok {
+			t.Fatalf("missing %s", name)
+		}
+		if got != token {
+			t.Fatalf("%s: got %v want %v", name, got, token)
+		}
+		if _, locked := domain.ChromeHex[name]; locked {
+			t.Fatalf("%s must stay OKLCH, not chrome-locked", name)
+		}
+		if !domain.IsLogoToken(name) {
+			t.Fatalf("%s should be in the logo set", name)
+		}
+	}
+}
+
+func TestPickLogoDotsAreDistinct(t *testing.T) {
+	seq := 0
+	intn := func(n int) int {
+		seq++
+		if n < 1 {
+			return 0
+		}
+		return seq % n
+	}
+	for i := 0; i < 64; i++ {
+		got := domain.PickLogoDots(intn)
+		seen := map[string]bool{}
+		for _, token := range got {
+			if !domain.IsLogoToken(token) {
+				t.Fatalf("picked %q which is not in the seven", token)
+			}
+			if seen[token] {
+				t.Fatalf("replacement: %v", got)
+			}
+			seen[token] = true
+		}
+		if len(seen) != 3 {
+			t.Fatalf("need three distinct, got %v", got)
+		}
+	}
+	process := domain.ProcessLogoDots()
+	seen := map[string]bool{}
+	for _, token := range process {
+		if !domain.IsLogoToken(token) || seen[token] {
+			t.Fatalf("process logo dots must be three distinct from the seven: %v", process)
+		}
+		seen[token] = true
+	}
+}

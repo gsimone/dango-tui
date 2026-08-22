@@ -82,9 +82,12 @@ func (m Model) renderFrame(width, height int) string {
 func (m Model) paintBrand(c *canvas, width int, surface, meta, stick string) {
 	badge := m.fetchBadge()
 	c.text(width-PadX-displayWidth(badge), PadTop, badge, meta, surface, displayWidth(badge))
-	hues := []string{"ready", "open", "queued"}
+	hues := m.LogoDots
 	x := PadX
 	for i, token := range hues {
+		if token == "" {
+			token = domain.LogoTokens[i]
+		}
 		c.set(x, PadTop, '●', domain.Color(token), surface)
 		if i < len(hues)-1 {
 			c.set(x+1, PadTop, '-', stick, surface)

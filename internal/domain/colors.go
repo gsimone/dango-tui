@@ -1,6 +1,10 @@
 package domain
 
-import "math"
+import (
+	"math"
+	"math/rand/v2"
+	"sync"
+)
 
 type OKLCH [3]float64
 
@@ -84,6 +88,18 @@ var OKLCHTokens = map[string]OKLCH{
 	"merged":        {0.65, 0.145, 305},
 	"success":       {0.76, 0.13, 145},
 	"warning":       {0.8, 0.14, 88},
+	"logoRed":       {0.63, 0.22, 25},
+	"logoOrange":    {0.72, 0.18, 55},
+	"logoYellow":    {0.85, 0.16, 95},
+	"logoGreen":     {0.72, 0.18, 145},
+	"logoBlue":      {0.62, 0.16, 250},
+	"logoPurple":    {0.60, 0.20, 310},
+	"logoPink":      {0.70, 0.18, 350},
+}
+
+// LogoTokens is the seven-dot palette. List status mapping does not use these.
+var LogoTokens = []string{
+	"logoRed", "logoOrange", "logoYellow", "logoGreen", "logoBlue", "logoPurple", "logoPink",
 }
 
 // ChromeHex locks the field, selected row, type, and connectors to the mark.
@@ -116,4 +132,45 @@ func Color(token string) string {
 		return hex
 	}
 	return "#ffffff"
+}
+
+func IsLogoToken(name string) bool {
+	for _, token := range LogoTokens {
+		if token == name {
+			return true
+		}
+	}
+	return false
+}
+
+func PickLogoDots(intn func(int) int) [3]string {
+	if intn == nil {
+		intn = rand.IntN
+	}
+	pool := append([]string(nil), LogoTokens...)
+	var out [3]string
+	for i := 0; i < 3; i++ {
+		j := intn(len(pool))
+		if j < 0 {
+			j = 0
+		}
+		if j >= len(pool) {
+			j = len(pool) - 1
+		}
+		out[i] = pool[j]
+		pool = append(pool[:j], pool[j+1:]...)
+	}
+	return out
+}
+
+var (
+	processLogo     [3]string
+	processLogoOnce sync.Once
+)
+
+func ProcessLogoDots() [3]string {
+	processLogoOnce.Do(func() {
+		processLogo = PickLogoDots(rand.IntN)
+	})
+	return processLogo
 }
