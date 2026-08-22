@@ -377,8 +377,14 @@ func TestInspectorIsLabeledRows(t *testing.T) {
 	}
 	lines := strings.Split(frame, "\n")
 	titleAt := -1
+	pane := func(line string) string {
+		if idx := strings.Index(line, "│"); idx >= 0 {
+			return line[idx+len("│"):]
+		}
+		return line
+	}
 	for i, line := range lines {
-		if strings.Contains(line, "#184 Split auth scope from session checks") {
+		if strings.Contains(pane(line), "#184 Split auth scope from session checks") {
 			titleAt = i
 			break
 		}
@@ -386,10 +392,10 @@ func TestInspectorIsLabeledRows(t *testing.T) {
 	if titleAt < 0 || titleAt+2 >= len(lines) {
 		t.Fatalf("title row missing:\n%s", frame)
 	}
-	if strings.TrimSpace(lines[titleAt+1]) != "" {
+	if strings.TrimSpace(pane(lines[titleAt+1])) != "" {
 		t.Fatalf("expected one blank row under the title:\n%s", frame)
 	}
-	if !strings.Contains(lines[titleAt+2], "status") {
+	if !strings.Contains(pane(lines[titleAt+2]), "status") {
 		t.Fatalf("first fact should be status:\n%s", frame)
 	}
 	if strings.Contains(frame, "┌") || strings.Contains(frame, "└") {
