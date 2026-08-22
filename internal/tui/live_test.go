@@ -90,6 +90,9 @@ func TestLiveRepoHeaderAndTwoColumns(t *testing.T) {
 	if !strings.Contains(frame, "○") {
 		t.Fatalf("list:\n%s", frame)
 	}
+	if !strings.Contains(strings.Join(listRows(frame), "\n"), "base") {
+		t.Fatalf("list paints the gh name first:\n%s", frame)
+	}
 	if strings.Contains(frame, "base and head") {
 		t.Fatalf("missing provider must not invent a stack title:\n%s", frame)
 	}
@@ -144,8 +147,15 @@ func TestProviderWritesStackTitleOnly(t *testing.T) {
 		t.Fatal("provider must kick summary cmds after first paint")
 	}
 	first := listRows(frameOf(with))
-	if strings.Contains(strings.Join(first, "\n"), "alpha layer") {
-		t.Fatalf("first paint must not wait on the summarizer:\n%s", first)
+	joined := strings.Join(first, "\n")
+	if !strings.Contains(joined, "alpha layer") {
+		t.Fatalf("list paints the gh name first:\n%s", joined)
+	}
+	if strings.Contains(joined, "alpha layer and beta layer") {
+		t.Fatalf("first paint must not wait on a generated title:\n%s", joined)
+	}
+	if strings.Contains(frameOf(with), "⠋") {
+		t.Fatalf("empty summary is not a spinner:\n%s", frameOf(with))
 	}
 	plain := tui.New(tui.Options{
 		Repo:   "owner/name",
@@ -156,10 +166,12 @@ func TestProviderWritesStackTitleOnly(t *testing.T) {
 	if plain.Init() != nil {
 		t.Fatal("missing provider must not start summaries")
 	}
-	bare := listRows(frameOf(plain))
-	joined := strings.Join(bare, "\n")
-	if strings.Contains(joined, "alpha layer") || strings.Contains(joined, "beta layer") {
-		t.Fatalf("missing provider must not invent a stack title:\n%s", joined)
+	bare := strings.Join(listRows(frameOf(plain)), "\n")
+	if !strings.Contains(bare, "alpha layer") {
+		t.Fatalf("missing provider keeps the gh name:\n%s", bare)
+	}
+	if strings.Contains(bare, "alpha layer and beta layer") {
+		t.Fatalf("missing provider must not invent a generated title:\n%s", bare)
 	}
 }
 

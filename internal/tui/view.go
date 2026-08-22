@@ -6,6 +6,7 @@ import (
 
 	"github.com/gsimone/dango-tui/internal/app"
 	"github.com/gsimone/dango-tui/internal/domain"
+	"github.com/gsimone/dango-tui/internal/live"
 )
 
 func (m Model) View() string {
@@ -94,6 +95,13 @@ func (m Model) paintBrand(c *canvas, width int, surface, paper, meta, stick stri
 	c.text(PadX+6, PadTop, "DANGO", paper, surface, displayWidth("DANGO"))
 	line2 := fmt.Sprintf("%s  •  %d stacks / %d layers", m.repoLabel(), m.stackCount(), m.layerCount())
 	c.text(PadX, PadTop+1, line2, meta, surface, innerWidth(width))
+}
+
+func stackListName(stack domain.Stack) string {
+	if name := strings.TrimSpace(stack.Name); name != "" {
+		return name
+	}
+	return live.GhTitle(stack)
 }
 
 func layerBallInk(pr domain.PullRequest) string {
@@ -245,7 +253,7 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 		if selectedStack {
 			marker = "▸ "
 		}
-		c.text(PadX, y, marker+stack.Name, nameFg, rowBg, nameW)
+		c.text(PadX, y, marker+stackListName(stack), nameFg, rowBg, nameW)
 
 		ballX := PadX + nameW + gutter
 		x := ballX
@@ -429,6 +437,23 @@ func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper
 		return
 	}
 	row++
+	if m.Live {
+		if stack, ok := m.SelectedStack(); ok {
+			if desc := strings.TrimSpace(stack.Description); desc != "" {
+				for _, line := range wrapWords(desc, maxLine) {
+					if row >= h {
+						return
+					}
+					c.text(x, y+row, line, meta, bg, maxLine)
+					row++
+				}
+				if row >= h {
+					return
+				}
+				row++
+			}
+		}
+	}
 	for _, fact := range inspectorFacts(pr) {
 		if row >= h {
 			break
@@ -503,7 +528,15 @@ func (m Model) stackedPaneHeight(listWidth int) int {
 	}
 	title := "#" + itoa(pr.Number) + " " + pr.Title
 	lines := len(wrapWords(title, innerW))
-	return max(2*border+2*pad+1, 2*border+2*pad+lines+1+len(inspectorFacts(pr)))
+	descLines := 0
+	if m.Live {
+		if stack, ok := m.SelectedStack(); ok {
+			if desc := strings.TrimSpace(stack.Description); desc != "" {
+				descLines = len(wrapWords(desc, innerW)) + 1
+			}
+		}
+	}
+	return max(2*border+2*pad+1, 2*border+2*pad+lines+1+descLines+len(inspectorFacts(pr)))
 }
 
 func (m Model) ballHit(x, y int) (stackIndex, prIndex int, ok bool) {

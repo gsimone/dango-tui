@@ -102,7 +102,7 @@ func (m *Model) loadLive() {
 		return
 	}
 	m.fetchErr = nil
-	m.stacks = stacks
+	m.stacks = live.StampGhNames(stacks)
 	m.cacheState = data.CacheCurrent
 }
 

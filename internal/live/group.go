@@ -39,7 +39,7 @@ func GroupStacks(prs []RemotePR, defaultBranch string) []domain.Stack {
 	for i := range stacks {
 		stacks[i].Number = i + 1
 	}
-	return stacks
+	return StampGhNames(stacks)
 }
 
 func stackKey(stack domain.Stack) int {
@@ -63,9 +63,33 @@ func makeStack(prs []RemotePR, defaultBranch, id string) domain.Stack {
 	}
 	return domain.Stack{
 		ID:      id,
+		Name:    GhTitle(domain.Stack{PRs: layers}),
 		BaseRef: base,
 		PRs:     layers,
 	}
+}
+
+// StampGhNames fills an empty list name from GitHub titles. It does not
+// invent a generated summary.
+func StampGhNames(stacks []domain.Stack) []domain.Stack {
+	for i := range stacks {
+		if strings.TrimSpace(stacks[i].Name) == "" {
+			stacks[i].Name = GhTitle(stacks[i])
+		}
+	}
+	return stacks
+}
+
+func GhTitle(stack domain.Stack) string {
+	for _, pr := range stack.PRs {
+		if t := strings.TrimSpace(pr.Title); t != "" {
+			return t
+		}
+		if pr.Branch != "" {
+			return pr.Branch
+		}
+	}
+	return ""
 }
 
 func takeNative(prs []RemotePR) (groups [][]RemotePR, rest []RemotePR) {

@@ -87,8 +87,11 @@ func TestGroupStacksDoesNotInventTitle(t *testing.T) {
 	if len(stacks) != 1 {
 		t.Fatalf("got %d", len(stacks))
 	}
-	if stacks[0].Name != "" || stacks[0].Summary != "" {
-		t.Fatalf("fetch must not invent a stack title, got name=%q summary=%q", stacks[0].Name, stacks[0].Summary)
+	if stacks[0].Name != "base layer" {
+		t.Fatalf("list paints the gh name first, got %q", stacks[0].Name)
+	}
+	if stacks[0].Summary != "" {
+		t.Fatalf("fetch must not invent a generated summary, got %q", stacks[0].Summary)
 	}
 }
 
