@@ -1,22 +1,45 @@
-# stacks
+# dango
 
-A small native OpenTUI for reading a GitHub pull-request stack at a glance.
-This milestone deliberately uses deterministic local fixtures: it does not call
-GitHub, run `git`, open a browser, or check out a branch. Checkout/open/refresh
-feedback is clearly labelled as a simulation.
+A small native terminal UI for reading a GitHub pull-request stack at a glance.
+
+This milestone uses deterministic local fixtures only. It does not call GitHub,
+run `git`, open a browser, or check out a branch. Checkout, open, and refresh
+are clearly labelled as simulations. Every status line says fixture or
+simulated.
+
+The previous Bun / OpenTUI / Solid tree is gone. The product path is a small
+Go binary (Go 1.24+) built with
+[Bubble Tea](https://github.com/charmbracelet/bubbletea) and
+[Lipgloss](https://github.com/charmbracelet/lipgloss).
 
 ## Run
 
 ```bash
-bun run stacks
+go run ./cmd/dango
 ```
 
-In this workspace Bun is available at
-`/tmp/stacks-bun-tooling/node_modules/.bin/bun`.
+Or build a static-ish binary:
 
-The app is native terminal UI, not a dev server. It handles 40×20, 80×24,
+```bash
+make build
+./dango
+```
+
+`make build` is `CGO_ENABLED=0 go build -ldflags="-s -w" -o dango ./cmd/dango`.
+
+The app is a native terminal UI, not a dev server. It handles 40×20, 80×24,
 120×30, and 160×40 terminals: the inspector docks below the list at compact
 sizes and becomes a stable right pane on wide terminals.
+
+Useful flags:
+
+```bash
+go run ./cmd/dango --stories          # fixture UI lab (story cycling)
+go run ./cmd/dango --story draft      # start on a named fixture story
+go run ./cmd/dango --frame 80x24      # print one frame and exit
+```
+
+`STACKS_STORY` selects a fixture story when `--story` is omitted.
 
 ## Controls
 
@@ -31,18 +54,22 @@ sizes and becomes a stable right pane on wide terminals.
 | `[` / `]` | Cycle fixture stories |
 
 The fixture cycle includes current, stale-cache, refresh-error, and empty
-repository states. No network state is implied: every status says fixture or
-simulated.
+repository states. No network state is implied.
 
-## Verify
+## Test
 
 ```bash
-bun run check
+go test ./...
 ```
 
-`src/stories/native-frames.html` is a static, dev-only sheet of copied native
-`testRender` frames for 40/80/120/160-column visual review. It contains no
-terminal, process, WebSocket, or server implementation.
+or `make test`.
 
-The frozen legacy browser bridge remains outside the native product path. Its
-tests are opt-in only: `bun run test:web` or `bun run check:web`.
+Domain tests cover display-state precedence and the OKLCH palette. App tests
+cover selection, filtering, fixture frames at 40/80/120/160, keyboard, and
+mouse hits on the two-cell PR balls.
+
+## Layout
+
+- **40×20** — compact list, inspector docks below, short footer
+- **80×24** — full stack rows, inspector still below the list
+- **120×30 / 160×40** — inspector becomes a stable right pane

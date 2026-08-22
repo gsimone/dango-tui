@@ -1,0 +1,421 @@
+package data
+
+import "github.com/gsimone/dango-tui/internal/domain"
+
+type PullRequestFixtureInput struct {
+	State            domain.PrDisplayState
+	Number           int
+	Title            string
+	URL              string
+	Branch           string
+	Author           string
+	Draft            *bool
+	Merged           *bool
+	Mergeable        *bool
+	MergeQueueState  *string
+	ReviewDecision   *string
+	Approvals        *int
+	ChangesRequested *bool
+	CI               *domain.CISummary
+	Additions        *int
+	Deletions        *int
+	ChangedFiles     *int
+	HeadSHA          *string
+	UnsetMergeable   bool
+}
+
+var stateFlags = map[domain.PrDisplayState]func(*domain.PullRequest){
+	domain.StateMerged: func(pr *domain.PullRequest) { pr.Merged = true },
+	domain.StateDraft:  func(pr *domain.PullRequest) { pr.Draft = true },
+	domain.StateCIFailure: func(pr *domain.PullRequest) {
+		pr.CI = domain.CISummary{State: domain.CIFailure, Failed: 1, Pending: 0, Total: 9}
+	},
+	domain.StateReviewBlocked: func(pr *domain.PullRequest) {
+		pr.ChangesRequested = true
+		pr.ReviewDecision = "CHANGES_REQUESTED"
+	},
+	domain.StateQueued: func(pr *domain.PullRequest) {
+		pr.MergeQueueState = "QUEUED"
+		pr.ReviewDecision = "APPROVED"
+		pr.CI = domain.CISummary{State: domain.CISuccess, Failed: 0, Pending: 0, Total: 9}
+	},
+	domain.StateReady: func(pr *domain.PullRequest) {
+		pr.ReviewDecision = "APPROVED"
+		pr.Approvals = 2
+		pr.CI = domain.CISummary{State: domain.CISuccess, Failed: 0, Pending: 0, Total: 9}
+	},
+	domain.StateOpen: func(pr *domain.PullRequest) {
+		pr.CI = domain.CISummary{State: domain.CIPending, Failed: 0, Pending: 2, Total: 9}
+	},
+}
+
+func PRFixture(input PullRequestFixtureInput) domain.PullRequest {
+	state := input.State
+	if state == "" {
+		state = domain.StateOpen
+	}
+	number := input.Number
+	if number == 0 {
+		number = 100
+	}
+	pr := domain.PullRequest{
+		Number:       number,
+		Title:        "Improve PR layer " + itoa(number),
+		URL:          "https://github.com/example/stacks/pull/" + itoa(number),
+		Branch:       "gm/stacks-" + itoa(number),
+		Author:       "gianni",
+		Draft:        false,
+		Merged:       false,
+		Mergeable:    domain.MergeableTrue(),
+		Approvals:    0,
+		Additions:    43,
+		Deletions:    12,
+		ChangedFiles: 4,
+		HeadSHA:      "fixture" + padHex(number, 8),
+		CI:           domain.CISummary{State: domain.CIUnknown, Failed: 0, Pending: 0, Total: 0},
+	}
+	if apply, ok := stateFlags[state]; ok {
+		apply(&pr)
+	}
+	if input.Title != "" {
+		pr.Title = input.Title
+	}
+	if input.URL != "" {
+		pr.URL = input.URL
+	}
+	if input.Branch != "" {
+		pr.Branch = input.Branch
+	}
+	if input.Author != "" {
+		pr.Author = input.Author
+	}
+	if input.Draft != nil {
+		pr.Draft = *input.Draft
+	}
+	if input.Merged != nil {
+		pr.Merged = *input.Merged
+	}
+	if input.UnsetMergeable {
+		pr.Mergeable = nil
+	} else if input.Mergeable != nil {
+		pr.Mergeable = input.Mergeable
+	}
+	if input.MergeQueueState != nil {
+		pr.MergeQueueState = *input.MergeQueueState
+	}
+	if input.ReviewDecision != nil {
+		pr.ReviewDecision = *input.ReviewDecision
+	}
+	if input.Approvals != nil {
+		pr.Approvals = *input.Approvals
+	}
+	if input.ChangesRequested != nil {
+		pr.ChangesRequested = *input.ChangesRequested
+	}
+	if input.Additions != nil {
+		pr.Additions = *input.Additions
+	}
+	if input.Deletions != nil {
+		pr.Deletions = *input.Deletions
+	}
+	if input.ChangedFiles != nil {
+		pr.ChangedFiles = *input.ChangedFiles
+	}
+	if input.HeadSHA != nil {
+		pr.HeadSHA = *input.HeadSHA
+	}
+	if input.CI != nil {
+		pr.CI = *input.CI
+	}
+	return pr
+}
+
+type StackFixtureInput struct {
+	ID          string
+	Number      int
+	Name        string
+	BaseRef     string
+	PRs         []domain.PullRequest
+	Description *string
+}
+
+func StackFixture(input StackFixtureInput) domain.Stack {
+	number := input.Number
+	if number == 0 {
+		number = 1
+	}
+	id := input.ID
+	if id == "" {
+		id = "fixture-stack-" + itoa(number)
+	}
+	name := input.Name
+	if name == "" {
+		name = "stack " + itoa(number)
+	}
+	baseRef := input.BaseRef
+	if baseRef == "" {
+		baseRef = "main"
+	}
+	prs := input.PRs
+	if prs == nil {
+		prs = []domain.PullRequest{PRFixture(PullRequestFixtureInput{Number: number * 100})}
+	}
+	description := "A deterministic fixture stack"
+	if input.Description != nil {
+		description = *input.Description
+	}
+	return domain.Stack{
+		ID:          id,
+		Number:      number,
+		Name:        name,
+		BaseRef:     baseRef,
+		PRs:         prs,
+		Description: description,
+	}
+}
+
+type CacheState string
+
+const (
+	CacheCurrent CacheState = "current"
+	CacheStale   CacheState = "stale"
+	CacheError   CacheState = "error"
+)
+
+type FixtureStory struct {
+	ID         string
+	Label      string
+	Stacks     []domain.Stack
+	CacheState CacheState
+}
+
+func pr(number int, title string, state domain.PrDisplayState, extra ...PullRequestFixtureInput) domain.PullRequest {
+	input := PullRequestFixtureInput{Number: number, Title: title, State: state}
+	if len(extra) > 0 {
+		over := extra[0]
+		over.Number = number
+		over.Title = title
+		over.State = state
+		if extra[0].Title != "" {
+			over.Title = extra[0].Title
+		}
+		if extra[0].State != "" {
+			over.State = extra[0].State
+		}
+		if extra[0].Number != 0 {
+			over.Number = extra[0].Number
+		}
+		input = over
+		input.Number = number
+		input.Title = title
+		input.State = state
+	}
+	return PRFixture(input)
+}
+
+func strPtr(v string) *string { return &v }
+func intPtr(v int) *int       { return &v }
+
+func desc(v string) *string { return &v }
+
+var FixtureStories = []FixtureStory{
+	{
+		ID:    "mixed",
+		Label: "mixed health",
+		Stacks: []domain.Stack{
+			StackFixture(StackFixtureInput{Number: 1, Name: "auth cleanup", Description: desc("Simplify authentication boundaries"), PRs: []domain.PullRequest{
+				pr(184, "Split auth scope from session checks", domain.StateMerged),
+				pr(185, "Keep service identity explicit", domain.StateReady),
+				pr(186, "Remove implicit session fallback", domain.StateCIFailure),
+			}}),
+			StackFixture(StackFixtureInput{Number: 2, Name: "composer tokens", Description: desc("Add ontology tokens to email"), PRs: []domain.PullRequest{
+				pr(211, "Add token catalogue", domain.StateReady),
+				pr(212, "Map entity fields into composer", domain.StateReviewBlocked),
+				pr(213, "Prepare token migration", domain.StateQueued),
+			}}),
+			StackFixture(StackFixtureInput{Number: 3, Name: "sync rewrite", Description: desc("Fix optimistic sync lifecycle"), PRs: []domain.PullRequest{
+				pr(241, "Mark syncing work clearly", domain.StateDraft),
+				pr(242, "Avoid duplicate invalidation", domain.StateOpen),
+			}}),
+		},
+	},
+	{
+		ID:    "all-ready",
+		Label: "all ready",
+		Stacks: []domain.Stack{
+			StackFixture(StackFixtureInput{Number: 4, Name: "profile editor", Description: desc("Ship the profile editing stack"), PRs: []domain.PullRequest{
+				pr(301, "Add profile capability", domain.StateReady),
+				pr(302, "Wire profile editor", domain.StateReady),
+				pr(303, "Polish confirmation copy", domain.StateReady),
+			}}),
+		},
+	},
+	{ID: "all-merged", Label: "empty repository", Stacks: []domain.Stack{}},
+	{
+		ID:         "draft",
+		Label:      "stale cache",
+		CacheState: CacheStale,
+		Stacks: []domain.Stack{
+			StackFixture(StackFixtureInput{Number: 6, Name: "release notes", Description: desc("Cached 18m ago · waiting to refresh"), PRs: []domain.PullRequest{
+				pr(321, "Draft release notes from merged work", domain.StateOpen, PullRequestFixtureInput{
+					CI: &domain.CISummary{State: domain.CIUnknown, Failed: 0, Pending: 0, Total: 0},
+				}),
+				pr(322, "Publish the rollout note", domain.StateReady),
+			}}),
+		},
+	},
+	{
+		ID:    "queued",
+		Label: "queued",
+		Stacks: []domain.Stack{
+			StackFixture(StackFixtureInput{Number: 7, Name: "release handoff", Description: desc("Waiting in merge queue"), PRs: []domain.PullRequest{
+				pr(331, "Queue after release freeze", domain.StateQueued),
+			}}),
+		},
+	},
+	{ID: "ci-failing", Label: "refresh error", CacheState: CacheError, Stacks: []domain.Stack{}},
+	{
+		ID:    "changes-requested",
+		Label: "changes requested",
+		Stacks: []domain.Stack{
+			StackFixture(StackFixtureInput{Number: 9, Name: "checkout safety", Description: desc("Needs one review follow-up"), PRs: []domain.PullRequest{
+				pr(351, "Protect local checkout action", domain.StateReviewBlocked, PullRequestFixtureInput{
+					Approvals:        intPtr(1),
+					ChangesRequested: boolPtr(true),
+				}),
+			}}),
+		},
+	},
+	{
+		ID:    "merge-conflict",
+		Label: "merge conflict",
+		Stacks: []domain.Stack{
+			StackFixture(StackFixtureInput{Number: 10, Name: "stack base", Description: desc("Conflict against main"), PRs: []domain.PullRequest{
+				pr(361, "Rework stack base references", domain.StateReviewBlocked, PullRequestFixtureInput{
+					Mergeable:        domain.MergeableFalse(),
+					ChangesRequested: boolPtr(false),
+					ReviewDecision:   strPtr(""),
+				}),
+			}}),
+		},
+	},
+	{
+		ID:    "pending-no-review",
+		Label: "pending, no review",
+		Stacks: []domain.Stack{
+			StackFixture(StackFixtureInput{Number: 11, Name: "first review", Description: desc("Awaiting CI and first review"), PRs: []domain.PullRequest{
+				pr(371, "Observe no review data", domain.StateOpen, PullRequestFixtureInput{
+					CI:             &domain.CISummary{State: domain.CIPending, Failed: 0, Pending: 4, Total: 9},
+					UnsetMergeable: true,
+					Author:         "lina",
+				}),
+			}}),
+		},
+	},
+	{
+		ID:    "long-title-branch",
+		Label: "long title + branch",
+		Stacks: []domain.Stack{
+			StackFixture(StackFixtureInput{Number: 12, Name: "terminal dignity", Description: desc("Ensure narrow terminals truncate with dignity"), PRs: []domain.PullRequest{
+				pr(381, "Refactor the very long composition pipeline so entity token expansion remains deterministic when a deeply nested relationship resolves to an empty value", domain.StateReady, PullRequestFixtureInput{
+					Branch: "gm/refactor-composer-token-expansion-for-deeply-nested-relationship-fallbacks",
+				}),
+				pr(382, "Document the branch naming experiment", domain.StateOpen, PullRequestFixtureInput{
+					Branch: "gm/this-branch-name-is-deliberately-absurdly-long-to-test-the-card",
+				}),
+			}}),
+		},
+	},
+	{
+		ID:    "large-stack",
+		Label: "large stack",
+		Stacks: []domain.Stack{
+			StackFixture(StackFixtureInput{Number: 13, Name: "migration train", Description: desc("Ten independent layers, still one readable line"), PRs: largeStackPRs()}),
+		},
+	},
+}
+
+func largeStackPRs() []domain.PullRequest {
+	states := []domain.PrDisplayState{
+		domain.StateMerged, domain.StateMerged, domain.StateReady, domain.StateReady, domain.StateQueued,
+		domain.StateOpen, domain.StateDraft, domain.StateCIFailure, domain.StateReviewBlocked, domain.StateOpen,
+	}
+	out := make([]domain.PullRequest, len(states))
+	for i, state := range states {
+		out[i] = pr(400+i, "Large stack layer "+itoa(i+1), state)
+	}
+	return out
+}
+
+func FixtureStoryIDs() []string {
+	ids := make([]string, len(FixtureStories))
+	for i, story := range FixtureStories {
+		ids[i] = story.ID
+	}
+	return ids
+}
+
+func IsFixtureStoryID(value string) bool {
+	for _, id := range FixtureStoryIDs() {
+		if id == value {
+			return true
+		}
+	}
+	return false
+}
+
+func StoryByID(id string) FixtureStory {
+	for _, story := range FixtureStories {
+		if story.ID == id {
+			return story
+		}
+	}
+	return FixtureStories[0]
+}
+
+func boolPtr(v bool) *bool { return &v }
+
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	neg := n < 0
+	if neg {
+		n = -n
+	}
+	var buf [20]byte
+	i := len(buf)
+	for n > 0 {
+		i--
+		buf[i] = byte('0' + n%10)
+		n /= 10
+	}
+	if neg {
+		i--
+		buf[i] = '-'
+	}
+	return string(buf[i:])
+}
+
+func padHex(n int, width int) string {
+	const hexdigits = "0123456789abcdef"
+	if n < 0 {
+		n = 0
+	}
+	var buf [16]byte
+	i := len(buf)
+	if n == 0 {
+		i--
+		buf[i] = '0'
+	}
+	for n > 0 {
+		i--
+		buf[i] = hexdigits[n&0xf]
+		n >>= 4
+	}
+	for len(buf)-i < width {
+		i--
+		buf[i] = '0'
+	}
+	return string(buf[i:])
+}
