@@ -130,7 +130,9 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 		}
 	}
 	statusW := 8
-	nameW = min(nameW, max(8, listWidth-statusW-8))
+	ballColW := 13
+	nameW = min(nameW, max(8, listWidth-statusW-ballColW-2))
+	statusX := PadX + nameW + 1 + ballColW + 1
 	start := m.listOrigin(len(stacks), sel.StackIndex, top, bottom)
 	y := top
 	for i := start; i < len(stacks); i++ {
@@ -146,22 +148,9 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 			rowBg = raised
 			nameFg = paper
 			focus = sel.PRIndex
+			c.fill(PadX, y, listWidth, 1, rowBg)
 		}
 		from, show, lead, tail := ballWindow(len(stack.PRs), focus)
-		ballW := show
-		if show > 1 {
-			ballW += show - 1
-		}
-		if lead {
-			ballW += 4
-		}
-		if tail {
-			ballW += 4
-		}
-		statusX := PadX + nameW + 1 + ballW + 1
-		if selectedStack {
-			c.fill(PadX, y, min(listWidth, statusX+statusW-PadX), 1, rowBg)
-		}
 		marker := "· "
 		if selectedStack {
 			marker = "▸ "
