@@ -336,6 +336,11 @@ var FixtureStories = []FixtureStory{
 			StackFixture(StackFixtureInput{Number: 13, Name: "migration train", Description: desc("Ten independent layers, still one readable line"), PRs: largeStackPRs()}),
 		},
 	},
+	{
+		ID:     "chaos",
+		Label:  "chaos load",
+		Stacks: chaosStacks(),
+	},
 }
 
 func init() {
@@ -348,6 +353,52 @@ func applySummaries(stories []FixtureStory, s summary.Summarizer) {
 			stories[i].Stacks[j].Summary = s.Summarize(stories[i].Stacks[j])
 		}
 	}
+}
+
+func twentyLayerPRs() []domain.PullRequest {
+	states := []domain.PrDisplayState{
+		domain.StateMerged, domain.StateMerged, domain.StateMerged, domain.StateReady, domain.StateReady,
+		domain.StateQueued, domain.StateQueued, domain.StateOpen, domain.StateOpen, domain.StateDraft,
+		domain.StateCIFailure, domain.StateReviewBlocked, domain.StateOpen, domain.StateReady, domain.StateMerged,
+		domain.StateOpen, domain.StateDraft, domain.StateCIFailure, domain.StateQueued, domain.StateOpen,
+	}
+	out := make([]domain.PullRequest, len(states))
+	for i, state := range states {
+		out[i] = pr(800+i, "Freight layer "+itoa(i+1), state)
+	}
+	return out
+}
+
+func chaosStacks() []domain.Stack {
+	states := []domain.PrDisplayState{
+		domain.StateMerged, domain.StateReady, domain.StateQueued, domain.StateOpen,
+		domain.StateDraft, domain.StateCIFailure, domain.StateReviewBlocked,
+	}
+	names := []string{
+		"pair", "ok", "x", "billing", "sync", "auth",
+		"a very long stack name from last quarter",
+		"ci", "docs", "hotfix",
+	}
+	out := make([]domain.Stack, 0, 300)
+	out = append(out, StackFixture(StackFixtureInput{Number: 1, Name: "pair", Description: desc("Two layers only"), PRs: []domain.PullRequest{
+		pr(701, "Tiny left", domain.StateMerged),
+		pr(702, "Tiny right", domain.StateOpen),
+	}}))
+	out = append(out, StackFixture(StackFixtureInput{Number: 2, Name: "freight train", Description: desc("Twenty layers"), PRs: twentyLayerPRs()}))
+	for n := 3; n <= 300; n++ {
+		layers := 1 + n%5
+		prs := make([]domain.PullRequest, layers)
+		for i := 0; i < layers; i++ {
+			prs[i] = pr(1000+n*10+i, names[n%len(names)]+" layer "+itoa(i+1), states[(n+i)%len(states)])
+		}
+		out = append(out, StackFixture(StackFixtureInput{
+			Number:      n,
+			Name:        names[n%len(names)] + " " + itoa(n),
+			Description: desc("chaos stack"),
+			PRs:         prs,
+		}))
+	}
+	return out
 }
 
 func largeStackPRs() []domain.PullRequest {

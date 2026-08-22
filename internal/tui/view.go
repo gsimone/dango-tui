@@ -129,8 +129,10 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 		}
 	}
 	grid := GetListRowLayout(listWidth, m.Width, maxPRs)
+	start := m.listOrigin(len(stacks), sel.StackIndex, top, bottom)
 	y := top
-	for i, stack := range stacks {
+	for i := start; i < len(stacks); i++ {
+		stack := stacks[i]
 		if y >= bottom {
 			break
 		}
@@ -316,6 +318,14 @@ func stackHealth(stack domain.Stack) string {
 	}
 }
 
+func (m Model) listOrigin(n, selected, top, bottom int) int {
+	room := max(1, bottom-top)
+	if selected < room {
+		return 0
+	}
+	return selected - room + 1
+}
+
 func (m Model) stackedPaneHeight(listWidth int) int {
 	pr, ok := m.SelectedPR()
 	if !ok {
@@ -340,9 +350,10 @@ func (m Model) ballHit(x, y int) (stackIndex, prIndex int, ok bool) {
 		return 0, 0, false
 	}
 	sel := app.ClampSelection(m.State.Selection, stacks)
+	start := m.listOrigin(len(stacks), sel.StackIndex, ListStartY, m.Height-1)
 	rowY := ListStartY
 	stackIndex = -1
-	for i := range stacks {
+	for i := start; i < len(stacks); i++ {
 		if y == rowY {
 			stackIndex = i
 			break

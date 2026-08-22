@@ -34,7 +34,7 @@ func New(opts Options) Model {
 	}
 	storyID := opts.StoryID
 	if storyID == "" {
-		storyID = "mixed"
+		storyID = "chaos"
 	}
 	idx := 0
 	for i, story := range data.FixtureStories {
