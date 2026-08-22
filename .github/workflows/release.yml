@@ -1,0 +1,101 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  compile:
+    name: Compile ${{ matrix.asset }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset: dango-linux-x64
+          - os: macos-latest
+            asset: dango-darwin-arm64
+          - os: windows-latest
+            asset: dango-windows-x64.exe
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+
+      - run: bun install --frozen-lockfile
+
+      - run: bun run compile -- --outfile dist/${{ matrix.asset }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: compile
+    if: always() && !cancelled()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dango-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_NUMBER: ${{ github.run_number }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          assets=(artifacts/dango-*)
+          if [ ${#assets[@]} -eq 0 ]; then
+            echo "No compiled binaries to publish."
+            exit 1
+          fi
+          if [ ! -f artifacts/dango-linux-x64 ]; then
+            echo "Linux x64 is the required release asset and was not built."
+            exit 1
+          fi
+
+          tag="v$(date -u +%Y%m%d)-${RUN_NUMBER}"
+          short_sha="${SHA:0:7}"
+          {
+            echo "Standalone \`dango\` binary from \`${short_sha}\` (run ${RUN_NUMBER})."
+            echo
+            echo "Every push to \`main\` compiles a host-native Bun executable and publishes it here."
+            echo "Linux x64 is the baseline; other assets appear only when that runner succeeds."
+            echo
+            echo "Install:"
+            echo
+            echo '```bash'
+            echo 'curl -fsSL https://raw.githubusercontent.com/gsimone/dango-tui/main/install.sh | bash'
+            echo '```'
+            echo
+            echo "Assets:"
+            for asset in "${assets[@]}"; do
+              echo "- \`$(basename "$asset")\`"
+            done
+          } > notes.md
+
+          gh release create "$tag" "${assets[@]}" \
+            --title "dango $tag" \
+            --notes-file notes.md \
+            --latest

@@ -5,6 +5,27 @@ This milestone deliberately uses deterministic local fixtures: it does not call
 GitHub, run `git`, open a browser, or check out a branch. Checkout/open/refresh
 feedback is clearly labelled as a simulation.
 
+## Install
+
+After `main` has a GitHub Release:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gsimone/dango-tui/main/install.sh | bash
+```
+
+That downloads the latest standalone `dango` binary for this OS/arch into
+`~/.local/bin`. If that platform has no asset yet, the script exits with an
+error instead of installing a wrong file.
+
+## Releases
+
+Every push (and merge) to `main` compiles a standalone Bun binary and publishes
+a GitHub Release tagged `vYYYYMMDD-<run>`. Linux x64 is the baseline artifact.
+macOS (arm64) and Windows (x64) are built in the same workflow when those
+runners succeed. There is no npm publish.
+
+To compile a host binary locally: `bun run compile`.
+
 ## Run
 
 ```bash

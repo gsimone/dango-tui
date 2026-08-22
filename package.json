@@ -11,7 +11,8 @@
     "test:web": "bun test --preload @opentui/solid/preload src/tests/terminal-web.test.ts src/tests/terminal-web-dimensions.test.ts",
     "typecheck": "tsc --noEmit",
     "check": "bun run typecheck && bun run test",
-    "check:web": "bun run check && bun run test:web"
+    "check:web": "bun run check && bun run test:web",
+    "compile": "bun scripts/compile.ts"
   },
   "dependencies": {
     "@opentui/core": "0.5.6",
