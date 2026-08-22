@@ -56,7 +56,7 @@ func TestDotCopiesBranchAndDoesNotCheckout(t *testing.T) {
 	if strings.Contains(cleared, "Copied gm/stacks-184") {
 		t.Fatalf("copy confirmation should clear:\n%s", cleared)
 	}
-	if !strings.Contains(cleared, "↑↓ stack  ←→ layer  enter checkout  o open  . copy") {
+	if !strings.Contains(cleared, "[ ↑↓ ] stack") || !strings.Contains(cleared, "[ enter ] checkout") || !strings.Contains(cleared, "[ o ] open") || !strings.Contains(cleared, "[ . ] copy") {
 		t.Fatalf("footer should return to the key legend:\n%s", cleared)
 	}
 }
@@ -79,7 +79,7 @@ func TestOpenRestoresFooterAfterResult(t *testing.T) {
 	if strings.Contains(okFrame, "Opening ") {
 		t.Fatalf("success must not leave Opening stuck:\n%s", okFrame)
 	}
-	if !strings.Contains(okFrame, "↑↓ stack  ←→ layer  enter checkout  o open  . copy") {
+	if !strings.Contains(okFrame, "[ ↑↓ ] stack") || !strings.Contains(okFrame, "[ enter ] checkout") || !strings.Contains(okFrame, "[ o ] open") || !strings.Contains(okFrame, "[ . ] copy") {
 		t.Fatalf("success should restore the key legend:\n%s", okFrame)
 	}
 
@@ -94,7 +94,7 @@ func TestOpenRestoresFooterAfterResult(t *testing.T) {
 	if strings.Contains(failFrame, "Opening ") || strings.Contains(failFrame, "Could not open") {
 		t.Fatalf("failure must not lock the footer:\n%s", failFrame)
 	}
-	if !strings.Contains(failFrame, "↑↓ stack  ←→ layer  enter checkout  o open  . copy") {
+	if !strings.Contains(failFrame, "[ ↑↓ ] stack") || !strings.Contains(failFrame, "[ enter ] checkout") || !strings.Contains(failFrame, "[ o ] open") || !strings.Contains(failFrame, "[ . ] copy") {
 		t.Fatalf("failure should restore the key legend:\n%s", failFrame)
 	}
 }

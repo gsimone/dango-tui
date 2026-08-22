@@ -103,17 +103,28 @@ func (m Model) footer() string {
 	compact := IsCompact(m.Width)
 	if m.Help {
 		if compact {
-			return "↑↓ stack  enter  o  .  r  esc  q"
+			return "[ ↑↓ ] stack  [ enter ]  [ o ]  [ . ]  [ r ]  [ esc ]  [ q ]"
 		}
-		return "↑↓ stack  enter checkout  o open  . copy  r refresh  esc  q"
+		return "[ ↑↓ ] stack  [ enter ] checkout  [ o ] open  [ . ] copy  [ r ] refresh  [ esc ]  [ q ]"
 	}
 	if compact {
-		return "↑↓ stack  ←→ layer  . copy  /  ?  q"
+		return "[ ↑↓ ] stack  [ ←→ ] layer  [ . ] copy  [ / ]  [ ? ]  [ q ]"
 	}
 	if m.Width <= 90 {
-		return "↑↓ stack  ←→ layer  enter checkout  o open  . copy  /  ?  q"
+		return "[ ↑↓ ] stack  [ ←→ ] layer  [ enter ] checkout  [ o ] open  [ . ] copy  [ / ]  [ ? ]  [ q ]"
 	}
-	return "↑↓ stack  ←→ layer  enter checkout  o open  . copy  a add  r refresh  / filter  esc  ?  q"
+	return "[ ↑↓ ] stack  [ ←→ ] layer  [ enter ] checkout  [ o ] open  [ . ] copy  [ a ] add  [ r ] refresh  [ / ] filter  [ esc ]  [ ? ]  [ q ]"
+}
+
+func splitLegendItem(item string) (key, action string) {
+	item = strings.TrimSpace(item)
+	if strings.HasPrefix(item, "[") {
+		if end := strings.Index(item, "]"); end >= 0 {
+			return strings.TrimSpace(item[:end+1]), strings.TrimSpace(item[end+1:])
+		}
+	}
+	key, action, _ = strings.Cut(item, " ")
+	return key, action
 }
 
 func paintKeyLegend(c *canvas, x, y, maxWidth int, legend, paper, meta, bg string) {
@@ -130,7 +141,7 @@ func paintKeyLegend(c *canvas, x, y, maxWidth int, legend, paper, meta, bg strin
 			remain -= n
 		}
 		first = false
-		key, action, ok := strings.Cut(item, " ")
+		key, action := splitLegendItem(item)
 		write := func(s, fg string) {
 			if remain <= 0 || s == "" {
 				return
@@ -141,7 +152,7 @@ func paintKeyLegend(c *canvas, x, y, maxWidth int, legend, paper, meta, bg strin
 			remain -= w
 		}
 		write(key, paper)
-		if ok {
+		if action != "" {
 			write(" "+action, meta)
 		}
 	}
@@ -156,8 +167,12 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 	sel := app.ClampSelection(m.State.Selection, stacks)
 	layout := GetListRowLayout(listWidth, m.Width, 0)
 	nameW := layout.NameWidth
+	gutter := layout.Gutter
+	if gutter < 1 {
+		gutter = ColGutter
+	}
 	statusW := layout.StatusWidth
-	statusX := PadX + nameW + 1 + layout.BallsWidth + 1
+	statusX := PadX + nameW + gutter + layout.BallsWidth + gutter
 	start := m.listOrigin(len(stacks), sel.StackIndex, top, bottom)
 	y := top
 	for i := start; i < len(stacks); i++ {
@@ -182,7 +197,7 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 		}
 		c.text(PadX, y, marker+stack.Name, nameFg, rowBg, nameW)
 
-		ballX := PadX + nameW + 1
+		ballX := PadX + nameW + gutter
 		x := ballX
 		n := len(stack.PRs)
 		for i, cell := range cells {
@@ -237,6 +252,59 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 	}
 }
 
+const inspectorLabelW = 10
+
+type inspectorFact struct {
+	label string
+	value string
+}
+
+func inspectorFacts(pr domain.PullRequest) []inspectorFact {
+	return []inspectorFact{
+		{"status", inspectorStatus(pr)},
+		{"ci", inspectorCI(pr)},
+		{"review", inspectorReview(pr)},
+		{"diff", fmt.Sprintf("+%d −%d", pr.Additions, pr.Deletions)},
+		{"branch", pr.Branch},
+	}
+}
+
+func inspectorStatus(pr domain.PullRequest) string {
+	if label, ok := domain.DisplayStateLabel[domain.GetDisplayState(pr)]; ok {
+		return label
+	}
+	return "pending"
+}
+
+func inspectorCI(pr domain.PullRequest) string {
+	switch pr.CI.State {
+	case domain.CISuccess:
+		return "passed"
+	case domain.CIFailure:
+		return "failed"
+	case domain.CIPending:
+		return "pending"
+	default:
+		return "not reported"
+	}
+}
+
+func inspectorReview(pr domain.PullRequest) string {
+	if pr.Mergeable != nil && !*pr.Mergeable {
+		return "merge conflict"
+	}
+	if pr.ChangesRequested {
+		return "changes requested"
+	}
+	if pr.Approvals == 1 {
+		return "1 approval"
+	}
+	if pr.Approvals > 1 {
+		return itoa(pr.Approvals) + " approvals"
+	}
+	return "no decision"
+}
+
 func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper, meta string) {
 	x, y, w, h := place.Left, place.Top, place.Width, place.Height
 	if w < 1 || h < 1 {
@@ -249,113 +317,29 @@ func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper
 	}
 
 	maxLine := max(1, w)
-	state := domain.GetDisplayState(pr)
 	id := "#" + itoa(pr.Number)
 	row := 0
-	for i, line := range wrapWords(id+" "+pr.Title, maxLine) {
+	for _, line := range wrapWords(id+" "+pr.Title, maxLine) {
 		if row >= h {
-			break
+			return
 		}
-		if i == 0 && strings.HasPrefix(line, id) {
-			c.text(x, y+row, id, paper, surface, maxLine)
-			rest := strings.TrimPrefix(line, id)
-			if rest != "" {
-				c.text(x+displayWidth(id), y+row, rest, meta, surface, max(1, maxLine-displayWidth(id)))
-			}
-		} else {
-			c.text(x, y+row, line, meta, surface, maxLine)
-		}
+		c.text(x, y+row, line, paper, surface, maxLine)
 		row++
 	}
-	if h <= row {
+	if row >= h {
 		return
-	}
-	if stack, ok := m.SelectedStack(); ok && stack.Summary != "" {
-		c.text(x, y+row, stack.Summary, meta, surface, maxLine)
-		row++
-	}
-	if h <= row {
-		return
-	}
-	label := domain.DisplayStateLabel[state]
-	c.text(x, y+row, label, domain.Color(domain.StateColorToken(state)), surface, maxLine)
-	detail := " · " + domain.DisplayStateDetail(pr)
-	if displayWidth(label) < maxLine {
-		c.text(x+displayWidth(label), y+row, detail, meta, surface, maxLine-displayWidth(label))
 	}
 	row++
-
-	ci := ciLine(pr)
-	review := reviewLine(pr)
-	diff := fmt.Sprintf("+%d −%d · %d files", pr.Additions, pr.Deletions, pr.ChangedFiles)
-	hint := "o open"
-	if place.Compact {
-		if h > row {
-			c.text(x, y+row, ci+" · "+review, meta, surface, maxLine)
-			row++
-		}
-		if h > row {
-			c.text(x, y+row, diff, meta, surface, maxLine)
-			row++
-		}
-		if h > row {
-			c.text(x, y+row, pr.Branch, meta, surface, maxLine)
-			row++
-		}
-		if h > row {
-			c.text(x, y+row, hint, meta, surface, maxLine)
-		}
-		return
-	}
-	for _, line := range []string{ci, review, diff, pr.Branch, hint} {
+	for _, fact := range inspectorFacts(pr) {
 		if row >= h {
 			break
 		}
-		c.text(x, y+row, line, meta, surface, maxLine)
+		c.text(x, y+row, fact.label, meta, surface, min(inspectorLabelW, maxLine))
+		if maxLine > inspectorLabelW && fact.value != "" {
+			c.text(x+inspectorLabelW, y+row, fact.value, paper, surface, maxLine-inspectorLabelW)
+		}
 		row++
 	}
-}
-
-func ciLine(pr domain.PullRequest) string {
-	switch pr.CI.State {
-	case domain.CISuccess:
-		total := itoa(pr.CI.Total)
-		if pr.CI.Total == 0 {
-			total = "all"
-		}
-		return "CI ✓ " + total + " checks"
-	case domain.CIFailure:
-		failed := pr.CI.Failed
-		if failed == 0 {
-			failed = 1
-		}
-		return fmt.Sprintf("CI × %d failed · %d total", failed, pr.CI.Total)
-	case domain.CIPending:
-		pending := pr.CI.Pending
-		if pending == 0 {
-			pending = 1
-		}
-		return fmt.Sprintf("CI ◌ %d pending · %d total", pending, pr.CI.Total)
-	default:
-		return "CI — not reported"
-	}
-}
-
-func reviewLine(pr domain.PullRequest) string {
-	if pr.Mergeable != nil && !*pr.Mergeable {
-		return "Review ! merge conflict"
-	}
-	if pr.ChangesRequested {
-		return "Review ! changes requested"
-	}
-	if pr.Approvals > 0 {
-		noun := "approvals"
-		if pr.Approvals == 1 {
-			noun = "approval"
-		}
-		return fmt.Sprintf("Review ✓ %d %s", pr.Approvals, noun)
-	}
-	return "Review ◌ no decision yet"
 }
 
 func stackHealthColor(stack domain.Stack) string {
@@ -410,11 +394,7 @@ func (m Model) stackedPaneHeight(listWidth int) int {
 	}
 	title := "#" + itoa(pr.Number) + " " + pr.Title
 	lines := len(wrapWords(title, max(1, listWidth)))
-	extra := 6
-	if IsCompact(m.Width) {
-		extra = 6
-	}
-	return max(3, lines+extra)
+	return max(3, lines+1+len(inspectorFacts(pr)))
 }
 
 func (m Model) ballHit(x, y int) (stackIndex, prIndex int, ok bool) {
@@ -445,7 +425,7 @@ func (m Model) ballHit(x, y int) (stackIndex, prIndex int, ok bool) {
 	}
 	stack := stacks[stackIndex]
 	layout := GetListRowLayout(listWidth, m.Width, len(stack.PRs))
-	ballX := PadX + layout.NameWidth + 1
+	ballX := PadX + layout.NameWidth + layout.Gutter
 	if x < ballX || x >= ballX+layout.BallsWidth {
 		return 0, 0, false
 	}

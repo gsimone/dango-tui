@@ -152,10 +152,10 @@ func TestCompactCardAndHomeEnd(t *testing.T) {
 	if !strings.Contains(frame, "#184") {
 		t.Fatalf("home should jump to the first stack:\n%s", frame)
 	}
-	if !strings.Contains(frame, "o open") {
-		t.Fatalf("compact card hint:\n%s", frame)
+	if !strings.Contains(frame, "status") || !strings.Contains(frame, "branch") {
+		t.Fatalf("compact inspector should be labeled rows:\n%s", frame)
 	}
-	if !strings.Contains(frame, "↑↓ stack  ←→ layer  . copy  /  ?  q") {
+	if !strings.Contains(frame, "[ ↑↓ ] stack") || !strings.Contains(frame, "[ ←→ ] layer") {
 		t.Fatalf("compact footer:\n%s", frame)
 	}
 	assertFits(t, frame, 40)
@@ -242,7 +242,7 @@ func TestEightyColumnFooterAndFocus(t *testing.T) {
 	if !strings.Contains(frame, "●") {
 		t.Fatalf("focused layer:\n%s", frame)
 	}
-	if !strings.Contains(frame, "↑↓ stack  ←→ layer  enter checkout  o open  . copy") {
+	if !strings.Contains(frame, "[ ↑↓ ] stack") || !strings.Contains(frame, "[ enter ] checkout") || !strings.Contains(frame, "[ o ] open") || !strings.Contains(frame, "[ . ] copy") {
 		t.Fatalf("80-col footer should be a key strip:\n%s", frame)
 	}
 	if strings.Contains(frame, "fixture cache ·") || strings.Contains(frame, " · ") && strings.Contains(frame, "q quit") {
@@ -354,23 +354,101 @@ func TestInspectorIsARightColumn(t *testing.T) {
 	}
 }
 
-func TestInspectorShowsOneSummaryLine(t *testing.T) {
+func TestInspectorIsLabeledRows(t *testing.T) {
 	size := tui.TerminalSize{Width: 120, Height: 30}
 	frame := frameOf(makeUI(size, "mixed"))
 	if !strings.Contains(frame, "#184 Split auth scope from session checks") {
 		t.Fatalf("paper title missing:\n%s", frame)
 	}
-	hits := 0
-	for _, line := range strings.Split(frame, "\n") {
-		if strings.Contains(line, "split auth scope") {
-			hits++
+	if strings.Contains(frame, "split auth scope from session checks, keep") {
+		t.Fatalf("inspector must not dump a comma layer list:\n%s", frame)
+	}
+	needles := []string{
+		"status    merged",
+		"ci        not reported",
+		"review    no decision",
+		"diff      +43 −12",
+		"branch    gm/stacks-184",
+	}
+	for _, needle := range needles {
+		if !strings.Contains(frame, needle) {
+			t.Fatalf("inspector missing %q:\n%s", needle, frame)
 		}
 	}
-	if hits != 1 {
-		t.Fatalf("summary must be one meta line under the title, got %d:\n%s", hits, frame)
+	lines := strings.Split(frame, "\n")
+	titleAt := -1
+	for i, line := range lines {
+		if strings.Contains(line, "#184 Split auth scope from session checks") {
+			titleAt = i
+			break
+		}
+	}
+	if titleAt < 0 || titleAt+2 >= len(lines) {
+		t.Fatalf("title row missing:\n%s", frame)
+	}
+	if strings.TrimSpace(lines[titleAt+1]) != "" {
+		t.Fatalf("expected one blank row under the title:\n%s", frame)
+	}
+	if !strings.Contains(lines[titleAt+2], "status") {
+		t.Fatalf("first fact should be status:\n%s", frame)
 	}
 	if strings.Contains(frame, "┌") || strings.Contains(frame, "└") {
-		t.Fatalf("summary must not invent a box:\n%s", frame)
+		t.Fatalf("inspector must not invent a box:\n%s", frame)
+	}
+}
+
+func TestFooterKeysAreBracketed(t *testing.T) {
+	for _, size := range []tui.TerminalSize{{Width: 40, Height: 20}, {Width: 80, Height: 24}, {Width: 120, Height: 30}} {
+		frame := frameOf(makeUI(size, "mixed"))
+		lines := strings.Split(frame, "\n")
+		footer := lines[len(lines)-1]
+		if !strings.Contains(footer, "[ ↑↓ ]") || !strings.Contains(footer, "stack") {
+			t.Fatalf("%dx%d footer missing bracketed keys:\n%s", size.Width, size.Height, footer)
+		}
+		if strings.Contains(footer, "↑↓ stack") && !strings.Contains(footer, "[ ↑↓ ] stack") {
+			t.Fatalf("%dx%d key is not bracketed:\n%s", size.Width, size.Height, footer)
+		}
+	}
+}
+
+func TestListColumnsHaveGutters(t *testing.T) {
+	size := tui.TerminalSize{Width: 120, Height: 30}
+	m := makeUI(size, "freight")
+	frame := frameOf(m)
+	listWidth := tui.ListPaneWidth(size.Width)
+	layout := tui.GetListRowLayout(listWidth, size.Width, 20)
+	if layout.Gutter < tui.ColGutter {
+		t.Fatalf("gutter too small: %d", layout.Gutter)
+	}
+	nameEnd := tui.PadX + layout.NameWidth
+	ballStart := nameEnd + layout.Gutter
+	statusStart := ballStart + layout.BallsWidth + layout.Gutter
+	var row string
+	for _, line := range strings.Split(frame, "\n") {
+		if strings.Contains(line, "freight train") {
+			row = line
+			break
+		}
+	}
+	if row == "" {
+		t.Fatalf("freight row missing:\n%s", frame)
+	}
+	runes := []rune(row)
+	if statusStart >= len(runes) {
+		t.Fatalf("row shorter than status column: %q", row)
+	}
+	for x := nameEnd; x < ballStart; x++ {
+		if runes[x] != ' ' {
+			t.Fatalf("name/balls gutter smeared at %d: %q", x, row)
+		}
+	}
+	for x := ballStart + layout.BallsWidth; x < statusStart; x++ {
+		if runes[x] != ' ' {
+			t.Fatalf("balls/status gutter smeared at %d: %q", x, row)
+		}
+	}
+	if tui.GetRowLayout(80, 3).Gutter < tui.ColGutter {
+		t.Fatal("do not invent drag-resize; keep a fixed gutter")
 	}
 }
 
@@ -406,7 +484,7 @@ func TestTypeIsThreeInks(t *testing.T) {
 		t.Fatal("failed / ready / blocked must keep their status colors")
 	}
 	frame := strip(raw)
-	if !strings.Contains(frame, "↑↓") || !strings.Contains(frame, "stack") {
+	if !strings.Contains(frame, "[ ↑↓ ]") || !strings.Contains(frame, "stack") {
 		t.Fatalf("footer key legend missing:\n%s", frame)
 	}
 	if strings.Contains(frame, "fixture cache ·") {
