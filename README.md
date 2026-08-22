@@ -31,15 +31,12 @@ The app is a native terminal UI, not a dev server. It handles 40×20, 80×24,
 120×30, and 160×40 terminals: the inspector docks below the list at compact
 sizes and becomes a stable right pane on wide terminals.
 
-Useful flags:
+`go run ./cmd/dango` is the app with local fixture data. There is no GitHub
+client yet — checkout / open / refresh are labelled simulations.
 
 ```bash
-go run ./cmd/dango --stories          # fixture UI lab (story cycling)
-go run ./cmd/dango --story draft      # start on a named fixture story
 go run ./cmd/dango --frame 80x24      # print one frame and exit
 ```
-
-`STACKS_STORY` selects a fixture story when `--story` is omitted.
 
 ## Controls
 
@@ -51,10 +48,6 @@ go run ./cmd/dango --frame 80x24      # print one frame and exit
 | `Enter`, `o`, `r` | Simulate checkout, open, refresh |
 | `/` | Filter local fixtures |
 | `Esc`, `?`, `q` | Close, toggle concise help, quit safely |
-| `[` / `]` | Cycle fixture stories |
-
-The fixture cycle includes current, stale-cache, refresh-error, and empty
-repository states. No network state is implied.
 
 ## Test
 

@@ -8,33 +8,14 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/gsimone/dango-tui/internal/data"
 	"github.com/gsimone/dango-tui/internal/tui"
 )
 
 func main() {
-	stories := flag.Bool("stories", false, "open the fixture UI lab")
-	story := flag.String("story", "", "fixture story id")
 	frame := flag.String("frame", "", "print a fixture frame (WxH, e.g. 80x24) and exit")
 	flag.Parse()
 
-	storyID := *story
-	if storyID == "" {
-		storyID = os.Getenv("STACKS_STORY")
-	}
-	mode := tui.ModeStacks
-	if *stories || storyID != "" {
-		mode = tui.ModeStories
-	}
-	if storyID != "" && !data.IsFixtureStoryID(storyID) {
-		fmt.Fprintf(os.Stderr, "dango: unknown fixture story %q\n", storyID)
-		os.Exit(2)
-	}
-
-	model := tui.New(tui.Options{
-		Mode:    mode,
-		StoryID: storyID,
-	})
+	model := tui.New(tui.Options{})
 
 	if *frame != "" {
 		width, height, err := parseFrame(*frame)

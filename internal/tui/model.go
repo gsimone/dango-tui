@@ -9,22 +9,13 @@ import (
 	"github.com/gsimone/dango-tui/internal/domain"
 )
 
-type Mode string
-
-const (
-	ModeStacks  Mode = "stacks"
-	ModeStories Mode = "stories"
-)
-
 type Options struct {
-	Mode    Mode
 	StoryID string
 	Width   int
 	Height  int
 }
 
 type Model struct {
-	Mode       Mode
 	Width      int
 	Height     int
 	StoryIndex int
@@ -34,10 +25,6 @@ type Model struct {
 }
 
 func New(opts Options) Model {
-	mode := opts.Mode
-	if mode == "" {
-		mode = ModeStacks
-	}
 	width, height := opts.Width, opts.Height
 	if width <= 0 {
 		width = 80
@@ -57,7 +44,6 @@ func New(opts Options) Model {
 		}
 	}
 	return Model{
-		Mode:       mode,
 		Width:      width,
 		Height:     height,
 		StoryIndex: idx,
@@ -116,16 +102,6 @@ func (m *Model) open(pr domain.PullRequest) {
 	m.State.CardVisible = true
 }
 
-func (m *Model) switchStory(offset int) {
-	n := len(data.FixtureStories)
-	m.StoryIndex = (m.StoryIndex + offset + n) % n
-	m.State.Selection = app.Selection{StackIndex: 0, PRIndex: 0}
-	m.State.Query = ""
-	m.State.Searching = false
-	m.State.CardVisible = true
-	m.State.Feedback = "Story: " + data.FixtureStories[m.StoryIndex].Label
-}
-
 func (m *Model) clamp() {
 	m.State.Selection = app.ClampSelection(m.State.Selection, m.Stacks())
 }
@@ -164,9 +140,6 @@ func (m Model) layerCount() int {
 }
 
 func (m Model) title() string {
-	if m.Mode == ModeStories {
-		return "STACKS UI LAB"
-	}
 	return "STACKS"
 }
 

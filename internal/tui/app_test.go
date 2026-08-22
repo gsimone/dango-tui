@@ -22,7 +22,6 @@ func makeUI(size tui.TerminalSize, storyID string) tui.Model {
 		storyID = "mixed"
 	}
 	return tui.New(tui.Options{
-		Mode:    tui.ModeStories,
 		StoryID: storyID,
 		Width:   size.Width,
 		Height:  size.Height,
@@ -85,10 +84,10 @@ func TestDeterministicFramesAtCanonicalSizes(t *testing.T) {
 	for _, size := range []tui.TerminalSize{{Width: 40, Height: 20}, {Width: 80, Height: 24}, {Width: 120, Height: 30}} {
 		m := makeUI(size, "mixed")
 		frame := frameOf(m)
-		if !strings.Contains(frame, "STACKS UI LAB") {
+		if !strings.Contains(frame, "STACKS") {
 			t.Fatalf("%dx%d missing title:\n%s", size.Width, size.Height, frame)
 		}
-		if !strings.Contains(frame, "mixed health") {
+		if !strings.Contains(frame, "3 stacks / 8 layers") {
 			t.Fatalf("%dx%d missing story label:\n%s", size.Width, size.Height, frame)
 		}
 		if !strings.Contains(frame, "auth cleanup") {
@@ -238,7 +237,7 @@ func TestResizeAndCardClamp(t *testing.T) {
 		next, _ := m.Update(tea.WindowSizeMsg{Width: size.Width, Height: size.Height})
 		m = next.(tui.Model)
 		frame := frameOf(m)
-		if !strings.Contains(frame, "STACKS UI LAB") {
+		if !strings.Contains(frame, "STACKS") {
 			t.Fatalf("%dx%d missing title:\n%s", size.Width, size.Height, frame)
 		}
 		assertFits(t, frame, size.Width)
@@ -292,12 +291,7 @@ func TestSimulatedActionsStayHonest(t *testing.T) {
 	}
 }
 
-func TestStoryCycleAndWideInspector(t *testing.T) {
-	m := applyKey(makeUI(tui.TerminalSize{Width: 120, Height: 30}, "mixed"), key("]"))
-	frame := frameOf(m)
-	if !strings.Contains(frame, "all ready") && !strings.Contains(frame, "Story: all ready") {
-		t.Fatalf("next story:\n%s", frame)
-	}
+func TestWideInspector(t *testing.T) {
 	wide := frameOf(makeUI(tui.TerminalSize{Width: 120, Height: 30}, "mixed"))
 	if !strings.Contains(wide, "#184 Split auth scope from session checks") {
 		t.Fatalf("wide inspector should sit beside the list:\n%s", wide)

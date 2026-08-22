@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/gsimone/dango-tui/internal/app"
-	"github.com/gsimone/dango-tui/internal/data"
 	"github.com/gsimone/dango-tui/internal/domain"
 )
 
@@ -43,9 +42,6 @@ func (m Model) renderFrame(width, height int) string {
 	listWidth := ListTerminalWidth(width, insp.Width)
 
 	badge := "fixture"
-	if m.Mode == ModeStories {
-		badge = "fixture story"
-	}
 	title := m.title()
 	if !compact {
 		title = title + " / example/stacks"
@@ -54,16 +50,7 @@ func (m Model) renderFrame(width, height int) string {
 	c.text(1, 0, title, focus, surface, inner-displayWidth(badge)-1)
 	c.text(width-1-displayWidth(badge), 0, badge, muted, surface, displayWidth(badge))
 
-	var meta string
-	if m.Mode == ModeStories {
-		if compact {
-			meta = fmt.Sprintf("%s · %d stacks / %d layers", m.Story().Label, m.stackCount(), m.layerCount())
-		} else {
-			meta = fmt.Sprintf("story %d/%d · %s · %d stacks / %d layers", m.StoryIndex+1, len(data.FixtureStories), m.Story().Label, m.stackCount(), m.layerCount())
-		}
-	} else {
-		meta = fmt.Sprintf("%d stacks / %d layers · local deterministic data", m.stackCount(), m.layerCount())
-	}
+	meta := fmt.Sprintf("%d stacks / %d layers · local deterministic data", m.stackCount(), m.layerCount())
 	c.text(1, 1, meta, muted, surface, inner)
 
 	col := "STACK · BASE → HEAD"
@@ -134,7 +121,7 @@ func (m Model) footer() string {
 		}
 		return "enter checkout · o open · r refresh · esc close · q quit"
 	}
-	full := "↑↓ stack  ←→ layer  enter checkout  o open  r refresh  / filter  esc close  ? help  [ ] stories  q quit"
+	full := "↑↓ stack  ←→ layer  enter checkout  o open  r refresh  / filter  esc close  ? help  q quit"
 	if compact {
 		return "↑↓ stack · ←→ layer · / find · ? help"
 	}

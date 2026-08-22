@@ -81,10 +81,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.Help = !m.Help
 	case "esc", "escape":
 		m.State.CardVisible = false
-	case "[":
-		m.switchStory(-1)
-	case "]":
-		m.switchStory(1)
 	case "q":
 		m.quitting = true
 		return m, tea.Quit
