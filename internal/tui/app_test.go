@@ -1,6 +1,7 @@
 package tui_test
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"testing"
@@ -8,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gsimone/dango-tui/internal/data"
+	"github.com/gsimone/dango-tui/internal/domain"
 	"github.com/gsimone/dango-tui/internal/tui"
 )
 
@@ -15,6 +17,15 @@ var ansi = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\x07]*(?:\x07|\x1b\
 
 func strip(s string) string {
 	return ansi.ReplaceAllString(s, "")
+}
+
+func ansiBG(hex string) string {
+	if len(hex) != 7 || hex[0] != '#' {
+		return ""
+	}
+	var r, g, b int
+	fmt.Sscanf(hex, "#%02x%02x%02x", &r, &g, &b)
+	return fmt.Sprintf("48;2;%d;%d;%d", r, g, b)
 }
 
 func makeUI(size tui.TerminalSize, storyID string) tui.Model {
@@ -291,9 +302,45 @@ func TestSimulatedActionsStayHonest(t *testing.T) {
 	}
 }
 
-func TestWideInspector(t *testing.T) {
-	wide := frameOf(makeUI(tui.TerminalSize{Width: 120, Height: 30}, "mixed"))
+func TestPostcardOverlaysAsACard(t *testing.T) {
+	m := makeUI(tui.TerminalSize{Width: 120, Height: 30}, "mixed")
+	raw := m.View()
+	wide := strip(raw)
 	if !strings.Contains(wide, "#184 Split auth scope from session checks") {
-		t.Fatalf("wide inspector should sit beside the list:\n%s", wide)
+		t.Fatalf("postcard missing title:\n%s", wide)
+	}
+	if !strings.Contains(wide, "┌") || !strings.Contains(wide, "└") {
+		t.Fatalf("postcard should have card chrome:\n%s", wide)
+	}
+	if !strings.Contains(wide, "○-○-○") {
+		t.Fatalf("postcard should sit off the packed balls, not cut them:\n%s", wide)
+	}
+	paperBG := ansiBG(domain.Color("postcard"))
+	fieldBG := ansiBG(domain.Color("surface"))
+	if !strings.Contains(raw, paperBG) {
+		t.Fatalf("postcard paper fill missing from frame: %s", paperBG)
+	}
+	if !strings.Contains(raw, fieldBG) {
+		t.Fatalf("list field missing from frame: %s", fieldBG)
+	}
+	if paperBG == fieldBG {
+		t.Fatal("postcard and list share a background")
+	}
+}
+
+func TestHoverShowsPostcardWithoutClick(t *testing.T) {
+	size := tui.TerminalSize{Width: 80, Height: 24}
+	first := data.FixtureStories[0].Stacks[0]
+	point := tui.GetBallPoint(size, 0, 1, len(first.PRs))
+	m, _ := makeUI(size, "mixed").Update(mouseMove(point.X, point.Y))
+	frame := frameOf(m.(tui.Model))
+	if !strings.Contains(frame, "┌") {
+		t.Fatalf("hover should lift a postcard:\n%s", frame)
+	}
+	if !strings.Contains(frame, "#185 Keep service identity explicit") {
+		t.Fatalf("hover postcard:\n%s", frame)
+	}
+	if !strings.Contains(frame, "○-●-○") {
+		t.Fatalf("hover should fill the focused ball:\n%s", frame)
 	}
 }

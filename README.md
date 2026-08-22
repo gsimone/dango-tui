@@ -27,9 +27,9 @@ make build
 
 `make build` is `CGO_ENABLED=0 go build -ldflags="-s -w" -o dango ./cmd/dango`.
 
-The app is a native terminal UI, not a dev server. It handles 40×20, 80×24,
-120×30, and 160×40 terminals: the inspector docks below the list at compact
-sizes and becomes a stable right pane on wide terminals.
+The app is a native terminal UI, not a dev server. Hover or focus a layer ball
+and a paper postcard lifts off the list field. It is clamped so it stays on
+screen and never becomes a same-ground chrome column.
 
 `go run ./cmd/dango` is the app: local fixture / test data. There is no live GitHub fetch yet. `o` opens the PR URL in your browser. There is no GitHub
 client yet — checkout / open / refresh are labelled simulations.
@@ -63,6 +63,7 @@ mouse hits on the two-cell PR balls.
 
 ## Layout
 
-- **40×20** — compact list, inspector docks below, short footer
-- **80×24** — full stack rows, inspector still below the list
-- **120×30 / 160×40** — inspector becomes a stable right pane
+- **40×20** — compact list, postcard clamped on-screen, short footer
+- **80×24** — full stack rows, hover/focus postcard over the field
+- **120×30 / 160×40** — postcard sits beside the focused balls, still a card
+  not a reserved right column

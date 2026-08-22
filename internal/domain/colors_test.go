@@ -77,3 +77,23 @@ func TestChromeHexLocks(t *testing.T) {
 		t.Fatal("status color collided with connector")
 	}
 }
+
+func TestPostcardIsNotListGround(t *testing.T) {
+	if _, ok := domain.ChromeHex["postcard"]; ok {
+		t.Fatal("postcard must not be chrome-locked to the list field")
+	}
+	if domain.Color("postcard") == domain.Color("surface") {
+		t.Fatal("postcard fill must not match the list field")
+	}
+	if domain.Color("postcard") == domain.Color("surfaceRaised") {
+		t.Fatal("postcard fill must not match the selected-row lift")
+	}
+	if domain.Color("postcardInk") == domain.Color("text") {
+		t.Fatal("postcard ink should sit on paper, not cream-on-field type")
+	}
+	paper := domain.OKLCHTokens["postcard"]
+	field := domain.OKLCHTokens["surface"]
+	if paper[0] <= field[0]+0.4 {
+		t.Fatalf("postcard should be a lifted paper surface, lightness %v vs field %v", paper[0], field[0])
+	}
+}

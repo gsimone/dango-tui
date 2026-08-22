@@ -84,6 +84,10 @@ var OKLCHTokens = map[string]OKLCH{
 	"merged":        {0.65, 0.145, 305},
 	"success":       {0.76, 0.13, 145},
 	"warning":       {0.8, 0.14, 88},
+	"postcard":      {0.84, 0.045, 82},
+	"postcardInk":   {0.24, 0.03, 68},
+	"postcardMuted": {0.45, 0.028, 70},
+	"postcardEdge":  {0.58, 0.055, 72},
 }
 
 // ChromeHex locks the field, selected row, type, and connectors to the mark.

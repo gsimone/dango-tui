@@ -86,22 +86,30 @@ func ClampCardPlacement(size TerminalSize, anchor struct{ X, Y int }) CardPlacem
 	if below+cardHeight > usableBottom {
 		top = max(1, anchor.Y-cardHeight)
 	}
-	return CardPlacement{
+	place := CardPlacement{
 		Left:    min(max(1, anchor.X+2), maxLeft),
 		Top:     top,
 		Width:   cardWidth,
-		Height:  min(cardHeight, max(3, usableBottom-1)),
+		Height:  min(cardHeight, max(3, usableBottom-top)),
 		Compact: compact,
 	}
+	if place.Left+place.Width > size.Width-1 {
+		place.Width = max(16, size.Width-1-place.Left)
+	}
+	if place.Top+place.Height > usableBottom {
+		place.Height = max(3, usableBottom-place.Top)
+	}
+	if place.Top < 1 {
+		place.Top = 1
+	}
+	return place
 }
 
 func IsWide(width int) bool    { return width >= 100 }
 func IsCompact(width int) bool { return width <= 50 }
 
-func ListTerminalWidth(termWidth int, inspectorWidth int) int {
-	if IsWide(termWidth) {
-		return termWidth - inspectorWidth - 1
-	}
+func ListTerminalWidth(termWidth int, _ int) int {
+	// The postcard overlays the field; do not reserve a chrome column.
 	return termWidth
 }
 

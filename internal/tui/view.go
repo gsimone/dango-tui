@@ -37,9 +37,7 @@ func (m Model) renderFrame(width, height int) string {
 
 	c := newCanvas(width, height, surface)
 	compact := IsCompact(width)
-	wide := IsWide(width)
-	insp := GetInspectorSize(TerminalSize{Width: width, Height: height})
-	listWidth := ListTerminalWidth(width, insp.Width)
+	listWidth := width
 
 	badge := "fixture"
 	title := m.title()
@@ -67,27 +65,8 @@ func (m Model) renderFrame(width, height int) string {
 		mainBottom = mainTop
 	}
 
-	var listBottom, inspX, inspY, inspW, inspH int
-	if wide {
-		inspW = insp.Width
-		inspH = mainBottom - mainTop
-		inspX = width - 1 - inspW
-		inspY = mainTop
-		listBottom = mainBottom
-	} else {
-		inspW = insp.Width
-		inspH = insp.Height
-		inspX = 1
-		inspY = mainBottom - inspH
-		if inspY < mainTop {
-			inspY = mainTop
-			inspH = mainBottom - mainTop
-		}
-		listBottom = inspY
-	}
-
-	m.paintList(c, listWidth, mainTop, listBottom, surface, raised, text, muted, stick)
-	m.paintInspector(c, inspX, inspY, inspW, inspH, insp.Compact, raised, focus, text, muted, surface)
+	m.paintList(c, listWidth, mainTop, mainBottom, surface, raised, text, muted, stick)
+	m.paintPostcard(c)
 
 	if m.State.Searching {
 		c.fill(1, statusY, inner, 1, raised)
@@ -149,7 +128,9 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 		nameFg := muted
 		selectedStack := i == sel.StackIndex
 		if selectedStack {
+			rowBg = raised
 			nameFg = text
+			c.fill(1, y, max(1, listWidth-2), 1, rowBg)
 		}
 		marker := "· "
 		if selectedStack {
@@ -172,21 +153,12 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 			if prIndex == len(stack.PRs)-1 {
 				connector = ' '
 			}
-			c.set(ballX+prIndex*2+1, y, connector, muted, bg)
+			c.set(ballX+prIndex*2+1, y, connector, stick, bg)
 		}
 
 		if !layout.Compact {
 			descX := ballX + layout.BallsWidth + 1
-			remain := max(0, 1+max(1, listWidth-2)-descX)
-			if IsWide(m.Width) {
-				insp := GetInspectorSize(TerminalSize{Width: m.Width, Height: m.Height})
-				limit := m.Width - 1 - insp.Width - 1
-				if descX+remain > limit {
-					remain = max(0, limit-descX)
-				}
-			} else {
-				remain = max(0, (listWidth-1)-descX)
-			}
+			remain := max(0, (listWidth-1)-descX)
 			c.text(descX, y, clip(stackHealth(stack)+" · "+stack.Description, remain), muted, rowBg, remain)
 		}
 	}
@@ -215,43 +187,117 @@ func stackHealth(stack domain.Stack) string {
 	}
 }
 
-func (m Model) paintInspector(c *canvas, x, y, w, h int, compact bool, raised, focus, text, muted, surface string) {
-	if w < 1 || h < 1 {
-		return
+func (m Model) postcardPlace() (CardPlacement, bool) {
+	anchor, ok := m.selectedBallAnchor()
+	if !ok {
+		return CardPlacement{}, false
 	}
-	c.fill(x, y, w, h, surface)
+	size := TerminalSize{Width: m.Width, Height: m.Height}
+	afterBalls := 0
+	for _, stack := range m.Stacks() {
+		layout := GetRowLayout(size.Width, len(stack.PRs))
+		edge := RootPaddingX + layout.NameWidth + 1 + layout.BallsWidth + 1
+		if edge > afterBalls {
+			afterBalls = edge
+		}
+	}
+	compact := IsCompact(size.Width)
+	cardWidth := max(16, min(func() int {
+		if compact {
+			return 38
+		}
+		return 56
+	}(), size.Width-2))
+	cardHeight := 9
+	if compact {
+		cardHeight = 8
+	}
+	usableBottom := max(1, size.Height-2)
+	listBottom := ListStartY + len(m.Stacks())
+
+	// Prefer a postcard on the field below the stacks so the ball chain stays intact.
+	if listBottom+cardHeight <= usableBottom {
+		return keepCardOnScreen(size, CardPlacement{Left: 1, Top: listBottom, Width: cardWidth, Height: cardHeight, Compact: compact}), true
+	}
+	if afterBalls+cardWidth <= size.Width-1 {
+		top := anchor.Y
+		if top+cardHeight > usableBottom {
+			top = max(1, usableBottom-cardHeight)
+		}
+		return keepCardOnScreen(size, CardPlacement{Left: afterBalls, Top: top, Width: cardWidth, Height: cardHeight, Compact: compact}), true
+	}
+	return ClampCardPlacement(size, anchor), true
+}
+
+func keepCardOnScreen(size TerminalSize, place CardPlacement) CardPlacement {
+	usableBottom := max(1, size.Height-2)
+	if place.Left < 1 {
+		place.Left = 1
+	}
+	if place.Left+place.Width > size.Width-1 {
+		place.Width = max(16, size.Width-1-place.Left)
+	}
+	if place.Top < 1 {
+		place.Top = 1
+	}
+	if place.Top+place.Height > usableBottom {
+		place.Height = max(3, usableBottom-place.Top)
+	}
+	return place
+}
+
+func (m Model) selectedBallAnchor() (struct{ X, Y int }, bool) {
+	stack, ok := m.SelectedStack()
+	if !ok {
+		return struct{ X, Y int }{}, false
+	}
+	sel := app.ClampSelection(m.State.Selection, m.Stacks())
+	return GetBallPoint(TerminalSize{Width: m.Width, Height: m.Height}, sel.StackIndex, sel.PRIndex, len(stack.PRs)), true
+}
+
+func (m Model) paintPostcard(c *canvas) {
 	pr, ok := m.SelectedPR()
 	if !m.State.CardVisible || !ok {
-		msg := "Select or hover a layer to inspect."
-		if compact {
-			msg = "Select a layer to inspect."
-		}
-		c.text(x, y, msg, muted, surface, w)
+		return
+	}
+	place, ok := m.postcardPlace()
+	if !ok {
+		return
+	}
+	x, y, w, h := place.Left, place.Top, place.Width, place.Height
+	if w < 2 || h < 2 {
 		return
 	}
 
-	maxLine := max(8, w)
+	paper := domain.Color("postcard")
+	ink := domain.Color("postcardInk")
+	quiet := domain.Color("postcardMuted")
+	edge := domain.Color("postcardEdge")
+	c.box(x, y, w, h, edge, paper, ink)
+
+	maxLine := max(8, w-4)
 	state := domain.GetDisplayState(pr)
+	stateFg := domain.Color(domain.StateColorToken(state))
 	headline := domain.DisplayStateLabel[state] + " · " + domain.DisplayStateDetail(pr)
-	c.text(x, y, "#"+itoa(pr.Number)+" "+pr.Title, text, surface, maxLine)
-	c.text(x, y+1, headline, muted, surface, maxLine)
+	c.text(x+2, y+1, "#"+itoa(pr.Number)+" "+pr.Title, ink, paper, maxLine)
+	c.text(x+2, y+2, headline, stateFg, paper, maxLine)
 
 	ci := ciLine(pr)
 	review := reviewLine(pr)
 	diff := fmt.Sprintf("+%d −%d · %d files", pr.Additions, pr.Deletions, pr.ChangedFiles)
 	hint := "o open"
-	if compact {
-		c.text(x, y+2, ci+" · "+review, muted, surface, maxLine)
-		c.text(x, y+3, diff, muted, surface, maxLine)
-		c.text(x, y+4, pr.Branch, muted, surface, maxLine)
-		c.text(x, y+5, hint, muted, surface, maxLine)
+	if place.Compact {
+		c.text(x+2, y+3, ci+" · "+review, quiet, paper, maxLine)
+		c.text(x+2, y+4, diff, ink, paper, maxLine)
+		c.text(x+2, y+5, pr.Branch, quiet, paper, maxLine)
+		c.text(x+2, y+6, hint, ink, paper, maxLine)
 		return
 	}
-	c.text(x, y+2, ci, muted, surface, maxLine)
-	c.text(x, y+3, review, muted, surface, maxLine)
-	c.text(x, y+4, diff, muted, surface, maxLine)
-	c.text(x, y+5, pr.Branch, muted, surface, maxLine)
-	c.text(x, y+6, hint, muted, surface, maxLine)
+	c.text(x+2, y+3, ci, quiet, paper, maxLine)
+	c.text(x+2, y+4, review, quiet, paper, maxLine)
+	c.text(x+2, y+5, diff, ink, paper, maxLine)
+	c.text(x+2, y+6, pr.Branch, quiet, paper, maxLine)
+	c.text(x+2, y+7, hint, ink, paper, maxLine)
 }
 
 func ciLine(pr domain.PullRequest) string {
@@ -301,19 +347,10 @@ func (m Model) ballHit(x, y int) (stackIndex, prIndex int, ok bool) {
 	if len(stacks) == 0 {
 		return 0, 0, false
 	}
-	insp := GetInspectorSize(TerminalSize{Width: m.Width, Height: m.Height})
-	listWidth := ListTerminalWidth(m.Width, insp.Width)
+	listWidth := ListTerminalWidth(m.Width, 0)
 	statusY := m.Height - 2
 	mainTop := ListStartY
-	mainBottom := statusY
-	listBottom := mainBottom
-	if !IsWide(m.Width) {
-		listBottom = mainBottom - insp.Height
-		if listBottom < mainTop {
-			listBottom = mainTop
-		}
-	}
-	if y < mainTop || y >= listBottom {
+	if y < mainTop || y >= statusY {
 		return 0, 0, false
 	}
 	stackIndex = y - mainTop
