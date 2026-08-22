@@ -59,8 +59,8 @@ func (m Model) renderFrame(width, height int) string {
 		m.paintInspectorPane(c, insp, surface, paper, meta)
 	}
 
-	footX := PadX + 2
-	footW := max(1, inner-4)
+	footX := PadX
+	footW := max(1, inner)
 	if m.State.Searching {
 		query := m.State.Query
 		if query == "" {

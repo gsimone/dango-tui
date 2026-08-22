@@ -50,7 +50,7 @@ func New(opts Options) Model {
 		Height:     height,
 		StoryIndex: idx,
 		State:      app.InitialState(),
-		Fetched:    "local",
+		Fetched:    "20:42",
 	}
 }
 
@@ -58,12 +58,12 @@ func (m Model) Init() tea.Cmd { return nil }
 
 func (m Model) fetchBadge() string {
 	if m.Fetching {
-		return "⠋ fetching"
+		return "⠋"
 	}
 	if m.Fetched == "" {
-		return "fetched · local"
+		return "20:42"
 	}
-	return "fetched · " + m.Fetched
+	return m.Fetched
 }
 
 func (m Model) Story() data.FixtureStory {

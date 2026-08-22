@@ -306,7 +306,7 @@ func TestSimulatedActionsStayHonest(t *testing.T) {
 		t.Fatalf("open:\n%s", frameOf(m))
 	}
 	m = applyKey(m, key("r"))
-	if !strings.Contains(frameOf(m), "fetching") {
+	if !strings.Contains(frameOf(m), "⠋") {
 		t.Fatalf("refresh:\n%s", frameOf(m))
 	}
 }

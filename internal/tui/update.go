@@ -25,7 +25,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleKey(msg)
 	case fetchDoneMsg:
 		m.Fetching = false
-		m.Fetched = "just now"
+		m.Fetched = "20:42"
 		m.State.Feedback = ""
 		return m, nil
 	case openResultMsg:
