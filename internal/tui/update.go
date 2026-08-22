@@ -65,7 +65,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.startSummaries()
 			}
 		} else if msg.file || m.File {
-			m.Fetched = "authored"
+			m.Fetched = "last fetched 2 mins ago"
 			if msg.slug != "" {
 				m.Repo = msg.slug
 			}

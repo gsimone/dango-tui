@@ -168,17 +168,13 @@ func ReadDangoJSON(dir string) (Config, error) {
 	return ReadDangoConfig(dir)
 }
 
-// Resolve fills repo from git remote and provider from dango.json / dango.yml
-// / dango.yaml when flags are omitted. --repo (owner/name or a stack file)
-// and --provider win. -story stays fixtures.
+// Resolve fills provider from dango.json / dango.yml / dango.yaml when
+// --provider is omitted. Empty --repo stays empty (authored examples).
+// --repo owner/name is live gh. --repo path.json is a stack dump.
+// Story is a test/dev hook and is not filled from git.
 func Resolve(args Args, dir string) Args {
 	if args.Story != "" {
 		return args
-	}
-	if args.Repo == "" {
-		if repo, err := DetectRepo(dir); err == nil {
-			args.Repo = repo
-		}
 	}
 	if args.Provider.Empty() {
 		if cfg, err := ReadDangoConfig(dir); err == nil && cfg.Provider != "" {

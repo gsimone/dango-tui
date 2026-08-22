@@ -415,21 +415,19 @@ func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper
 		return
 	}
 	row++
-	if m.Live || m.File {
-		if stack, ok := m.SelectedStack(); ok {
-			if desc := strings.TrimSpace(stack.Description); desc != "" {
-				for _, line := range wrapWords(desc, maxLine) {
-					if row >= h {
-						return
-					}
-					c.text(x, y+row, line, meta, bg, maxLine)
-					row++
-				}
+	if stack, ok := m.SelectedStack(); ok {
+		if desc := strings.TrimSpace(stack.Description); desc != "" {
+			for _, line := range wrapWords(desc, maxLine) {
 				if row >= h {
 					return
 				}
+				c.text(x, y+row, line, meta, bg, maxLine)
 				row++
 			}
+			if row >= h {
+				return
+			}
+			row++
 		}
 	}
 	for _, fact := range inspectorFacts(pr) {
@@ -490,11 +488,9 @@ func (m Model) stackedPaneHeight(listWidth int) int {
 	title := "#" + itoa(pr.Number) + " " + pr.Title
 	lines := len(wrapWords(title, innerW))
 	descLines := 0
-	if m.Live || m.File {
-		if stack, ok := m.SelectedStack(); ok {
-			if desc := strings.TrimSpace(stack.Description); desc != "" {
-				descLines = len(wrapWords(desc, innerW)) + 1
-			}
+	if stack, ok := m.SelectedStack(); ok {
+		if desc := strings.TrimSpace(stack.Description); desc != "" {
+			descLines = len(wrapWords(desc, innerW)) + 1
 		}
 	}
 	return max(2*border+2*pad+1, 2*border+2*pad+lines+1+descLines+len(inspectorFacts(pr)))

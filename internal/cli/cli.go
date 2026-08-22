@@ -16,11 +16,12 @@ func IsStackFile(raw string) bool {
 	return data.IsStackFile(raw)
 }
 
-// Args is the flag-driven launch config. --repo is owner/name (live gh) or a
-// JSON stack file. -story loads authored fixtures and ignores live fetch.
+// Args is the flag-driven launch config. No --repo is authored examples
+// (same chrome as live). --repo owner/name is live gh. --repo path.json
+// is a stack dump.
 type Args struct {
 	Frame    string
-	Story    string
+	Story    string // test/dev hook only; not advertised
 	Repo     string
 	Provider summary.Provider
 }
@@ -32,6 +33,18 @@ func ParseProvider(raw string) Provider {
 	return summary.ParseProvider(raw)
 }
 
+// Usage is the advertised help. -story is a hidden test/dev hook and
+// must not appear here.
+func Usage() string {
+	return "Usage: dango\n" +
+		"       dango --repo owner/name [--provider name@model]\n" +
+		"       dango --repo testdata/test.json\n" +
+		"\n" +
+		"No --repo: authored example stacks (same chrome as live).\n" +
+		"--repo owner/name fetches via gh. dango.json / dango.yml / dango.yaml sets the title provider.\n" +
+		"Missing config file = no generated title. --provider overrides. No picker.\n"
+}
+
 func Parse(args []string) (Args, error) {
 	return parse(args, io.Discard)
 }
@@ -40,22 +53,11 @@ func parse(args []string, usage io.Writer) (Args, error) {
 	fs := flag.NewFlagSet("dango", flag.ContinueOnError)
 	fs.SetOutput(usage)
 	frame := fs.String("frame", "", "print one frame (WxH, e.g. 80x24) and exit")
-	story := fs.String("story", "", "authored fixture: mixed, freight, pair (chaos is stress only)")
+	story := fs.String("story", "", "")
 	repo := fs.String("repo", "", "owner/name (live gh) or a JSON file of authored stacks")
 	provider := fs.String("provider", "", "stack title summarizer (e.g. codex@luna.medium); optional, does not block fetch")
 	fs.Usage = func() {
-		fmt.Fprintln(usage, "Usage: dango")
-		fmt.Fprintln(usage, "       dango --repo owner/name [--provider name@model]")
-		fmt.Fprintln(usage, "       dango --repo testdata/test.json")
-		fmt.Fprintln(usage, "       dango -story mixed")
-		fmt.Fprintln(usage, "       dango -story freight")
-		fmt.Fprintln(usage, "       dango -story pair")
-		fmt.Fprintln(usage, "")
-		fmt.Fprintln(usage, "With no flags, owner/name comes from git remote of cwd.")
-		fmt.Fprintln(usage, "dango.json / dango.yml / dango.yaml sets the title provider. Missing file = no generated title.")
-		fmt.Fprintln(usage, "--repo is live gh or a stack dump. -story loads fixtures and ignores fetch.")
-		fmt.Fprintln(usage, "--provider overrides the config file. No picker.")
-		fs.PrintDefaults()
+		fmt.Fprint(usage, Usage())
 	}
 	if err := fs.Parse(args); err != nil {
 		return Args{}, err

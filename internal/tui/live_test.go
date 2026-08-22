@@ -45,17 +45,34 @@ func TestNoRepoUsesFixture(t *testing.T) {
 		t.Fatal("no --repo is fixtures")
 	}
 	frame := frameOf(m)
+	if !strings.Contains(frame, "●-●-● DANGO") || strings.Contains(frame, "🍡") {
+		t.Fatalf("same chrome as live:\n%s", frame)
+	}
 	if !strings.Contains(frame, "org/reponame") {
 		t.Fatalf("fixture header slug:\n%s", frame)
 	}
-	if !strings.Contains(frame, "auth cleanup") {
-		t.Fatalf("default fixture is mixed, not chaos:\n%s", frame)
+	if !strings.Contains(frame, "last fetched 2 mins ago") {
+		t.Fatalf("same fetch chrome as live:\n%s", frame)
+	}
+	if strings.Contains(frame, "DEMO") || strings.Contains(frame, "demo") {
+		t.Fatalf("no demo theme:\n%s", frame)
+	}
+	for _, name := range []string{"auth cleanup", "pair", "freight train"} {
+		if !strings.Contains(frame, name) {
+			t.Fatalf("default examples include %q:\n%s", name, frame)
+		}
+	}
+	if !strings.Contains(frame, "5 stacks / 30 layers") {
+		t.Fatalf("mixed+pair+freight counts:\n%s", frame)
 	}
 	if strings.Contains(frame, "300 stacks") {
-		t.Fatalf("default demo must not be chaos:\n%s", frame)
+		t.Fatalf("default examples must not be chaos:\n%s", frame)
 	}
 	if strings.Contains(frame, "pass --repo") {
-		t.Fatalf("no empty/help when fixtures load:\n%s", frame)
+		t.Fatalf("no empty/help when examples load:\n%s", frame)
+	}
+	if strings.Contains(frame, "[ p ]") {
+		t.Fatalf("no picker:\n%s", frame)
 	}
 }
 
@@ -120,7 +137,7 @@ func TestStoryIgnoresLiveFetch(t *testing.T) {
 		Width:   80,
 		Height:  24,
 		Fetch: func(string) ([]domain.Stack, error) {
-			t.Fatal("-story must ignore live fetch")
+			t.Fatal("StoryID hook must ignore live fetch")
 			return nil, nil
 		},
 	})

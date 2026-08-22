@@ -71,10 +71,32 @@ func TestChaosStaysStressOnly(t *testing.T) {
 	if len(story.Stacks) != 300 {
 		t.Fatalf("chaos is the 300-stack stress story, got %d", len(story.Stacks))
 	}
-	if data.StoryByID("").ID != "mixed" && data.StoryByID("missing").ID != "mixed" {
-		// StoryByID("") falls through to first story (mixed).
-	}
 	if data.StoryByID("missing").ID != "mixed" {
 		t.Fatalf("unknown story should fall back to mixed, got %s", data.StoryByID("missing").ID)
+	}
+}
+
+func TestExampleStacksAreAuthoredNotChaos(t *testing.T) {
+	stacks := data.ExampleStacks()
+	if len(stacks) != 5 {
+		t.Fatalf("mixed+pair+freight is 5 stacks, got %d", len(stacks))
+	}
+	layers := 0
+	for _, stack := range stacks {
+		layers += len(stack.PRs)
+	}
+	if layers != 30 {
+		t.Fatalf("8+2+20 layers, got %d", layers)
+	}
+	names := strings.Join([]string{stacks[0].Name, stacks[3].Name, stacks[4].Name}, ",")
+	if stacks[0].Name != "auth cleanup" || stacks[3].Name != "pair" || stacks[4].Name != "freight train" {
+		t.Fatalf("example order: %s", names)
+	}
+	for _, stack := range stacks {
+		for _, pr := range stack.PRs {
+			if strings.HasPrefix(pr.Title, "Freight layer") || strings.Contains(pr.Title, " layer ") && strings.HasPrefix(stack.Name, "ok") {
+				t.Fatalf("examples must stay authored: %q / %q", stack.Name, pr.Title)
+			}
+		}
 	}
 }

@@ -88,7 +88,7 @@ func New(opts Options) Model {
 func (m *Model) loadFile(path string) {
 	m.File = true
 	m.file = path
-	m.Fetched = "authored"
+	m.Fetched = "last fetched 2 mins ago"
 	repo, stacks, err := data.LoadStacks(path)
 	if repo != "" {
 		m.Repo = repo
@@ -107,8 +107,12 @@ func (m *Model) loadFile(path string) {
 }
 
 func (m *Model) loadFixture(storyID string) {
+	m.Fetched = "last fetched 2 mins ago"
 	if storyID == "" {
-		storyID = "mixed"
+		m.StoryIndex = -1
+		m.stacks = data.ExampleStacks()
+		m.cacheState = data.CacheCurrent
+		return
 	}
 	idx := 0
 	for i, story := range data.FixtureStories {
@@ -121,7 +125,6 @@ func (m *Model) loadFixture(storyID string) {
 	m.StoryIndex = idx
 	m.stacks = story.Stacks
 	m.cacheState = story.CacheState
-	m.Fetched = "last fetched 2 mins ago"
 }
 
 func (m *Model) loadLive() {
@@ -202,11 +205,8 @@ func (m Model) repoLabel() string {
 }
 
 func (m Model) Story() data.FixtureStory {
-	if m.Live || m.File {
+	if m.Live || m.File || m.StoryIndex < 0 || m.StoryIndex >= len(data.FixtureStories) {
 		return data.FixtureStory{Stacks: m.stacks, CacheState: m.cacheState}
-	}
-	if m.StoryIndex < 0 || m.StoryIndex >= len(data.FixtureStories) {
-		return data.StoryByID("mixed")
 	}
 	return data.FixtureStories[m.StoryIndex]
 }
@@ -291,15 +291,9 @@ func (m Model) emptyMessage() string {
 		return m.fetchErr.Error()
 	}
 	if m.cacheState == data.CacheError || m.Story().CacheState == data.CacheError {
-		if m.Live || m.File {
-			return "Refresh failed. No stacks are available."
-		}
-		return "Refresh failed in this fixture. No cached stacks are available."
+		return "Refresh failed. No stacks are available."
 	}
-	if m.Live || m.File {
-		return "No open stacks in this repository."
-	}
-	return "No open stacks in this fixture repository."
+	return "No open stacks in this repository."
 }
 
 func (m Model) stackCount() int {

@@ -49,15 +49,7 @@ func main() {
 }
 
 func helpText() string {
-	return "Usage: dango\n" +
-		"       dango --repo owner/name [--provider name@model]\n" +
-		"       dango --repo testdata/test.json\n" +
-		"       dango -story mixed\n" +
-		"       dango -story freight\n" +
-		"       dango -story pair\n\n" +
-		"No flags: detect owner/name from git remote of cwd. dango.json / dango.yml / dango.yaml sets the title provider.\n" +
-		"Missing config file = no generated title. --repo is live gh or a stack dump. -story loads fixtures.\n" +
-		"--provider overrides. No picker. -story chaos is a stress load, not the default demo.\n"
+	return cli.Usage()
 }
 
 func parseFrame(spec string) (int, int, error) {

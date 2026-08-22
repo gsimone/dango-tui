@@ -128,15 +128,15 @@ func TestReadDangoConfigPrefersRepoOverCwd(t *testing.T) {
 	}
 }
 
-func TestResolveDetectsRepoAndJSON(t *testing.T) {
+func TestResolveEmptyRepoStaysExamples(t *testing.T) {
 	dir := t.TempDir()
 	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")
 	if err := os.WriteFile(filepath.Join(dir, "dango.json"), []byte(`{"provider":"codex@luna.medium"}`), 0644); err != nil {
 		t.Fatal(err)
 	}
 	got := Resolve(Args{}, dir)
-	if got.Repo != "gsimone/leva-2" {
-		t.Fatalf("repo %q", got.Repo)
+	if got.Repo != "" {
+		t.Fatalf("no --repo stays examples, got repo %q", got.Repo)
 	}
 	if got.Provider.Raw != "codex@luna.medium" {
 		t.Fatalf("provider %+v", got.Provider)
@@ -158,15 +158,15 @@ func TestResolveFlagsOverrideDetectAndYAML(t *testing.T) {
 	}
 }
 
-func TestResolveDetectsRepoAndYAML(t *testing.T) {
+func TestResolveYAMLProviderWithoutRepo(t *testing.T) {
 	dir := t.TempDir()
 	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")
 	if err := os.WriteFile(filepath.Join(dir, "dango.yaml"), []byte("# title hook\nprovider: \"codex@luna.medium\"\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	got := Resolve(Args{}, dir)
-	if got.Repo != "gsimone/leva-2" {
-		t.Fatalf("repo %q", got.Repo)
+	if got.Repo != "" {
+		t.Fatalf("no --repo stays examples, got repo %q", got.Repo)
 	}
 	if got.Provider.Raw != "codex@luna.medium" {
 		t.Fatalf("provider %+v", got.Provider)
@@ -177,15 +177,15 @@ func TestResolveMissingJSONHasNoProvider(t *testing.T) {
 	dir := t.TempDir()
 	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")
 	got := Resolve(Args{}, dir)
-	if got.Repo != "gsimone/leva-2" {
-		t.Fatalf("repo %q", got.Repo)
+	if got.Repo != "" {
+		t.Fatalf("no --repo stays examples, got repo %q", got.Repo)
 	}
 	if got.Provider.Raw != "" {
 		t.Fatalf("missing dango.json must not invent a provider: %+v", got.Provider)
 	}
 }
 
-func TestResolveStoryStaysFixtures(t *testing.T) {
+func TestResolveStoryHookStaysFixtures(t *testing.T) {
 	dir := t.TempDir()
 	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")
 	got := Resolve(Args{Story: "mixed"}, dir)

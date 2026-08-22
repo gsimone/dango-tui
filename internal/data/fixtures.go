@@ -476,6 +476,18 @@ func StoryByID(id string) FixtureStory {
 	return FixtureStories[0]
 }
 
+// ExampleIDs are the authored stacks shown when --repo is off.
+var ExampleIDs = []string{"mixed", "pair", "freight"}
+
+// ExampleStacks returns mixed + pair + freight. Not chaos, not random.
+func ExampleStacks() []domain.Stack {
+	var out []domain.Stack
+	for _, id := range ExampleIDs {
+		out = append(out, StoryByID(id).Stacks...)
+	}
+	return out
+}
+
 func boolPtr(v bool) *bool { return &v }
 
 func itoa(n int) string {

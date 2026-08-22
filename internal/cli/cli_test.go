@@ -39,28 +39,16 @@ func TestParseNormalizesGitHubURL(t *testing.T) {
 	}
 }
 
-func TestParseStoryIgnoresRepo(t *testing.T) {
+func TestParseStoryHookStaysHidden(t *testing.T) {
 	args, err := Parse([]string{"-story", "mixed", "--repo", "gsimone/leva-2"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if args.Story != "mixed" {
-		t.Fatalf("story %q", args.Story)
+		t.Fatalf("hidden hook still works, got %q", args.Story)
 	}
 	if args.Repo != "" {
-		t.Fatalf("story must ignore live repo, got %q", args.Repo)
-	}
-}
-
-func TestParseStoryFreightPair(t *testing.T) {
-	for _, id := range []string{"mixed", "freight", "pair", "chaos"} {
-		args, err := Parse([]string{"-story", id})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if args.Story != id {
-			t.Fatalf("story %q", args.Story)
-		}
+		t.Fatalf("story hook ignores --repo, got %q", args.Repo)
 	}
 }
 
@@ -81,13 +69,13 @@ func TestParseRepoJSONFile(t *testing.T) {
 	}
 }
 
-func TestParseNeitherLeavesDetectToResolve(t *testing.T) {
+func TestParseNeitherIsExamples(t *testing.T) {
 	args, err := Parse(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if args.Repo != "" || args.Story != "" {
-		t.Fatalf("flags-only parse must not invent a repo, got %+v", args)
+		t.Fatalf("no --repo is examples, got %+v", args)
 	}
 }
 
@@ -119,8 +107,29 @@ func TestParseProviderWithoutAt(t *testing.T) {
 }
 
 func TestParseHelp(t *testing.T) {
-	_, err := Parse([]string{"-h"})
+	var buf strings.Builder
+	_, err := parse([]string{"-h"}, &buf)
 	if err != flag.ErrHelp {
 		t.Fatalf("help: %v", err)
+	}
+	got := buf.String()
+	if strings.Contains(got, "-story") || strings.Contains(got, "dango -story") {
+		t.Fatalf("must not advertise -story:\n%s", got)
+	}
+	if !strings.Contains(got, "No --repo: authored example stacks") {
+		t.Fatalf("advertised path:\n%s", got)
+	}
+	if !strings.Contains(got, "--repo owner/name") {
+		t.Fatalf("live path:\n%s", got)
+	}
+}
+
+func TestUsageDoesNotAdvertiseStory(t *testing.T) {
+	got := Usage()
+	if strings.Contains(got, "-story") || strings.Contains(got, "story") {
+		t.Fatalf("usage must not sell -story:\n%s", got)
+	}
+	if strings.Contains(got, "detect") {
+		t.Fatalf("no --repo is examples, not git detect:\n%s", got)
 	}
 }

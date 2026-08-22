@@ -267,11 +267,11 @@ func TestFixtureCacheAndEmptyStates(t *testing.T) {
 		t.Fatalf("footer must not be a middot status sentence:\n%s", stale)
 	}
 	empty := frameOf(makeUI(tui.TerminalSize{Width: 80, Height: 24}, "all-merged"))
-	if !strings.Contains(empty, "No open stacks in this fixture") {
+	if !strings.Contains(empty, "No open stacks in this repository.") {
 		t.Fatalf("empty:\n%s", empty)
 	}
 	errFrame := frameOf(makeUI(tui.TerminalSize{Width: 80, Height: 24}, "ci-failing"))
-	if !strings.Contains(errFrame, "Refresh failed in this fixture.") {
+	if !strings.Contains(errFrame, "Refresh failed. No stacks are available.") {
 		t.Fatalf("error empty:\n%s", errFrame)
 	}
 	if strings.Contains(errFrame, "fixture refresh failed · no cached stacks") {
