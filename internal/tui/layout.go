@@ -14,7 +14,7 @@ type RowLayout struct {
 }
 
 const (
-	BallColW   = 13
+	BallColW   = 10
 	StatusColW = 9
 )
 
@@ -47,9 +47,6 @@ func rowLayout(contentWidth int, prCount int, compact bool) RowLayout {
 		contentWidth = 1
 	}
 	balls := BallColW
-	if compact {
-		balls = 9
-	}
 	nameWidth := lockedNameWidth(contentWidth, compact)
 	need := nameWidth + 1 + balls + 1 + StatusColW
 	if need > contentWidth {
@@ -101,14 +98,7 @@ func InspectorLeft(termWidth int) int {
 func GetBallPoint(size TerminalSize, stackIndex, prIndex, prCount int) struct{ X, Y int } {
 	listWidth := ListPaneWidth(size.Width)
 	layout := GetListRowLayout(listWidth, size.Width, prCount)
-	from, show, lead, _ := ballWindow(prCount, prIndex)
-	x := PadX + layout.NameWidth + 1
-	if lead {
-		x += 4
-	}
-	if prIndex >= from && prIndex < from+show {
-		x += (prIndex - from) * 2
-	}
+	x := ballCellX(PadX+layout.NameWidth+1, prCount, prIndex)
 	return struct{ X, Y int }{
 		X: x,
 		Y: ListStartY + stackIndex,

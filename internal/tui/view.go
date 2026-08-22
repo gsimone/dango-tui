@@ -142,7 +142,7 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 			focus = sel.PRIndex
 			c.fill(PadX, y, listWidth, 1, rowBg)
 		}
-		from, show, lead, tail := ballWindow(len(stack.PRs), focus)
+		cells := ballCells(len(stack.PRs), focus)
 		marker := "· "
 		if selectedStack {
 			marker = "▸ "
@@ -151,31 +151,31 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 
 		ballX := PadX + nameW + 1
 		x := ballX
-		if lead {
-			c.text(x, y, "...", meta, rowBg, 3)
-			x += 3
-			c.set(x, y, '-', stick, rowBg)
-			x++
-		}
-		for i := 0; i < show; i++ {
-			prIndex := from + i
-			pr := stack.PRs[prIndex]
-			state := domain.GetDisplayState(pr)
-			fg := domain.Color(domain.StateColorToken(state))
-			selected := selectedStack && prIndex == sel.PRIndex
-			glyph := '○'
-			if selected {
-				glyph = '●'
+		n := len(stack.PRs)
+		for i, cell := range cells {
+			if cell.pager {
+				fg := meta
+				if selectedStack && focus >= 2 && focus <= n-3 {
+					fg = paper
+				}
+				c.text(x, y, "‹›", fg, rowBg, 2)
+				x += 2
+			} else {
+				pr := stack.PRs[cell.pr]
+				state := domain.GetDisplayState(pr)
+				fg := domain.Color(domain.StateColorToken(state))
+				selected := selectedStack && cell.pr == sel.PRIndex
+				glyph := '○'
+				if selected {
+					glyph = '●'
+				}
+				c.set(x, y, glyph, fg, rowBg)
+				x++
 			}
-			c.set(x, y, glyph, fg, rowBg)
-			x++
-			if i < show-1 || tail {
+			if i < len(cells)-1 {
 				c.set(x, y, '-', stick, rowBg)
 				x++
 			}
-		}
-		if tail {
-			c.text(x, y, "...", meta, rowBg, 3)
 		}
 		remain := min(statusW, max(0, PadX+listWidth-statusX))
 		if remain >= 4 {
@@ -387,30 +387,58 @@ func (m Model) ballHit(x, y int) (stackIndex, prIndex int, ok bool) {
 	if x < ballX || x >= ballX+layout.BallsWidth {
 		return 0, 0, false
 	}
-	prIndex = (x - ballX) / 2
-	if prIndex < 0 || prIndex >= len(stack.PRs) {
-		return 0, 0, false
+	cx := ballX
+	for _, cell := range ballCells(len(stack.PRs), sel.PRIndex) {
+		w := 1
+		if cell.pager {
+			w = 2
+		}
+		if x >= cx && x < cx+w+1 {
+			if cell.pager {
+				prIndex = sel.PRIndex
+				if prIndex < 2 || prIndex > len(stack.PRs)-3 {
+					prIndex = 2
+				}
+			} else {
+				prIndex = cell.pr
+			}
+			return stackIndex, prIndex, true
+		}
+		cx += w + 1
 	}
-	return stackIndex, prIndex, true
+	return 0, 0, false
 }
 
-func ballWindow(n, focus int) (from, show int, lead, tail bool) {
+type ballCell struct {
+	pr    int
+	pager bool
+}
+
+func ballCells(n, focus int) []ballCell {
 	if n <= 5 {
-		return 0, n, false, false
+		out := make([]ballCell, n)
+		for i := 0; i < n; i++ {
+			out[i].pr = i
+		}
+		return out
 	}
-	if focus < 0 {
-		focus = 0
+	return []ballCell{{pr: 0}, {pr: 1}, {pager: true}, {pr: n - 2}, {pr: n - 1}}
+}
+
+func ballCellX(ballX, n, prIndex int) int {
+	x := ballX
+	for _, cell := range ballCells(n, prIndex) {
+		if cell.pager && prIndex >= 2 && prIndex <= n-3 {
+			return x
+		}
+		if !cell.pager && cell.pr == prIndex {
+			return x
+		}
+		if cell.pager {
+			x += 3
+		} else {
+			x += 2
+		}
 	}
-	if focus > n-1 {
-		focus = n - 1
-	}
-	from = (focus / 3) * 3
-	if from > n-3 {
-		from = n - 3
-	}
-	show = 3
-	if from+show > n {
-		show = n - from
-	}
-	return from, show, from > 0, from+show < n
+	return ballX
 }

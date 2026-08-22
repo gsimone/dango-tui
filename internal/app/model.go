@@ -95,9 +95,9 @@ func MoveSelection(selection Selection, stacks []domain.Stack, direction Directi
 	current := ClampSelection(selection, stacks)
 	switch direction {
 	case DirLeft:
-		return ClampSelection(Selection{StackIndex: current.StackIndex, PRIndex: current.PRIndex - 1}, stacks)
+		return ClampSelection(Selection{StackIndex: current.StackIndex, PRIndex: stepLayer(current, stacks, -1)}, stacks)
 	case DirRight:
-		return ClampSelection(Selection{StackIndex: current.StackIndex, PRIndex: current.PRIndex + 1}, stacks)
+		return ClampSelection(Selection{StackIndex: current.StackIndex, PRIndex: stepLayer(current, stacks, 1)}, stacks)
 	case DirHome:
 		return ClampSelection(Selection{StackIndex: 0, PRIndex: current.PRIndex}, stacks)
 	case DirEnd:
@@ -113,6 +113,42 @@ func MoveSelection(selection Selection, stacks []domain.Stack, direction Directi
 		}
 		return ClampSelection(Selection{StackIndex: current.StackIndex + delta, PRIndex: current.PRIndex}, stacks)
 	}
+}
+
+func stepLayer(sel Selection, stacks []domain.Stack, dir int) int {
+	pr := sel.PRIndex
+	if sel.StackIndex < 0 || sel.StackIndex >= len(stacks) {
+		return pr + dir
+	}
+	n := len(stacks[sel.StackIndex].PRs)
+	if n <= 5 {
+		return pr + dir
+	}
+	midLo, midHi := 2, n-3
+	if dir > 0 {
+		if pr == 1 {
+			return midLo
+		}
+		if pr >= midLo && pr <= midHi {
+			next := pr + 3
+			if next > midHi {
+				return n - 2
+			}
+			return next
+		}
+		return pr + 1
+	}
+	if pr == n-2 {
+		return midHi
+	}
+	if pr >= midLo && pr <= midHi {
+		next := pr - 3
+		if next < midLo {
+			return 1
+		}
+		return next
+	}
+	return pr - 1
 }
 
 func itoa(n int) string {
