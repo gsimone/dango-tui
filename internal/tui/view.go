@@ -40,9 +40,7 @@ func (m Model) renderFrame(width, height int) string {
 	inner := innerWidth(width)
 
 	// y=0 is the one blank row at the top.
-	m.paintBrand(c, width, surface, meta, stick)
-	metaLine := fmt.Sprintf("%d stacks / %d layers · local deterministic data", m.stackCount(), m.layerCount())
-	c.text(PadX, PadTop+1, metaLine, meta, surface, inner)
+	m.paintBrand(c, width, surface, paper, meta, stick)
 	// one blank row under the header, then the list.
 
 	footerY := height - 1
@@ -79,7 +77,9 @@ func (m Model) renderFrame(width, height int) string {
 	return c.render()
 }
 
-func (m Model) paintBrand(c *canvas, width int, surface, meta, stick string) {
+const repoSlug = "org/reponame"
+
+func (m Model) paintBrand(c *canvas, width int, surface, paper, meta, stick string) {
 	badge := m.fetchBadge()
 	c.text(width-PadX-displayWidth(badge), PadTop, badge, meta, surface, displayWidth(badge))
 	hues := m.LogoDots
@@ -94,8 +94,10 @@ func (m Model) paintBrand(c *canvas, width int, surface, meta, stick string) {
 		}
 		x += 2
 	}
-	repo := "example/stacks"
-	c.text(PadX+6, PadTop, repo, meta, surface, displayWidth(repo))
+	mark := "🍡 DANGO"
+	c.text(PadX+6, PadTop, mark, paper, surface, displayWidth(mark))
+	line2 := fmt.Sprintf("%s  •  %d stacks / %d layers", repoSlug, m.stackCount(), m.layerCount())
+	c.text(PadX, PadTop+1, line2, meta, surface, innerWidth(width))
 }
 
 func (m Model) paintRule(c *canvas, top, bottom int, meta, surface string) {

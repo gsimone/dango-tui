@@ -98,15 +98,59 @@ func mousePress(x, y int) tea.MouseMsg {
 	return tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft, Type: tea.MouseLeft}
 }
 
+func TestHeaderCopyIsTwoLines(t *testing.T) {
+	mixed := frameOf(makeUI(tui.TerminalSize{Width: 80, Height: 24}, "mixed"))
+	lines := strings.Split(mixed, "\n")
+	if len(lines) < 3 {
+		t.Fatalf("short frame:\n%s", mixed)
+	}
+	if !strings.Contains(lines[1], "🍡 DANGO") || !strings.Contains(lines[1], "●-●-●") {
+		t.Fatalf("line 1 must be logo + DANGO:\n%s", mixed)
+	}
+	if strings.Contains(lines[1], "example/stacks") || strings.Contains(lines[1], "org/reponame") {
+		t.Fatalf("line 1 must not carry the repo slug:\n%s", mixed)
+	}
+	if !strings.Contains(lines[1], "last fetched 2 mins ago") {
+		t.Fatalf("line 1 must keep relative fetch age:\n%s", mixed)
+	}
+	if !strings.Contains(lines[2], "org/reponame  •  3 stacks / 8 layers") {
+		t.Fatalf("line 2 must be repo and counts:\n%s", mixed)
+	}
+	if strings.Contains(mixed, "local deterministic data") {
+		t.Fatalf("drop the data clause:\n%s", mixed)
+	}
+
+	chaos := makeUI(tui.TerminalSize{Width: 80, Height: 24}, "chaos")
+	story := data.StoryByID("chaos")
+	layers := 0
+	for _, stack := range story.Stacks {
+		layers += len(stack.PRs)
+	}
+	want := fmt.Sprintf("org/reponame  •  %d stacks / %d layers", len(story.Stacks), layers)
+	frame := frameOf(chaos)
+	if !strings.Contains(frame, want) {
+		t.Fatalf("chaos counts: want %q\n%s", want, frame)
+	}
+	if strings.Contains(frame, "1 stacks / 20 layers") {
+		t.Fatalf("chaos must not show the freight-only count:\n%s", frame)
+	}
+	if len(story.Stacks) != 300 {
+		t.Fatalf("chaos fixture should be 300 stacks, got %d", len(story.Stacks))
+	}
+}
+
 func TestDeterministicFramesAtCanonicalSizes(t *testing.T) {
 	for _, size := range []tui.TerminalSize{{Width: 40, Height: 20}, {Width: 80, Height: 24}, {Width: 120, Height: 30}} {
 		m := makeUI(size, "mixed")
 		frame := frameOf(m)
-		if !strings.Contains(frame, "●-●-● example/stacks") {
+		if !strings.Contains(frame, "●-●-●") || !strings.Contains(frame, "🍡 DANGO") {
 			t.Fatalf("%dx%d missing brand mark:\n%s", size.Width, size.Height, frame)
 		}
-		if !strings.Contains(frame, "3 stacks / 8 layers") {
+		if !strings.Contains(frame, "org/reponame  •  3 stacks / 8 layers") {
 			t.Fatalf("%dx%d missing story label:\n%s", size.Width, size.Height, frame)
+		}
+		if strings.Contains(frame, "local deterministic data") {
+			t.Fatalf("%dx%d still has the old data clause:\n%s", size.Width, size.Height, frame)
 		}
 		if !strings.Contains(frame, "auth") {
 			t.Fatalf("%dx%d missing stack:\n%s", size.Width, size.Height, frame)
@@ -275,7 +319,7 @@ func TestResizeAndCardClamp(t *testing.T) {
 		next, _ := m.Update(tea.WindowSizeMsg{Width: size.Width, Height: size.Height})
 		m = next.(tui.Model)
 		frame := frameOf(m)
-		if !strings.Contains(frame, "●-●-● example/stacks") {
+		if !strings.Contains(frame, "●-●-●") || !strings.Contains(frame, "🍡 DANGO") {
 			t.Fatalf("%dx%d missing brand mark:\n%s", size.Width, size.Height, frame)
 		}
 		assertFits(t, frame, size.Width)

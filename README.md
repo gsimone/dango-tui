@@ -28,8 +28,9 @@ make build
 `make build` is `CGO_ENABLED=0 go build -ldflags="-s -w" -o dango ./cmd/dango`.
 
 The app is a native terminal UI, not a dev server. The header mark is
-`●-●-● DANGO`. Type is paper `#f2ebe0` or meta `#9a8f82`. The inspector is a
-full-height right pane on the same field, divided by one dim vertical rule.
+`●-●-● 🍡 DANGO` over `org/reponame  •  N stacks / M layers`. Type is paper
+`#f2ebe0` or meta `#9a8f82`. The inspector is a full-height right pane on the
+same field, divided by one dim vertical rule.
 
 `go run ./cmd/dango` is the app: local fixture / test data. There is no live GitHub fetch yet. `o` opens the PR URL in your browser. There is no GitHub
 client yet — checkout / open / refresh are labelled simulations.
@@ -64,7 +65,7 @@ mouse hits on the two-cell PR balls.
 
 ## Layout
 
-- Header: `●-●-● DANGO`, then counts, then two blank rows
+- Header: `●-●-● 🍡 DANGO`, then `org/reponame  •  N stacks / M layers`
 - 2-column side pad, 1 blank row at the top
 - Stack list on the left; one `│` rule; inspector pane on the right
 - Selected row `#242018` with paper ink; everything else meta
