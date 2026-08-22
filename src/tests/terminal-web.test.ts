@@ -1,3 +1,4 @@
+import { resolve } from "node:path"
 import { describe, expect, test } from "bun:test"
 import { fixtureStoryIds } from "../data/fixtures.ts"
 import { MAX_CONTROL_BYTES, parseTerminalControl } from "../dev/terminal-web/protocol.ts"
@@ -165,7 +166,7 @@ describe("terminal web protocol", () => {
     expect(fixtureStoryIds).toHaveLength(11)
     const spawn = buildStorySpawn("mixed")
     expect(spawn.cmd).toEqual([process.execPath, "--preload", "@opentui/solid/preload", expect.stringMatching(/src\/stories\/index\.tsx$/)])
-    expect(spawn.cwd).toMatch(/stacks$/)
+    expect(spawn.cwd).toBe(resolve(import.meta.dir, "../.."))
     expect(spawn.env).toEqual({ TERM: "xterm-256color", COLORTERM: "truecolor", STACKS_STORY: "mixed" })
     expect(() => buildStorySpawn("not-a-story")).toThrow("allowlist")
   })
