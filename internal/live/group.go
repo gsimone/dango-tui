@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/gsimone/dango-tui/internal/domain"
-	"github.com/gsimone/dango-tui/internal/summary"
 )
 
 var graphiteItem = regexp.MustCompile(`(?m)^\s*(?:[-*]|\d+\.)\s+#(\d+)`)
@@ -40,7 +39,7 @@ func GroupStacks(prs []RemotePR, defaultBranch string) []domain.Stack {
 	for i := range stacks {
 		stacks[i].Number = i + 1
 	}
-	return summary.Apply(stacks, summary.Choose(summary.Provider{}))
+	return stacks
 }
 
 func stackKey(stack domain.Stack) int {
@@ -58,20 +57,12 @@ func makeStack(prs []RemotePR, defaultBranch, id string) domain.Stack {
 	for i, pr := range prs {
 		layers[i] = ToDomain(pr)
 	}
-	name := strings.TrimSpace(prs[0].Title)
-	if name == "" {
-		name = prs[0].HeadRefName
-	}
-	if name == "" {
-		name = "#" + strconv.Itoa(prs[0].Number)
-	}
 	base := prs[0].BaseRefName
 	if base == "" {
 		base = defaultBranch
 	}
 	return domain.Stack{
 		ID:      id,
-		Name:    name,
 		BaseRef: base,
 		PRs:     layers,
 	}

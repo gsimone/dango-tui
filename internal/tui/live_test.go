@@ -66,8 +66,7 @@ func TestLiveRepoHeaderAndTwoColumns(t *testing.T) {
 				t.Fatalf("repo %q", repo)
 			}
 			return []domain.Stack{{
-				ID:   "stack-1",
-				Name: "live chain",
+				ID: "stack-1",
 				PRs: []domain.PullRequest{
 					{Number: 1, Title: "base", Branch: "a", URL: "https://github.com/gsimone/leva-2/pull/1"},
 					{Number: 2, Title: "head", Branch: "b", URL: "https://github.com/gsimone/leva-2/pull/2", CI: domain.CISummary{State: domain.CIFailure, Failed: 1, Total: 1}},
@@ -88,8 +87,11 @@ func TestLiveRepoHeaderAndTwoColumns(t *testing.T) {
 	if !strings.Contains(frame, "gsimone/leva-2  •  1 stacks / 2 layers") {
 		t.Fatalf("live header:\n%s", frame)
 	}
-	if !strings.Contains(frame, "live chain") || !strings.Contains(frame, "○") {
+	if !strings.Contains(frame, "○") {
 		t.Fatalf("list:\n%s", frame)
+	}
+	if strings.Contains(frame, "base and head") {
+		t.Fatalf("missing provider must not invent a stack title:\n%s", frame)
 	}
 	if strings.Contains(frame, "ci failed") {
 		t.Fatalf("no status column:\n%s", frame)
@@ -130,38 +132,52 @@ func TestLiveRepoHeaderAndTwoColumns(t *testing.T) {
 	}
 }
 
-func TestProviderIsStoredAndIgnoredOnScreen(t *testing.T) {
+func TestProviderWritesStackTitleOnly(t *testing.T) {
+	fetch := func(string) ([]domain.Stack, error) {
+		return []domain.Stack{{
+			ID:  "s",
+			PRs: []domain.PullRequest{{Number: 1, Title: "alpha layer"}, {Number: 2, Title: "beta layer"}},
+		}}, nil
+	}
 	with := tui.New(tui.Options{
 		Repo:     "owner/name",
 		Provider: summary.ParseProvider("codex@luna.medium"),
 		Width:    80,
 		Height:   24,
-		Fetch: func(string) ([]domain.Stack, error) {
-			return []domain.Stack{{
-				ID:   "s",
-				Name: "chain",
-				PRs:  []domain.PullRequest{{Number: 1, Title: "one", Branch: "a"}},
-			}}, nil
-		},
+		Fetch:    fetch,
 	})
 	if with.Provider.Name != "codex" || with.Provider.Model != "luna.medium" {
 		t.Fatalf("store provider, got %+v", with.Provider)
+	}
+	titled := listRows(frameOf(with))
+	if !strings.Contains(strings.Join(titled, "\n"), "alpha layer") {
+		t.Fatalf("provider should write the stack title:\n%s", titled)
 	}
 	plain := tui.New(tui.Options{
 		Repo:   "owner/name",
 		Width:  80,
 		Height: 24,
-		Fetch: func(string) ([]domain.Stack, error) {
-			return []domain.Stack{{
-				ID:   "s",
-				Name: "chain",
-				PRs:  []domain.PullRequest{{Number: 1, Title: "one", Branch: "a"}},
-			}}, nil
-		},
+		Fetch:  fetch,
 	})
-	if strip(with.View()) != strip(plain.View()) {
-		t.Fatal("provider must not change the frame")
+	bare := listRows(frameOf(plain))
+	joined := strings.Join(bare, "\n")
+	if strings.Contains(joined, "alpha layer") || strings.Contains(joined, "beta layer") {
+		t.Fatalf("missing provider must not invent a stack title:\n%s", joined)
 	}
+}
+
+func listRows(frame string) []string {
+	var out []string
+	for _, line := range strings.Split(frame, "\n") {
+		part := line
+		if idx := strings.Index(line, "│"); idx >= 0 {
+			part = line[:idx]
+		}
+		if strings.Contains(part, "▸") || strings.Contains(part, "·") {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 func TestFixtureRefreshStaysSimulated(t *testing.T) {

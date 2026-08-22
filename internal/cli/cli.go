@@ -35,7 +35,7 @@ func parse(args []string, usage io.Writer) (Args, error) {
 	frame := fs.String("frame", "", "print one frame (WxH, e.g. 80x24) and exit")
 	story := fs.String("story", "", "fixture story id; ignores live fetch")
 	repo := fs.String("repo", "", "GitHub repo as owner/name; fetch live PRs via gh")
-	provider := fs.String("provider", "", "summarizer provider (e.g. codex@luna.medium); optional, does not block fetch")
+	provider := fs.String("provider", "", "stack title summarizer (e.g. codex@luna.medium); optional, does not block fetch")
 	fs.Usage = func() {
 		fmt.Fprintln(usage, "Usage: dango --repo owner/name [--provider name@model]")
 		fmt.Fprintln(usage, "       dango [-story mixed]")

@@ -81,11 +81,22 @@ func TestChooseThreadsProviderAndStaysLocal(t *testing.T) {
 	stack := data.StoryByID("mixed").Stacks[0]
 	local := summary.Local().Summarize(stack)
 	if got.Summarize(stack) != local {
-		t.Fatalf("no network summarizer yet; want local %q, got %q", local, got.Summarize(stack))
+		t.Fatalf("provider with no network summarizer uses Local; want %q, got %q", local, got.Summarize(stack))
 	}
 	empty := summary.Choose(summary.Provider{})
-	if empty.Summarize(stack) != local {
-		t.Fatal("empty provider must still use Local")
+	if empty.Summarize(stack) != "" {
+		t.Fatalf("missing provider must not invent a title, got %q", empty.Summarize(stack))
+	}
+	untitled := []domain.Stack{{
+		PRs: []domain.PullRequest{{Number: 1, Title: "base"}, {Number: 2, Title: "head"}},
+	}}
+	summary.Apply(untitled, empty)
+	if untitled[0].Name != "" || untitled[0].Summary != "" {
+		t.Fatalf("apply without provider filled a title: %+v", untitled[0])
+	}
+	summary.Apply(untitled, got)
+	if untitled[0].Name == "" {
+		t.Fatal("provider should write the stack title")
 	}
 }
 

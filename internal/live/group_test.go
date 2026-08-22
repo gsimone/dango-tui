@@ -79,6 +79,19 @@ func TestGroupStacksUsesGitHubNativeStack(t *testing.T) {
 	}
 }
 
+func TestGroupStacksDoesNotInventTitle(t *testing.T) {
+	stacks := GroupStacks([]RemotePR{
+		{Number: 1, Title: "base layer", HeadRefName: "a", BaseRefName: "main"},
+		{Number: 2, Title: "head layer", HeadRefName: "b", BaseRefName: "a"},
+	}, "main")
+	if len(stacks) != 1 {
+		t.Fatalf("got %d", len(stacks))
+	}
+	if stacks[0].Name != "" || stacks[0].Summary != "" {
+		t.Fatalf("fetch must not invent a stack title, got name=%q summary=%q", stacks[0].Name, stacks[0].Summary)
+	}
+}
+
 func TestGroupStacksDoesNotInventLeva(t *testing.T) {
 	if stacks := GroupStacks(nil, "main"); len(stacks) != 0 {
 		t.Fatal("empty repo must stay empty")

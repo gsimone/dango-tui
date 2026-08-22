@@ -31,36 +31,48 @@ func Local() Summarizer {
 	return PreferDescription{Fallback: FromLayers{}}
 }
 
-// Chosen is the Summarizer picked for a provider. Tonight Inner is always
-// Local(). No network, no chat API.
+// none writes no stack title. Missing --provider must not invent one.
+type none struct{}
+
+func (none) Summarize(domain.Stack) string { return "" }
+
+// Chosen is the Summarizer picked for a provider. --provider is only for the
+// stack title. No provider → none. A provider with no network summarizer yet
+// uses Local(). Fetch does not wait on this.
 type Chosen struct {
 	Provider Provider
 	Inner    Summarizer
 }
 
 func (c Chosen) Summarize(stack domain.Stack) string {
-	inner := c.Inner
-	if inner == nil {
-		inner = Local()
+	if c.Inner != nil {
+		return c.Inner.Summarize(stack)
 	}
-	return inner.Summarize(stack)
+	if c.Provider.Raw == "" && c.Provider.Name == "" {
+		return ""
+	}
+	return Local().Summarize(stack)
 }
 
-// Choose threads --provider into the summarizer. Until a network summarizer
-// exists, every provider (including empty) gets Local().
+// Choose threads --provider into the stack-title summarizer.
 func Choose(p Provider) Chosen {
+	if p.Raw == "" && p.Name == "" {
+		return Chosen{Provider: p, Inner: none{}}
+	}
 	return Chosen{Provider: p, Inner: Local()}
 }
 
-// Apply writes one-line summaries onto stacks using s. Nil s uses Local().
+// Apply writes a generated stack title when s returns one. Empty/nil s
+// leaves Name alone — it does not invent a local title to fill the row.
 func Apply(stacks []domain.Stack, s Summarizer) []domain.Stack {
 	if s == nil {
-		s = Local()
+		s = none{}
 	}
 	for i := range stacks {
-		stacks[i].Summary = s.Summarize(stacks[i])
-		if strings.TrimSpace(stacks[i].Description) == "" {
-			stacks[i].Description = stacks[i].Summary
+		title := strings.TrimSpace(s.Summarize(stacks[i]))
+		stacks[i].Summary = title
+		if title != "" {
+			stacks[i].Name = title
 		}
 	}
 	return stacks

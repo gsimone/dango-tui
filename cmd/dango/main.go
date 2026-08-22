@@ -50,7 +50,7 @@ func helpText() string {
 	return "Usage: dango --repo owner/name [--provider name@model]\n" +
 		"       dango [-story mixed]\n\n" +
 		"Live fetch requires --repo owner/name. No baked-in repo.\n" +
-		"--provider is optional (summarizer, e.g. codex@luna.medium) and does not block fetch.\n"
+		"--provider is optional and only for the stack title (e.g. codex@luna.medium). It does not block fetch.\n"
 }
 
 func parseFrame(spec string) (int, int, error) {
