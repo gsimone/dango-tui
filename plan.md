@@ -31,4 +31,5 @@ Shipping order (Cassandra / Gianmarco). Do not skip ahead.
 - Packed `●-●-●` logo (U+25CF). Three Pablo inks. No dumpling.
 - List balls use meaning colors, not logo hues.
 - Footer: bracketed keys. No enter / checkout. `?` help overlay.
+- `.` and `,` copy the current PR branch. Footer toast `copied <branch>`. No modal. `[ . ] copy` stays.
 - Inspector `labels` + `author` rows. Live labels/avatarUrl come from `gh pr list --json`. No Go GitHub API client.

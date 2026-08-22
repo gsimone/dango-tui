@@ -256,7 +256,7 @@ func (m *Model) copyBranch(pr domain.PullRequest) tea.Cmd {
 		return m.clearFeedback()
 	}
 	copyText(pr.Branch)
-	m.State.Feedback = "Copied " + pr.Branch
+	m.State.Feedback = "copied " + pr.Branch
 	return m.clearFeedback()
 }
 

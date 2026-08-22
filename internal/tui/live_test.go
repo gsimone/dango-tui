@@ -393,6 +393,30 @@ func TestRepoOwnerNameStillFetches(t *testing.T) {
 	}
 }
 
+func TestCommaCopiesTestdataBranchToast(t *testing.T) {
+	m := tui.New(tui.Options{
+		Repo:   testdataJSON(t),
+		Width:  120,
+		Height: 30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			t.Fatal("JSON --repo must not call gh")
+			return nil, nil
+		},
+	})
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(",")})
+	m = next.(tui.Model)
+	frame := frameOf(m)
+	if !strings.Contains(frame, "copied gm/auth-scope") {
+		t.Fatalf("comma toast:\n%s", frame)
+	}
+	if strings.Contains(frame, "Checked out") || strings.Contains(frame, "[ p ]") {
+		t.Fatalf("toast only, no checkout/picker:\n%s", frame)
+	}
+	if cmd == nil {
+		t.Fatal("toast should clear")
+	}
+}
+
 func TestFixtureRefreshStaysSimulated(t *testing.T) {
 	m := applyKey(makeUI(tui.TerminalSize{Width: 80, Height: 24}, "mixed"), key("r"))
 	if !strings.Contains(frameOf(m), "⠋") {
