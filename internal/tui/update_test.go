@@ -136,6 +136,30 @@ func TestInspectorStatusInkIsValueOnly(t *testing.T) {
 		}
 	}
 
+	base := New(Options{StoryID: "mixed", Width: 120, Height: 30}).Stacks()[0].PRs[0]
+	facts = inspectorFacts(base)
+	var labels, author inspectorFact
+	for _, fact := range facts {
+		switch fact.label {
+		case "labels":
+			labels = fact
+		case "author":
+			author = fact
+		}
+	}
+	if labels.value != "bug auth" || len(labels.parts) < 3 {
+		t.Fatalf("labels fact: %+v", labels)
+	}
+	if labels.parts[0].text != "bug" || labels.parts[0].fg != "#d73a4a" {
+		t.Fatalf("bug label ink: %+v", labels.parts[0])
+	}
+	if labels.parts[2].text != "auth" || labels.parts[2].fg != "#0e8a16" {
+		t.Fatalf("auth label ink: %+v", labels.parts[2])
+	}
+	if author.value != "● gianni" || author.parts[0].text != "●" || author.parts[0].fg != domain.LoginColor("gianni") {
+		t.Fatalf("author fact: %+v", author)
+	}
+
 	blocked := New(Options{StoryID: "changes-requested", Width: 120, Height: 30}).Stacks()[0].PRs[0]
 	if got := inspectorStatusColor(blocked); got != domain.Color("reviewBlocked") {
 		t.Fatalf("blocked status value %s", got)

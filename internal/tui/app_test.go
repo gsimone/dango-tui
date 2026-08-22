@@ -498,6 +498,41 @@ func TestInspectorIsLabeledRows(t *testing.T) {
 	}
 }
 
+func fgBefore(raw, needle string) (r, g, b int, ok bool) {
+	idx := strings.Index(raw, needle)
+	if idx < 0 {
+		return 0, 0, 0, false
+	}
+	start := strings.LastIndex(raw[:idx], "\x1b[")
+	if start < 0 {
+		return 0, 0, 0, false
+	}
+	m := regexp.MustCompile(`38;2;(\d+);(\d+);(\d+)`).FindStringSubmatch(raw[start:idx])
+	if len(m) != 4 {
+		return 0, 0, 0, false
+	}
+	fmt.Sscanf(m[1], "%d", &r)
+	fmt.Sscanf(m[2], "%d", &g)
+	fmt.Sscanf(m[3], "%d", &b)
+	return r, g, b, true
+}
+
+func nearHex(raw, needle, hex string) bool {
+	wantR, wantG, wantB := ansiRGB(hex)
+	r, g, b, ok := fgBefore(raw, needle)
+	if !ok {
+		return false
+	}
+	return absInt(r-wantR) <= 1 && absInt(g-wantG) <= 1 && absInt(b-wantB) <= 1
+}
+
+func absInt(v int) int {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
 func TestInspectorLabelsAndAuthorRows(t *testing.T) {
 	size := tui.TerminalSize{Width: 120, Height: 30}
 	m := makeUI(size, "mixed")
@@ -509,15 +544,19 @@ func TestInspectorLabelsAndAuthorRows(t *testing.T) {
 	if !strings.Contains(frame, "author    ● gianni") {
 		t.Fatalf("author row:\n%s", frame)
 	}
-	if !strings.Contains(raw, ansiFG("#d73a4a")) {
+	if !nearHex(raw, "bug", "#d73a4a") {
 		t.Fatal("bug label must use its GitHub hex")
 	}
-	if !strings.Contains(raw, ansiFG("#0e8a16")) {
-		t.Fatal("auth label must use its GitHub hex")
+	if !nearHex(raw, "gianni", domain.Color("paper")) {
+		t.Fatal("author login stays paper")
 	}
-	wantDot := domain.LoginColor("gianni")
-	if !strings.Contains(raw, ansiFG(wantDot)) {
-		t.Fatalf("author ● must use stable login color %s", wantDot)
+	r, g, b, ok := fgBefore(raw, "gianni")
+	if !ok {
+		t.Fatal("author login ink")
+	}
+	dotR, dotG, dotB := ansiRGB(domain.LoginColor("gianni"))
+	if absInt(r-dotR) <= 1 && absInt(g-dotG) <= 1 && absInt(b-dotB) <= 1 {
+		t.Fatal("author login must not take the ● color")
 	}
 	if !strings.Contains(raw, ansiFG(domain.Color("ciFailure"))) {
 		t.Fatal("status value ink stays on the status value")
