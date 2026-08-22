@@ -340,17 +340,14 @@ var FixtureStories = []FixtureStory{
 		ID:    "pair",
 		Label: "two layers",
 		Stacks: []domain.Stack{
-			StackFixture(StackFixtureInput{Number: 1, Name: "pair", Description: desc("Two layers only"), PRs: []domain.PullRequest{
-				pr(701, "Tiny left", domain.StateMerged),
-				pr(702, "Tiny right", domain.StateOpen),
-			}}),
+			StackFixture(StackFixtureInput{Number: 1, Name: "pair", Description: desc("Two reviewable cuts on the same checkout"), PRs: pairPRs()}),
 		},
 	},
 	{
 		ID:    "freight",
 		Label: "twenty layers",
 		Stacks: []domain.Stack{
-			StackFixture(StackFixtureInput{Number: 2, Name: "freight train", Description: desc("Twenty layers"), PRs: twentyLayerPRs()}),
+			StackFixture(StackFixtureInput{Number: 2, Name: "freight train", Description: desc("Authored cutover train: mixed CI and review"), PRs: twentyLayerPRs()}),
 		},
 	},
 	{
@@ -372,16 +369,42 @@ func applySummaries(stories []FixtureStory, s summary.Summarizer) {
 	}
 }
 
-func twentyLayerPRs() []domain.PullRequest {
-	states := []domain.PrDisplayState{
-		domain.StateMerged, domain.StateMerged, domain.StateMerged, domain.StateReady, domain.StateReady,
-		domain.StateQueued, domain.StateQueued, domain.StateOpen, domain.StateOpen, domain.StateDraft,
-		domain.StateCIFailure, domain.StateReviewBlocked, domain.StateOpen, domain.StateReady, domain.StateMerged,
-		domain.StateOpen, domain.StateDraft, domain.StateCIFailure, domain.StateQueued, domain.StateOpen,
+func pairPRs() []domain.PullRequest {
+	return []domain.PullRequest{
+		pr(701, "Land the checkout helper", domain.StateMerged),
+		pr(702, "Prompt before the second hop", domain.StateOpen),
 	}
-	out := make([]domain.PullRequest, len(states))
-	for i, state := range states {
-		out[i] = pr(800+i, "Freight layer "+itoa(i+1), state)
+}
+
+func twentyLayerPRs() []domain.PullRequest {
+	layers := []struct {
+		title string
+		state domain.PrDisplayState
+	}{
+		{"Land the schema cutover", domain.StateMerged},
+		{"Backfill tenant rows", domain.StateMerged},
+		{"Dual-write the reader", domain.StateMerged},
+		{"Flip the default flag", domain.StateReady},
+		{"Drain the old path", domain.StateReady},
+		{"Queue the shadow drop", domain.StateQueued},
+		{"Hold the reader cutover", domain.StateQueued},
+		{"Drop the shadow table", domain.StateOpen},
+		{"Document the cutover", domain.StateOpen},
+		{"Draft the rollback note", domain.StateDraft},
+		{"Remove the fallback client", domain.StateCIFailure},
+		{"Restore the pager window", domain.StateReviewBlocked},
+		{"Ship the cleanup note", domain.StateOpen},
+		{"Pin the catalog checksum", domain.StateReady},
+		{"Merge the leftover dual-write", domain.StateMerged},
+		{"Watch the drain complete", domain.StateOpen},
+		{"Draft the postmortem", domain.StateDraft},
+		{"Fix the backfill checksum", domain.StateCIFailure},
+		{"Queue the final drop", domain.StateQueued},
+		{"Close the cutover ticket", domain.StateOpen},
+	}
+	out := make([]domain.PullRequest, len(layers))
+	for i, layer := range layers {
+		out[i] = pr(800+i, layer.title, layer.state)
 	}
 	return out
 }
@@ -397,11 +420,8 @@ func chaosStacks() []domain.Stack {
 		"ci", "docs", "hotfix",
 	}
 	out := make([]domain.Stack, 0, 300)
-	out = append(out, StackFixture(StackFixtureInput{Number: 1, Name: "pair", Description: desc("Two layers only"), PRs: []domain.PullRequest{
-		pr(701, "Tiny left", domain.StateMerged),
-		pr(702, "Tiny right", domain.StateOpen),
-	}}))
-	out = append(out, StackFixture(StackFixtureInput{Number: 2, Name: "freight train", Description: desc("Twenty layers"), PRs: twentyLayerPRs()}))
+	out = append(out, StackFixture(StackFixtureInput{Number: 1, Name: "pair", Description: desc("Two reviewable cuts on the same checkout"), PRs: pairPRs()}))
+	out = append(out, StackFixture(StackFixtureInput{Number: 2, Name: "freight train", Description: desc("Authored cutover train: mixed CI and review"), PRs: twentyLayerPRs()}))
 	for n := 3; n <= 300; n++ {
 		layers := 1 + n%5
 		prs := make([]domain.PullRequest, layers)

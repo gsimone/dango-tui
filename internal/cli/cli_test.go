@@ -39,6 +39,31 @@ func TestParseNormalizesGitHubURL(t *testing.T) {
 	}
 }
 
+func TestParseStoryIgnoresRepo(t *testing.T) {
+	args, err := Parse([]string{"-story", "mixed", "--repo", "gsimone/leva-2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if args.Story != "mixed" {
+		t.Fatalf("story %q", args.Story)
+	}
+	if args.Repo != "" {
+		t.Fatalf("story must ignore live repo, got %q", args.Repo)
+	}
+}
+
+func TestParseStoryFreightPair(t *testing.T) {
+	for _, id := range []string{"mixed", "freight", "pair", "chaos"} {
+		args, err := Parse([]string{"-story", id})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if args.Story != id {
+			t.Fatalf("story %q", args.Story)
+		}
+	}
+}
+
 func TestParseRepoJSONFile(t *testing.T) {
 	args, err := Parse([]string{"--repo", "testdata/test.json"})
 	if err != nil {
@@ -61,7 +86,7 @@ func TestParseNeitherLeavesDetectToResolve(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if args.Repo != "" {
+	if args.Repo != "" || args.Story != "" {
 		t.Fatalf("flags-only parse must not invent a repo, got %+v", args)
 	}
 }

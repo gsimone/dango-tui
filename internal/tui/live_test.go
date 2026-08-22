@@ -48,6 +48,12 @@ func TestNoRepoUsesFixture(t *testing.T) {
 	if !strings.Contains(frame, "org/reponame") {
 		t.Fatalf("fixture header slug:\n%s", frame)
 	}
+	if !strings.Contains(frame, "auth cleanup") {
+		t.Fatalf("default fixture is mixed, not chaos:\n%s", frame)
+	}
+	if strings.Contains(frame, "300 stacks") {
+		t.Fatalf("default demo must not be chaos:\n%s", frame)
+	}
 	if strings.Contains(frame, "pass --repo") {
 		t.Fatalf("no empty/help when fixtures load:\n%s", frame)
 	}
@@ -82,6 +88,28 @@ func TestLiveMissingGHShowsErrorNotFixtures(t *testing.T) {
 	}
 	if strings.Contains(frame, "300 stacks") {
 		t.Fatalf("must not load chaos fixtures:\n%s", frame)
+	}
+}
+
+func TestStoryFreightAndPairAreAuthored(t *testing.T) {
+	freight := tui.New(tui.Options{StoryID: "freight", Width: 120, Height: 30})
+	if freight.Live {
+		t.Fatal("story is fixtures")
+	}
+	frame := frameOf(freight)
+	if !strings.Contains(frame, "freight train") || !strings.Contains(frame, "Land the schema cutover") {
+		t.Fatalf("freight demo:\n%s", frame)
+	}
+	if strings.Contains(frame, "Freight layer") || strings.Contains(frame, "300 stacks") {
+		t.Fatalf("freight must stay authored:\n%s", frame)
+	}
+
+	pair := frameOf(tui.New(tui.Options{StoryID: "pair", Width: 80, Height: 24}))
+	if !strings.Contains(pair, "Land the checkout helper") {
+		t.Fatalf("pair demo:\n%s", pair)
+	}
+	if strings.Contains(pair, "Tiny left") {
+		t.Fatalf("pair must stay authored:\n%s", pair)
 	}
 }
 

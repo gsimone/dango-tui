@@ -185,6 +185,15 @@ func TestResolveMissingJSONHasNoProvider(t *testing.T) {
 	}
 }
 
+func TestResolveStoryStaysFixtures(t *testing.T) {
+	dir := t.TempDir()
+	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")
+	got := Resolve(Args{Story: "mixed"}, dir)
+	if got.Repo != "" || got.Story != "mixed" {
+		t.Fatalf("story must ignore detect: %+v", got)
+	}
+}
+
 func TestResolveRepoFileWinsOverDetect(t *testing.T) {
 	dir := t.TempDir()
 	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")

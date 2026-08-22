@@ -108,7 +108,7 @@ func (m *Model) loadFile(path string) {
 
 func (m *Model) loadFixture(storyID string) {
 	if storyID == "" {
-		storyID = "chaos"
+		storyID = "mixed"
 	}
 	idx := 0
 	for i, story := range data.FixtureStories {

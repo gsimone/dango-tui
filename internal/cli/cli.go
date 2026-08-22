@@ -17,9 +17,10 @@ func IsStackFile(raw string) bool {
 }
 
 // Args is the flag-driven launch config. --repo is owner/name (live gh) or a
-// JSON stack file. No flags: detect git remote. No -story user mode.
+// JSON stack file. -story loads authored fixtures and ignores live fetch.
 type Args struct {
 	Frame    string
+	Story    string
 	Repo     string
 	Provider summary.Provider
 }
@@ -39,16 +40,21 @@ func parse(args []string, usage io.Writer) (Args, error) {
 	fs := flag.NewFlagSet("dango", flag.ContinueOnError)
 	fs.SetOutput(usage)
 	frame := fs.String("frame", "", "print one frame (WxH, e.g. 80x24) and exit")
+	story := fs.String("story", "", "authored fixture: mixed, freight, pair (chaos is stress only)")
 	repo := fs.String("repo", "", "owner/name (live gh) or a JSON file of authored stacks")
 	provider := fs.String("provider", "", "stack title summarizer (e.g. codex@luna.medium); optional, does not block fetch")
 	fs.Usage = func() {
 		fmt.Fprintln(usage, "Usage: dango")
 		fmt.Fprintln(usage, "       dango --repo owner/name [--provider name@model]")
 		fmt.Fprintln(usage, "       dango --repo testdata/test.json")
+		fmt.Fprintln(usage, "       dango -story mixed")
+		fmt.Fprintln(usage, "       dango -story freight")
+		fmt.Fprintln(usage, "       dango -story pair")
 		fmt.Fprintln(usage, "")
 		fmt.Fprintln(usage, "With no flags, owner/name comes from git remote of cwd.")
 		fmt.Fprintln(usage, "dango.json / dango.yml / dango.yaml sets the title provider. Missing file = no generated title.")
-		fmt.Fprintln(usage, "--repo is live gh or a stack dump. --provider overrides the config file. No picker.")
+		fmt.Fprintln(usage, "--repo is live gh or a stack dump. -story loads fixtures and ignores fetch.")
+		fmt.Fprintln(usage, "--provider overrides the config file. No picker.")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -57,7 +63,11 @@ func parse(args []string, usage io.Writer) (Args, error) {
 
 	out := Args{
 		Frame:    strings.TrimSpace(*frame),
+		Story:    strings.TrimSpace(*story),
 		Provider: ParseProvider(*provider),
+	}
+	if out.Story != "" {
+		return out, nil
 	}
 	rawRepo := strings.TrimSpace(*repo)
 	if rawRepo == "" {
