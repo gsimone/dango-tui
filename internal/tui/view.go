@@ -129,7 +129,6 @@ func (m Model) paintSearchFooter(c *canvas, x, y, maxWidth int, text, muted, sur
 
 func (m Model) paintFooter(c *canvas, x, y, maxWidth int, text, muted, surface string) {
 	compact := IsCompact(m.Width)
-	sep := " · "
 	var items []helpItem
 	switch {
 	case m.Help && compact:
@@ -165,7 +164,6 @@ func (m Model) paintFooter(c *canvas, x, y, maxWidth int, text, muted, surface s
 			{key: "q", action: " quit"},
 		}
 	default:
-		sep = "  "
 		items = []helpItem{
 			{key: "↑↓", action: " stack"},
 			{key: "←→", action: " layer"},
@@ -178,7 +176,7 @@ func (m Model) paintFooter(c *canvas, x, y, maxWidth int, text, muted, surface s
 			{key: "q", action: " quit"},
 		}
 	}
-	paintHelp(c, x, y, maxWidth, sep, items, text, muted, surface)
+	paintHelp(c, x, y, maxWidth, "  ", items, text, muted, surface)
 }
 
 func paintHelp(c *canvas, x, y, maxWidth int, sep string, items []helpItem, text, muted, surface string) {
@@ -324,24 +322,56 @@ func (m Model) paintInspector(c *canvas, x, y, w, h int, compact bool, raised, t
 	review := reviewLine(pr)
 	diff := fmt.Sprintf("+%d −%d · %d files", pr.Additions, pr.Deletions, pr.ChangedFiles)
 	if compact {
-		c.text(x+2, y+3, ci+" · "+review, muted, raised, maxLine)
+		x3 := paintLabeled(c, x+2, y+3, maxLine, ci, text, muted, raised)
+		if x3+2 < x+2+maxLine {
+			c.text(x3, y+3, "  ", muted, raised, 2)
+			paintLabeled(c, x3+2, y+3, max(0, x+2+maxLine-(x3+2)), review, text, muted, raised)
+		}
 		c.text(x+2, y+4, diff, text, raised, maxLine)
 		c.text(x+2, y+5, pr.Branch, muted, raised, maxLine)
 		paintHint(c, x+2, y+6, maxLine, text, muted, raised)
 		return
 	}
-	c.text(x+2, y+3, ci, muted, raised, maxLine)
-	c.text(x+2, y+4, review, muted, raised, maxLine)
+	paintLabeled(c, x+2, y+3, maxLine, ci, text, muted, raised)
+	paintLabeled(c, x+2, y+4, maxLine, review, text, muted, raised)
 	c.text(x+2, y+5, diff, text, raised, maxLine)
 	c.text(x+2, y+6, pr.Branch, muted, raised, maxLine)
 	paintHint(c, x+2, y+7, maxLine, text, muted, raised)
 }
 
 func paintHint(c *canvas, x, y, maxWidth int, text, muted, surface string) {
-	paintHelp(c, x, y, maxWidth, " · ", []helpItem{
+	paintHelp(c, x, y, maxWidth, "  ", []helpItem{
 		{key: "click", action: " checkout"},
 		{key: "o", action: " open"},
 	}, text, muted, surface)
+}
+
+func paintLabeled(c *canvas, x, y, maxWidth int, line, valueFg, labelFg, bg string) int {
+	if maxWidth <= 0 {
+		return x
+	}
+	label, value, ok := cutWord(line)
+	if !ok {
+		c.text(x, y, line, labelFg, bg, maxWidth)
+		return x + displayWidth(clip(line, maxWidth))
+	}
+	key := label + " "
+	c.text(x, y, key, labelFg, bg, maxWidth)
+	used := displayWidth(clip(key, maxWidth))
+	if used >= maxWidth {
+		return x + used
+	}
+	c.text(x+used, y, value, valueFg, bg, maxWidth-used)
+	return x + used + displayWidth(clip(value, maxWidth-used))
+}
+
+func cutWord(s string) (word, rest string, ok bool) {
+	for i, r := range s {
+		if r == ' ' {
+			return s[:i], s[i+1:], true
+		}
+	}
+	return s, "", false
 }
 
 func ciLine(pr domain.PullRequest) string {

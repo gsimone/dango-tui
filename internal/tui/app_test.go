@@ -140,10 +140,10 @@ func TestCompactCardAndHomeEnd(t *testing.T) {
 	if !strings.Contains(frame, "#211 Add token catalogue") {
 		t.Fatalf("home:\n%s", frame)
 	}
-	if !strings.Contains(frame, "click checkout · o open") {
+	if !strings.Contains(frame, "click checkout  o open") {
 		t.Fatalf("compact card hint:\n%s", frame)
 	}
-	if !strings.Contains(frame, "↑↓ stack · ←→ layer · / find · ? help") {
+	if !strings.Contains(frame, "↑↓ stack  ←→ layer  / find  ? help") {
 		t.Fatalf("compact footer:\n%s", frame)
 	}
 	assertFits(t, frame, 40)
@@ -224,8 +224,13 @@ func TestEightyColumnFooterAndFocus(t *testing.T) {
 	if !strings.Contains(frame, "◉") {
 		t.Fatalf("focused layer:\n%s", frame)
 	}
-	if !strings.Contains(frame, "? help · q quit") {
+	if !strings.Contains(frame, "? help  q quit") {
 		t.Fatalf("80-col footer:\n%s", frame)
+	}
+	lines := strings.Split(strings.TrimRight(frame, "\n"), "\n")
+	footer := lines[len(lines)-1]
+	if strings.Contains(footer, "·") {
+		t.Fatalf("footer should be a control strip, not a middot sentence:\n%s", footer)
 	}
 	if !strings.Contains(raw, "38;2;") {
 		t.Fatal("expected truecolor OKLCH palette in the fixture frame")
