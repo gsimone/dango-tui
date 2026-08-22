@@ -97,7 +97,7 @@ var OKLCHTokens = map[string]OKLCH{
 	"logoPink":      {0.70, 0.18, 350},
 }
 
-// LogoTokens is the seven-dot palette. List status mapping does not use these.
+// LogoTokens is the seven-ink palette for list layer balls.
 var LogoTokens = []string{
 	"logoRed", "logoOrange", "logoYellow", "logoGreen", "logoBlue", "logoPurple", "logoPink",
 }

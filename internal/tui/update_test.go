@@ -23,6 +23,22 @@ func TestStatusWordsKeepStatusColor(t *testing.T) {
 	}
 }
 
+func TestAdjacentLayerBallsUseDistinctLogoInks(t *testing.T) {
+	for n := 2; n <= 22; n++ {
+		prev := ""
+		for i := 0; i < n; i++ {
+			token := layerBallToken(i)
+			if !domain.IsLogoToken(token) {
+				t.Fatalf("layer %d token %q is not in the seven", i, token)
+			}
+			if i > 0 && token == prev {
+				t.Fatalf("adjacent visible balls share %s at %d/%d", token, i-1, i)
+			}
+			prev = token
+		}
+	}
+}
+
 func TestRowDangerInkMatchesListStatus(t *testing.T) {
 	auth := New(Options{StoryID: "mixed", Width: 120, Height: 30}).Stacks()[0]
 	ink, red := rowDangerInk(auth)

@@ -82,22 +82,32 @@ const repoSlug = "org/reponame"
 func (m Model) paintBrand(c *canvas, width int, surface, paper, meta, stick string) {
 	badge := m.fetchBadge()
 	c.text(width-PadX-displayWidth(badge), PadTop, badge, meta, surface, displayWidth(badge))
-	hues := m.LogoDots
 	x := PadX
-	for i, token := range hues {
-		if token == "" {
+	for i, token := range m.LogoDots {
+		if token == "" || !domain.IsLogoToken(token) {
 			token = domain.LogoTokens[i]
 		}
-		c.set(x, PadTop, '●', domain.Color(token), surface)
-		if i < len(hues)-1 {
+		c.set(x, PadTop, 'o', domain.Color(token), surface)
+		if i < 2 {
 			c.set(x+1, PadTop, '-', stick, surface)
 		}
 		x += 2
 	}
-	mark := "🍡 DANGO"
-	c.text(PadX+6, PadTop, mark, paper, surface, displayWidth(mark))
+	c.text(PadX+6, PadTop, "DANGO", paper, surface, displayWidth("DANGO"))
 	line2 := fmt.Sprintf("%s  •  %d stacks / %d layers", repoSlug, m.stackCount(), m.layerCount())
 	c.text(PadX, PadTop+1, line2, meta, surface, innerWidth(width))
+}
+
+func layerBallToken(prIndex int) string {
+	n := len(domain.LogoTokens)
+	if n == 0 {
+		return "logoRed"
+	}
+	return domain.LogoTokens[prIndex%n]
+}
+
+func layerBallInk(prIndex int) string {
+	return domain.Color(layerBallToken(prIndex))
 }
 
 func (m Model) paintRule(c *canvas, top, bottom int, meta, surface string) {
@@ -261,9 +271,7 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 				c.text(x, y, "‹›", fg, rowBg, 2)
 				x += 2
 			} else if n <= 5 {
-				pr := stack.PRs[cell.pr]
-				state := domain.GetDisplayState(pr)
-				fg := domain.Color(domain.StateColorToken(state))
+				fg := layerBallInk(cell.pr)
 				selected := selectedStack && cell.pr == sel.PRIndex
 				glyph := '○'
 				if selected {
@@ -272,12 +280,7 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 				c.set(x, y, glyph, fg, rowBg)
 				x++
 			} else {
-				pr := stack.PRs[cell.pr]
-				state := domain.GetDisplayState(pr)
-				fg := domain.Color(domain.StateColorToken(state))
-				if selectedStack && cell.pr == sel.PRIndex {
-					fg = paper
-				}
+				fg := layerBallInk(cell.pr)
 				label := "(" + itoa(cell.pr+1) + ")"
 				c.text(x, y, label, fg, rowBg, displayWidth(label))
 				x += displayWidth(label)

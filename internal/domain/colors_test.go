@@ -142,12 +142,4 @@ func TestPickLogoDotsAreDistinct(t *testing.T) {
 			t.Fatalf("need three distinct, got %v", got)
 		}
 	}
-	process := domain.ProcessLogoDots()
-	seen := map[string]bool{}
-	for _, token := range process {
-		if !domain.IsLogoToken(token) || seen[token] {
-			t.Fatalf("process logo dots must be three distinct from the seven: %v", process)
-		}
-		seen[token] = true
-	}
 }

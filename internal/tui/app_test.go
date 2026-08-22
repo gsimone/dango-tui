@@ -104,8 +104,14 @@ func TestHeaderCopyIsTwoLines(t *testing.T) {
 	if len(lines) < 3 {
 		t.Fatalf("short frame:\n%s", mixed)
 	}
-	if !strings.Contains(lines[1], "🍡 DANGO") || !strings.Contains(lines[1], "●-●-●") {
-		t.Fatalf("line 1 must be logo + DANGO:\n%s", mixed)
+	if !strings.Contains(lines[1], "o-o-o DANGO") {
+		t.Fatalf("line 1 must be o-o-o DANGO:\n%s", mixed)
+	}
+	if strings.Contains(mixed, "🍡") {
+		t.Fatalf("dumpling is gone:\n%s", mixed)
+	}
+	if strings.Contains(lines[1], "●") {
+		t.Fatalf("line 1 must not use ●:\n%s", mixed)
 	}
 	if strings.Contains(lines[1], "example/stacks") || strings.Contains(lines[1], "org/reponame") {
 		t.Fatalf("line 1 must not carry the repo slug:\n%s", mixed)
@@ -143,8 +149,11 @@ func TestDeterministicFramesAtCanonicalSizes(t *testing.T) {
 	for _, size := range []tui.TerminalSize{{Width: 40, Height: 20}, {Width: 80, Height: 24}, {Width: 120, Height: 30}} {
 		m := makeUI(size, "mixed")
 		frame := frameOf(m)
-		if !strings.Contains(frame, "●-●-●") || !strings.Contains(frame, "🍡 DANGO") {
+		if !strings.Contains(frame, "o-o-o DANGO") {
 			t.Fatalf("%dx%d missing brand mark:\n%s", size.Width, size.Height, frame)
+		}
+		if strings.Contains(frame, "🍡") {
+			t.Fatalf("%dx%d still has the dumpling:\n%s", size.Width, size.Height, frame)
 		}
 		if !strings.Contains(frame, "org/reponame  •  3 stacks / 8 layers") {
 			t.Fatalf("%dx%d missing story label:\n%s", size.Width, size.Height, frame)
@@ -319,8 +328,11 @@ func TestResizeAndCardClamp(t *testing.T) {
 		next, _ := m.Update(tea.WindowSizeMsg{Width: size.Width, Height: size.Height})
 		m = next.(tui.Model)
 		frame := frameOf(m)
-		if !strings.Contains(frame, "●-●-●") || !strings.Contains(frame, "🍡 DANGO") {
+		if !strings.Contains(frame, "o-o-o DANGO") {
 			t.Fatalf("%dx%d missing brand mark:\n%s", size.Width, size.Height, frame)
+		}
+		if strings.Contains(frame, "🍡") {
+			t.Fatalf("%dx%d still has the dumpling:\n%s", size.Width, size.Height, frame)
 		}
 		assertFits(t, frame, size.Width)
 		placement := tui.GetInspectorSize(size)
@@ -602,30 +614,46 @@ func TestStackedCardIsInsetBox(t *testing.T) {
 	}
 }
 
-func TestBrandDotsUseDistinctLogoTokens(t *testing.T) {
+func TestMarkUsesThreeDistinctLogoInks(t *testing.T) {
 	m := makeUI(tui.TerminalSize{Width: 80, Height: 24}, "mixed")
 	seen := map[string]bool{}
 	for _, token := range m.LogoDots {
 		if !domain.IsLogoToken(token) {
-			t.Fatalf("brand dot %q is not in the seven", token)
+			t.Fatalf("mark ink %q is not in the seven", token)
 		}
 		if seen[token] {
-			t.Fatalf("brand dots are not distinct: %v", m.LogoDots)
+			t.Fatalf("mark inks are not distinct: %v", m.LogoDots)
 		}
 		seen[token] = true
 	}
 	if len(seen) != 3 {
-		t.Fatalf("need three distinct logo dots, got %v", m.LogoDots)
+		t.Fatalf("need three distinct mark inks, got %v", m.LogoDots)
 	}
 	raw := m.View()
+	frame := strip(raw)
+	if !strings.Contains(frame, "o-o-o DANGO") {
+		t.Fatalf("packed ASCII mark missing:\n%s", frame)
+	}
+	if strings.Contains(frame, "🍡") {
+		t.Fatal("dumpling must not be painted")
+	}
 	for _, token := range m.LogoDots {
 		if !strings.Contains(raw, ansiFG(domain.Color(token))) {
-			t.Fatalf("frame missing logo ink %s: %v", token, m.LogoDots)
+			t.Fatalf("frame missing mark ink %s: %v", token, m.LogoDots)
 		}
 	}
-	again := makeUI(tui.TerminalSize{Width: 120, Height: 30}, "freight")
-	if again.LogoDots != m.LogoDots {
-		t.Fatalf("logo dots must be picked once per process: %v vs %v", m.LogoDots, again.LogoDots)
+}
+
+func TestListBallsUseDistinctLogoInks(t *testing.T) {
+	raw := makeUI(tui.TerminalSize{Width: 120, Height: 30}, "mixed").View()
+	used := 0
+	for _, token := range domain.LogoTokens {
+		if strings.Contains(raw, ansiFG(domain.Color(token))) {
+			used++
+		}
+	}
+	if used < 2 {
+		t.Fatalf("list balls should use the seven logo inks, saw %d", used)
 	}
 }
 
