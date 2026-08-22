@@ -122,12 +122,19 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 		return
 	}
 	sel := app.ClampSelection(m.State.Selection, stacks)
+	maxPRs := 1
+	for _, stack := range stacks {
+		if len(stack.PRs) > maxPRs {
+			maxPRs = len(stack.PRs)
+		}
+	}
+	grid := GetListRowLayout(listWidth, m.Width, maxPRs)
 	y := top
 	for i, stack := range stacks {
 		if y >= bottom {
 			break
 		}
-		layout := GetListRowLayout(listWidth, m.Width, len(stack.PRs))
+		layout := grid
 		rowBg := surface
 		nameFg := meta
 		selectedStack := i == sel.StackIndex
@@ -157,6 +164,11 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 				connector = ' '
 			}
 			c.set(ballX+prIndex*2+1, y, connector, stick, rowBg)
+		}
+		statusX := PadX + layout.NameWidth + 1 + layout.BallsWidth + 1
+		remain := max(0, PadX+listWidth-statusX)
+		if remain >= 4 {
+			c.text(statusX, y, clip(stackHealth(stack), remain), meta, rowBg, remain)
 		}
 		y++
 		if StackedInspector(m.Width) && selectedStack && m.State.CardVisible {
@@ -279,6 +291,29 @@ func reviewLine(pr domain.PullRequest) string {
 		return fmt.Sprintf("Review ✓ %d %s", pr.Approvals, noun)
 	}
 	return "Review ◌ no decision yet"
+}
+
+func stackHealth(stack domain.Stack) string {
+	if len(stack.PRs) == 0 {
+		return "no layers"
+	}
+	head := stack.PRs[len(stack.PRs)-1]
+	switch domain.GetDisplayState(head) {
+	case domain.StateReady:
+		return "ready"
+	case domain.StateCIFailure:
+		return "ci failed"
+	case domain.StateReviewBlocked:
+		return "blocked"
+	case domain.StateQueued:
+		return "queued"
+	case domain.StateDraft:
+		return "draft"
+	case domain.StateMerged:
+		return "merged"
+	default:
+		return "pending"
+	}
 }
 
 func (m Model) stackedPaneHeight(listWidth int) int {

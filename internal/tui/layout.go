@@ -28,22 +28,26 @@ func GetListRowLayout(listWidth, termWidth, prCount int) RowLayout {
 	return rowLayout(listWidth, prCount, termWidth <= 50)
 }
 
+func lockedNameWidth(contentWidth int, compact bool) int {
+	desired := 18
+	if compact {
+		desired = 14
+	}
+	return max(8, min(desired, max(8, contentWidth-6)))
+}
+
 func rowLayout(contentWidth int, prCount int, compact bool) RowLayout {
 	if contentWidth < 1 {
 		contentWidth = 1
 	}
+	nameWidth := lockedNameWidth(contentWidth, compact)
 	ballsWidth := prCount * 2
-	desiredName := 22
-	if compact {
-		desiredName = 14
-	}
 	gap := 1
-	nameWidth := max(8, min(desiredName, contentWidth-ballsWidth-gap))
 	return RowLayout{
 		Compact:          compact,
 		NameWidth:        nameWidth,
 		BallsWidth:       ballsWidth,
-		DescriptionWidth: max(0, contentWidth-nameWidth-ballsWidth-gap),
+		DescriptionWidth: max(0, contentWidth-nameWidth-max(ballsWidth, 2)-gap),
 	}
 }
 
