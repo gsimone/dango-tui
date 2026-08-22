@@ -43,10 +43,9 @@ func (m Model) renderFrame(width, height int) string {
 	c.text(1, 1, metaLine, meta, surface, inner)
 	// y=2 and y=3 stay empty: two blank rows of air.
 
-	statusY := height - 2
 	footerY := height - 1
 	mainTop := ListStartY
-	mainBottom := statusY
+	mainBottom := footerY
 	if mainBottom < mainTop {
 		mainBottom = mainTop
 	}
@@ -55,23 +54,16 @@ func (m Model) renderFrame(width, height int) string {
 	m.paintInspectorPane(c, insp, surface, paper, meta)
 
 	if m.State.Searching {
-		c.fill(1, statusY, inner, 1, raised)
+		c.fill(1, footerY, inner, 1, raised)
 		query := m.State.Query
-		placeholder := "filter stacks, PR titles, branches, numbers, author"
 		if query == "" {
-			c.text(1, statusY, placeholder, meta, raised, inner)
+			c.text(1, footerY, "type to filter  backspace edits  esc clears / exits", meta, raised, inner)
 		} else {
-			c.text(1, statusY, query, paper, raised, inner)
+			c.text(1, footerY, query, meta, raised, inner)
 		}
-		c.text(1, footerY, "type to filter  backspace edits  esc clears / exits", meta, surface, inner)
+	} else if m.State.Feedback != "" {
+		c.text(1, footerY, m.State.Feedback, meta, surface, inner)
 	} else {
-		status := m.sourceState()
-		statusFg := meta
-		if m.State.Feedback != "" {
-			status = m.State.Feedback
-			statusFg = paper
-		}
-		c.text(1, statusY, status, statusFg, surface, inner)
 		c.text(1, footerY, m.footer(), meta, surface, inner)
 	}
 
@@ -96,18 +88,17 @@ func (m Model) footer() string {
 	compact := IsCompact(m.Width)
 	if m.Help {
 		if compact {
-			return "enter go · o open · r sync · esc · q quit"
+			return "↑↓ stack  enter  o  r  esc  q"
 		}
-		return "enter checkout · o open · r refresh · esc close · q quit"
+		return "↑↓ stack  enter checkout  o open  r refresh  esc  q"
 	}
-	full := "↑↓ stack  ←→ layer  enter checkout  o open  a add  r refresh  / filter  esc close  ? help  q quit"
 	if compact {
-		return "↑↓ stack · ←→ layer · / find · ? help"
+		return "↑↓ stack  ←→ layer  /  ?  q"
 	}
 	if m.Width <= 90 {
-		return "↑↓ stack · ←→ layer · enter checkout · / filter · a add · ? help · q quit"
+		return "↑↓ stack  ←→ layer  enter checkout  o open  /  ?  q"
 	}
-	return full
+	return "↑↓ stack  ←→ layer  enter checkout  o open  a add  r refresh  / filter  esc  ?  q"
 }
 
 func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised, paper, meta, stick string) {
@@ -158,11 +149,7 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 		if !layout.Compact {
 			descX := ballX + layout.BallsWidth + 1
 			remain := max(0, listWidth-1-descX)
-			descFg := meta
-			if selectedStack {
-				descFg = paper
-			}
-			c.text(descX, y, clip(stackHealth(stack)+" · "+stack.Description, remain), descFg, rowBg, remain)
+			c.text(descX, y, clip(stackHealth(stack)+" · "+stack.Description, remain), meta, rowBg, remain)
 		}
 	}
 }
@@ -287,7 +274,7 @@ func (m Model) ballHit(x, y int) (stackIndex, prIndex int, ok bool) {
 		return 0, 0, false
 	}
 	listWidth := ListTerminalWidth(m.Width, InspectorColumnWidth(m.Width))
-	if y < ListStartY || y >= m.Height-2 || x >= listWidth {
+	if y < ListStartY || y >= m.Height-1 || x >= listWidth {
 		return 0, 0, false
 	}
 	stackIndex = y - ListStartY

@@ -155,7 +155,7 @@ func TestCompactCardAndHomeEnd(t *testing.T) {
 	if !strings.Contains(frame, "o open") {
 		t.Fatalf("compact card hint:\n%s", frame)
 	}
-	if !strings.Contains(frame, "↑↓ stack · ←→ layer · / find · ? help") {
+	if !strings.Contains(frame, "↑↓ stack  ←→ layer  /  ?  q") {
 		t.Fatalf("compact footer:\n%s", frame)
 	}
 	assertFits(t, frame, 40)
@@ -195,8 +195,11 @@ func TestLocalFilter(t *testing.T) {
 
 func TestFixtureCacheAndEmptyStates(t *testing.T) {
 	stale := frameOf(makeUI(tui.TerminalSize{Width: 80, Height: 24}, "draft"))
-	if !strings.Contains(stale, "fixture cache · stale (simulated)") {
+	if !strings.Contains(stale, "release notes") {
 		t.Fatalf("stale:\n%s", stale)
+	}
+	if strings.Contains(stale, "fixture cache ·") {
+		t.Fatalf("footer must not be a middot status sentence:\n%s", stale)
 	}
 	empty := frameOf(makeUI(tui.TerminalSize{Width: 80, Height: 24}, "all-merged"))
 	if !strings.Contains(empty, "No open stacks in this fixture") {
@@ -206,8 +209,8 @@ func TestFixtureCacheAndEmptyStates(t *testing.T) {
 	if !strings.Contains(errFrame, "Refresh failed in this fixture.") {
 		t.Fatalf("error empty:\n%s", errFrame)
 	}
-	if !strings.Contains(errFrame, "fixture refresh failed · no cached stacks") {
-		t.Fatalf("error status:\n%s", errFrame)
+	if strings.Contains(errFrame, "fixture refresh failed · no cached stacks") {
+		t.Fatalf("error status leaked into the footer strip:\n%s", errFrame)
 	}
 }
 
@@ -236,8 +239,11 @@ func TestEightyColumnFooterAndFocus(t *testing.T) {
 	if !strings.Contains(frame, "●") {
 		t.Fatalf("focused layer:\n%s", frame)
 	}
-	if !strings.Contains(frame, "? help · q quit") {
-		t.Fatalf("80-col footer:\n%s", frame)
+	if !strings.Contains(frame, "↑↓ stack  ←→ layer") {
+		t.Fatalf("80-col footer should be a key strip:\n%s", frame)
+	}
+	if strings.Contains(frame, "fixture cache ·") || strings.Contains(frame, " · ") && strings.Contains(frame, "q quit") {
+		t.Fatalf("footer must not be a middot sentence:\n%s", frame)
 	}
 	if !strings.Contains(raw, "38;2;") {
 		t.Fatal("expected truecolor OKLCH palette in the fixture frame")
@@ -355,9 +361,13 @@ func TestTypeIsPaperOrMeta(t *testing.T) {
 	paper := ansiFG(domain.Color("paper"))
 	meta := ansiFG(domain.Color("meta"))
 	if !strings.Contains(raw, paper) {
-		t.Fatal("selected row / head title must use paper ink")
+		t.Fatal("selected stack name / inspector title must use paper ink")
 	}
 	if !strings.Contains(raw, meta) {
-		t.Fatal("dim copy must use meta")
+		t.Fatal("everything else must use meta")
+	}
+	frame := strip(raw)
+	if strings.Contains(frame, "fixture cache ·") {
+		t.Fatalf("idle footer is still a middot status sentence:\n%s", frame)
 	}
 }
