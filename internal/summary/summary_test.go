@@ -100,6 +100,20 @@ func TestChooseThreadsProviderAndStaysLocal(t *testing.T) {
 	}
 }
 
+func TestRunStubReturnsEmpty(t *testing.T) {
+	res := summary.Run(summary.Job{
+		Provider: summary.ParseProvider("codex@luna.medium"),
+		ID:       "stack-1",
+		Stack:    domain.Stack{ID: "stack-1", PRs: []domain.PullRequest{{Title: "alpha"}}},
+	})
+	if res.ID != "stack-1" {
+		t.Fatalf("id %q", res.ID)
+	}
+	if res.Title != "" || res.Description != "" {
+		t.Fatalf("stub must not invent a title: %+v", res)
+	}
+}
+
 func TestLoadStoresSummariesOnFixtureStacks(t *testing.T) {
 	stack := data.StoryByID("mixed").Stacks[0]
 	if stack.Summary == "" {

@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gsimone/dango-tui/internal/domain"
+	"github.com/gsimone/dango-tui/internal/summary"
 )
 
 var ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\x07]*(?:\x07|\x1b\\)`)
@@ -23,6 +24,46 @@ func TestRelativeFetched(t *testing.T) {
 	}
 	if got := relativeFetched(at, at.Add(2*time.Minute)); got != "last fetched 2 mins ago" {
 		t.Fatalf("two mins: %q", got)
+	}
+}
+
+func TestSummariesAreAsyncAndStubbed(t *testing.T) {
+	fetch := func(string) ([]domain.Stack, error) {
+		return []domain.Stack{{
+			ID:  "s",
+			PRs: []domain.PullRequest{{Number: 1, Title: "alpha layer"}, {Number: 2, Title: "beta layer"}},
+		}}, nil
+	}
+	m := New(Options{
+		Repo:     "owner/name",
+		Provider: summary.ParseProvider("codex@luna.medium"),
+		Width:    80,
+		Height:   24,
+		Fetch:    fetch,
+	})
+	if len(m.stacks) != 1 || m.stacks[0].Name != "" || m.stacks[0].Summary != "" {
+		t.Fatalf("first model must not wait on the summarizer: %+v", m.stacks)
+	}
+	if cmd := m.Init(); cmd == nil {
+		t.Fatal("provider must kick a summary cmd after first paint")
+	}
+	if cmd := New(Options{Repo: "owner/name", Width: 80, Height: 24, Fetch: fetch}).Init(); cmd != nil {
+		t.Fatal("missing provider must not start summaries")
+	}
+
+	next, cmd := m.Update(summaryDoneMsg{token: m.fetchSeq, id: "s", title: "from hook", description: "later"})
+	if cmd != nil {
+		t.Fatal("summary fill is not a new fetch")
+	}
+	m = next.(Model)
+	if m.stacks[0].Name != "from hook" || m.stacks[0].Description != "later" {
+		t.Fatalf("cmd land should fill title/description: %+v", m.stacks[0])
+	}
+
+	next, _ = m.Update(summaryDoneMsg{token: m.fetchSeq + 1, id: "s", title: "stale"})
+	m = next.(Model)
+	if m.stacks[0].Name != "from hook" {
+		t.Fatal("stale summary must not overwrite")
 	}
 }
 

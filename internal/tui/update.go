@@ -8,7 +8,6 @@ import (
 	"github.com/gsimone/dango-tui/internal/app"
 	"github.com/gsimone/dango-tui/internal/data"
 	"github.com/gsimone/dango-tui/internal/domain"
-	"github.com/gsimone/dango-tui/internal/summary"
 )
 
 type fetchDoneMsg struct {
@@ -17,6 +16,13 @@ type fetchDoneMsg struct {
 	at     time.Time
 	token  int
 	live   bool
+}
+
+type summaryDoneMsg struct {
+	token       int
+	id          string
+	title       string
+	description string
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -50,13 +56,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cacheState = data.CacheError
 			} else {
 				m.fetchErr = nil
-				m.stacks = summary.Apply(msg.stacks, m.summarizer)
+				m.stacks = msg.stacks
 				m.cacheState = data.CacheCurrent
 				m.clamp()
+				return m, m.startSummaries()
 			}
 		} else {
 			m.Fetched = "last fetched 2 mins ago"
 		}
+		return m, nil
+	case summaryDoneMsg:
+		m.applySummary(msg)
 		return m, nil
 	case openResultMsg:
 		if strings.HasPrefix(m.State.Feedback, "Opening ") {
@@ -144,6 +154,30 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m, nil
+}
+
+func (m *Model) applySummary(msg summaryDoneMsg) {
+	if msg.token != m.fetchSeq {
+		return
+	}
+	title := strings.TrimSpace(msg.title)
+	desc := strings.TrimSpace(msg.description)
+	if title == "" && desc == "" {
+		return
+	}
+	for i := range m.stacks {
+		if m.stacks[i].ID != msg.id {
+			continue
+		}
+		if title != "" {
+			m.stacks[i].Name = title
+			m.stacks[i].Summary = title
+		}
+		if desc != "" {
+			m.stacks[i].Description = desc
+		}
+		return
+	}
 }
 
 func (m Model) refresh() (tea.Model, tea.Cmd) {

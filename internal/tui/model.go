@@ -41,7 +41,6 @@ type Model struct {
 	fetchErr    error
 	fetchedAt   time.Time
 	fetch       live.FetchFunc
-	summarizer  summary.Summarizer
 }
 
 func New(opts Options) Model {
@@ -53,13 +52,12 @@ func New(opts Options) Model {
 		height = 24
 	}
 	m := Model{
-		Width:      width,
-		Height:     height,
-		State:      app.InitialState(),
-		LogoDots:   domain.ProcessLogoDots(),
-		Provider:   opts.Provider,
-		fetch:      opts.Fetch,
-		summarizer: summary.Choose(opts.Provider),
+		Width:    width,
+		Height:   height,
+		State:    app.InitialState(),
+		LogoDots: domain.ProcessLogoDots(),
+		Provider: opts.Provider,
+		fetch:    opts.Fetch,
 	}
 	if m.fetch == nil {
 		m.fetch = live.Fetch
@@ -104,11 +102,41 @@ func (m *Model) loadLive() {
 		return
 	}
 	m.fetchErr = nil
-	m.stacks = summary.Apply(stacks, m.summarizer)
+	m.stacks = stacks
 	m.cacheState = data.CacheCurrent
 }
 
-func (m Model) Init() tea.Cmd { return nil }
+func (m Model) Init() tea.Cmd {
+	return m.startSummaries()
+}
+
+func (m Model) startSummaries() tea.Cmd {
+	if !m.Live || (m.Provider.Raw == "" && m.Provider.Name == "") {
+		return nil
+	}
+	token := m.fetchSeq
+	var cmds []tea.Cmd
+	for _, stack := range m.stacks {
+		id := stack.ID
+		if id == "" {
+			continue
+		}
+		job := summary.Job{Provider: m.Provider, Stack: stack, ID: id}
+		cmds = append(cmds, func() tea.Msg {
+			res := summary.Run(job)
+			return summaryDoneMsg{
+				token:       token,
+				id:          res.ID,
+				title:       res.Title,
+				description: res.Description,
+			}
+		})
+	}
+	if len(cmds) == 0 {
+		return nil
+	}
+	return tea.Batch(cmds...)
+}
 
 func (m Model) fetchBadge() string {
 	if m.Fetching {
