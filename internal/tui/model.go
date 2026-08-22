@@ -22,6 +22,8 @@ type Model struct {
 	State      app.State
 	Help       bool
 	quitting   bool
+	Fetching   bool
+	Fetched    string
 }
 
 func New(opts Options) Model {
@@ -48,10 +50,21 @@ func New(opts Options) Model {
 		Height:     height,
 		StoryIndex: idx,
 		State:      app.InitialState(),
+		Fetched:    "local",
 	}
 }
 
 func (m Model) Init() tea.Cmd { return nil }
+
+func (m Model) fetchBadge() string {
+	if m.Fetching {
+		return "⠋ fetching"
+	}
+	if m.Fetched == "" {
+		return "fetched · local"
+	}
+	return "fetched · " + m.Fetched
+}
 
 func (m Model) Story() data.FixtureStory {
 	if m.StoryIndex < 0 || m.StoryIndex >= len(data.FixtureStories) {

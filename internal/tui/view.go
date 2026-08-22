@@ -46,7 +46,7 @@ func (m Model) renderFrame(width, height int) string {
 
 	footerY := height - 1
 	mainTop := ListStartY
-	mainBottom := footerY
+	mainBottom := footerY - 1
 	if mainBottom < mainTop {
 		mainBottom = mainTop
 	}
@@ -59,24 +59,26 @@ func (m Model) renderFrame(width, height int) string {
 		m.paintInspectorPane(c, insp, surface, paper, meta)
 	}
 
+	footX := PadX + 2
+	footW := max(1, inner-4)
 	if m.State.Searching {
 		query := m.State.Query
 		if query == "" {
-			c.text(PadX, footerY, "/", meta, surface, inner)
+			c.text(footX, footerY, "/", meta, surface, footW)
 		} else {
-			c.text(PadX, footerY, "/"+query, meta, surface, inner)
+			c.text(footX, footerY, "/"+query, meta, surface, footW)
 		}
 	} else if m.State.Feedback != "" {
-		c.text(PadX, footerY, m.State.Feedback, meta, surface, inner)
+		c.text(footX, footerY, m.State.Feedback, meta, surface, footW)
 	} else {
-		c.text(PadX, footerY, m.footer(), meta, surface, inner)
+		c.text(footX, footerY, m.footer(), meta, surface, footW)
 	}
 
 	return c.render()
 }
 
 func (m Model) paintBrand(c *canvas, width int, surface, meta, stick string) {
-	badge := "fixture"
+	badge := m.fetchBadge()
 	c.text(width-PadX-displayWidth(badge), PadTop, badge, meta, surface, displayWidth(badge))
 	hues := []string{"ready", "open", "queued"}
 	x := PadX
@@ -87,7 +89,8 @@ func (m Model) paintBrand(c *canvas, width int, surface, meta, stick string) {
 		}
 		x += 2
 	}
-	c.text(PadX+6, PadTop, "DANGO", meta, surface, 5)
+	repo := "example/stacks"
+	c.text(PadX+6, PadTop, repo, meta, surface, displayWidth(repo))
 }
 
 func (m Model) paintRule(c *canvas, top, bottom int, meta, surface string) {
@@ -160,7 +163,7 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 				}
 				c.text(x, y, "‹›", fg, rowBg, 2)
 				x += 2
-			} else {
+			} else if n <= 5 {
 				pr := stack.PRs[cell.pr]
 				state := domain.GetDisplayState(pr)
 				fg := domain.Color(domain.StateColorToken(state))
@@ -171,6 +174,16 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 				}
 				c.set(x, y, glyph, fg, rowBg)
 				x++
+			} else {
+				pr := stack.PRs[cell.pr]
+				state := domain.GetDisplayState(pr)
+				fg := domain.Color(domain.StateColorToken(state))
+				if selectedStack && cell.pr == sel.PRIndex {
+					fg = paper
+				}
+				label := "(" + itoa(cell.pr+1) + ")"
+				c.text(x, y, label, fg, rowBg, displayWidth(label))
+				x += displayWidth(label)
 			}
 			if i < len(cells)-1 {
 				c.set(x, y, '-', stick, rowBg)
@@ -389,10 +402,7 @@ func (m Model) ballHit(x, y int) (stackIndex, prIndex int, ok bool) {
 	}
 	cx := ballX
 	for _, cell := range ballCells(len(stack.PRs), sel.PRIndex) {
-		w := 1
-		if cell.pager {
-			w = 2
-		}
+		w := cell.width(len(stack.PRs))
 		if x >= cx && x < cx+w+1 {
 			if cell.pager {
 				prIndex = sel.PRIndex
@@ -412,6 +422,16 @@ func (m Model) ballHit(x, y int) (stackIndex, prIndex int, ok bool) {
 type ballCell struct {
 	pr    int
 	pager bool
+}
+
+func (cell ballCell) width(n int) int {
+	if cell.pager {
+		return 2
+	}
+	if n <= 5 {
+		return 1
+	}
+	return displayWidth("(" + itoa(cell.pr+1) + ")")
 }
 
 func ballCells(n, focus int) []ballCell {
@@ -434,11 +454,7 @@ func ballCellX(ballX, n, prIndex int) int {
 		if !cell.pager && cell.pr == prIndex {
 			return x
 		}
-		if cell.pager {
-			x += 3
-		} else {
-			x += 2
-		}
+		x += cell.width(n) + 1
 	}
 	return ballX
 }

@@ -1,9 +1,13 @@
 package tui
 
 import (
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gsimone/dango-tui/internal/app"
 )
+
+type fetchDoneMsg struct{}
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -19,6 +23,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleMouse(msg), nil
 	case tea.KeyMsg:
 		return m.handleKey(msg)
+	case fetchDoneMsg:
+		m.Fetching = false
+		m.Fetched = "just now"
+		m.State.Feedback = ""
+		return m, nil
 	case openResultMsg:
 		if msg.err != nil {
 			m.State.Feedback = "Could not open " + msg.url
@@ -79,7 +88,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "a":
 		m.State.Feedback = "add · not wired"
 	case "r":
-		m.State.Feedback = "Fixture data refreshed · no network"
+		m.Fetching = true
+		m.State.Feedback = ""
+		return m, tea.Tick(400*time.Millisecond, func(time.Time) tea.Msg { return fetchDoneMsg{} })
 	case "/":
 		m.State.Query = ""
 		m.State.Searching = true

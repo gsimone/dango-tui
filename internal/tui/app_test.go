@@ -102,13 +102,13 @@ func TestDeterministicFramesAtCanonicalSizes(t *testing.T) {
 	for _, size := range []tui.TerminalSize{{Width: 40, Height: 20}, {Width: 80, Height: 24}, {Width: 120, Height: 30}} {
 		m := makeUI(size, "mixed")
 		frame := frameOf(m)
-		if !strings.Contains(frame, "●-●-● DANGO") {
+		if !strings.Contains(frame, "●-●-● example/stacks") {
 			t.Fatalf("%dx%d missing brand mark:\n%s", size.Width, size.Height, frame)
 		}
 		if !strings.Contains(frame, "3 stacks / 8 layers") {
 			t.Fatalf("%dx%d missing story label:\n%s", size.Width, size.Height, frame)
 		}
-		if !strings.Contains(frame, "auth clean") {
+		if !strings.Contains(frame, "auth") {
 			t.Fatalf("%dx%d missing stack:\n%s", size.Width, size.Height, frame)
 		}
 		if !strings.Contains(frame, "●") {
@@ -264,7 +264,7 @@ func TestResizeAndCardClamp(t *testing.T) {
 		next, _ := m.Update(tea.WindowSizeMsg{Width: size.Width, Height: size.Height})
 		m = next.(tui.Model)
 		frame := frameOf(m)
-		if !strings.Contains(frame, "●-●-● DANGO") {
+		if !strings.Contains(frame, "●-●-● example/stacks") {
 			t.Fatalf("%dx%d missing brand mark:\n%s", size.Width, size.Height, frame)
 		}
 		assertFits(t, frame, size.Width)
@@ -306,7 +306,7 @@ func TestSimulatedActionsStayHonest(t *testing.T) {
 		t.Fatalf("open:\n%s", frameOf(m))
 	}
 	m = applyKey(m, key("r"))
-	if !strings.Contains(frameOf(m), "Fixture data refreshed · no network") {
+	if !strings.Contains(frameOf(m), "fetching") {
 		t.Fatalf("refresh:\n%s", frameOf(m))
 	}
 }

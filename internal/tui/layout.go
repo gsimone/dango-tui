@@ -14,7 +14,7 @@ type RowLayout struct {
 }
 
 const (
-	BallColW   = 10
+	BallColW   = 20
 	StatusColW = 9
 )
 
