@@ -23,6 +23,8 @@ func main() {
 		os.Exit(2)
 	}
 
+	args = cli.Resolve(args, ".")
+
 	model := tui.New(tui.Options{
 		StoryID:  args.Story,
 		Repo:     args.Repo,
@@ -47,10 +49,11 @@ func main() {
 }
 
 func helpText() string {
-	return "Usage: dango --repo owner/name [--provider name@model]\n" +
-		"       dango [-story mixed]\n\n" +
-		"Live fetch requires --repo owner/name. No baked-in repo.\n" +
-		"--provider is optional and only for the stack title (e.g. codex@luna.medium). It does not block fetch.\n"
+	return "Usage: dango\n" +
+		"       dango --repo owner/name [--provider name@model]\n" +
+		"       dango -story mixed\n\n" +
+		"No flags: detect owner/name from git remote of cwd. dango.json sets the title provider.\n" +
+		"Missing dango.json = no generated title. --repo and --provider override. No settings screen.\n"
 }
 
 func parseFrame(spec string) (int, int, error) {

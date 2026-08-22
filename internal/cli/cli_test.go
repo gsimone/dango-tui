@@ -52,13 +52,13 @@ func TestParseStoryIgnoresRepo(t *testing.T) {
 	}
 }
 
-func TestParseNeitherIsFixturePath(t *testing.T) {
+func TestParseNeitherLeavesDetectToResolve(t *testing.T) {
 	args, err := Parse(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if args.Repo != "" || args.Story != "" {
-		t.Fatalf("no --repo means fixtures, got %+v", args)
+		t.Fatalf("flags-only parse must not invent a repo, got %+v", args)
 	}
 }
 

@@ -37,11 +37,13 @@ func parse(args []string, usage io.Writer) (Args, error) {
 	repo := fs.String("repo", "", "GitHub repo as owner/name; fetch live PRs via gh")
 	provider := fs.String("provider", "", "stack title summarizer (e.g. codex@luna.medium); optional, does not block fetch")
 	fs.Usage = func() {
-		fmt.Fprintln(usage, "Usage: dango --repo owner/name [--provider name@model]")
-		fmt.Fprintln(usage, "       dango [-story mixed]")
+		fmt.Fprintln(usage, "Usage: dango")
+		fmt.Fprintln(usage, "       dango --repo owner/name [--provider name@model]")
+		fmt.Fprintln(usage, "       dango -story mixed")
 		fmt.Fprintln(usage, "")
-		fmt.Fprintln(usage, "Live fetch requires --repo owner/name. No baked-in repo.")
-		fmt.Fprintln(usage, "--provider is optional and is not required to fetch.")
+		fmt.Fprintln(usage, "With no flags, owner/name comes from git remote of cwd.")
+		fmt.Fprintln(usage, "dango.json in that repo sets the title provider. Missing file = no generated title.")
+		fmt.Fprintln(usage, "--repo and --provider override. No settings screen.")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
