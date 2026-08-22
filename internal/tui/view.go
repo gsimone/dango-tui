@@ -122,13 +122,16 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 		return
 	}
 	sel := app.ClampSelection(m.State.Selection, stacks)
-	maxPRs := 1
+	nameW := 8
 	for _, stack := range stacks {
-		if len(stack.PRs) > maxPRs {
-			maxPRs = len(stack.PRs)
+		n := displayWidth("· " + stack.Name)
+		if n > nameW {
+			nameW = n
 		}
 	}
-	grid := GetListRowLayout(listWidth, m.Width, maxPRs)
+	statusW := 8
+	nameW = min(nameW, max(8, listWidth-statusW-8))
+	ballBudget := max(2, listWidth-nameW-1-statusW-1)
 	start := m.listOrigin(len(stacks), sel.StackIndex, top, bottom)
 	y := top
 	for i := start; i < len(stacks); i++ {
@@ -136,7 +139,6 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 		if y >= bottom {
 			break
 		}
-		layout := grid
 		rowBg := surface
 		nameFg := meta
 		selectedStack := i == sel.StackIndex
@@ -149,10 +151,23 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 		if selectedStack {
 			marker = "▸ "
 		}
-		c.text(PadX, y, clip(marker+stack.Name, layout.NameWidth), nameFg, rowBg, layout.NameWidth)
+		c.text(PadX, y, marker+stack.Name, nameFg, rowBg, nameW)
 
-		ballX := PadX + layout.NameWidth + 1
-		for prIndex, pr := range stack.PRs {
+		n := len(stack.PRs)
+		show := n
+		extra := 0
+		need := n * 2
+		if need > ballBudget {
+			countW := displayWidth("+" + itoa(n))
+			show = max(1, (ballBudget-countW)/2)
+			if show > n {
+				show = n
+			}
+			extra = n - show
+		}
+		ballX := PadX + nameW + 1
+		for prIndex := 0; prIndex < show; prIndex++ {
+			pr := stack.PRs[prIndex]
 			state := domain.GetDisplayState(pr)
 			fg := domain.Color(domain.StateColorToken(state))
 			selected := selectedStack && prIndex == sel.PRIndex
@@ -161,13 +176,14 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 				glyph = '●'
 			}
 			c.set(ballX+prIndex*2, y, glyph, fg, rowBg)
-			connector := '-'
-			if prIndex == len(stack.PRs)-1 {
-				connector = ' '
+			if prIndex < show-1 {
+				c.set(ballX+prIndex*2+1, y, '-', stick, rowBg)
 			}
-			c.set(ballX+prIndex*2+1, y, connector, stick, rowBg)
 		}
-		statusX := PadX + layout.NameWidth + 1 + layout.BallsWidth + 1
+		if extra > 0 {
+			c.text(ballX+show*2, y, "+"+itoa(extra), meta, rowBg, ballBudget-show*2)
+		}
+		statusX := PadX + nameW + 1 + ballBudget + 1
 		remain := max(0, PadX+listWidth-statusX)
 		if remain >= 4 {
 			c.text(statusX, y, clip(stackHealth(stack), remain), meta, rowBg, remain)
@@ -320,8 +336,14 @@ func stackHealth(stack domain.Stack) string {
 
 func (m Model) listOrigin(n, selected, top, bottom int) int {
 	room := max(1, bottom-top)
+	if StackedInspector(m.Width) && m.State.CardVisible {
+		room = max(1, room-8)
+	}
 	if selected < room {
 		return 0
+	}
+	if selected > n-1 {
+		selected = n - 1
 	}
 	return selected - room + 1
 }

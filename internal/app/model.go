@@ -101,15 +101,13 @@ func MoveSelection(selection Selection, stacks []domain.Stack, direction Directi
 	case DirRight:
 		return ClampSelection(Selection{StackIndex: current.StackIndex, PRIndex: current.PRIndex + 1}, stacks)
 	case DirHome:
-		return Selection{StackIndex: current.StackIndex, PRIndex: 0}
+		return ClampSelection(Selection{StackIndex: 0, PRIndex: current.PRIndex}, stacks)
 	case DirEnd:
-		end := 0
-		if current.StackIndex < len(stacks) {
-			if n := len(stacks[current.StackIndex].PRs); n > 0 {
-				end = n - 1
-			}
+		last := 0
+		if len(stacks) > 0 {
+			last = len(stacks) - 1
 		}
-		return Selection{StackIndex: current.StackIndex, PRIndex: end}
+		return ClampSelection(Selection{StackIndex: last, PRIndex: current.PRIndex}, stacks)
 	default:
 		delta := 1
 		if direction == DirUp {

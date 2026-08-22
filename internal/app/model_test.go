@@ -30,16 +30,16 @@ func TestMoveSelectionAndClamp(t *testing.T) {
 		t.Fatalf("right: %+v", right)
 	}
 	end := app.MoveSelection(sel, stacks, app.DirEnd)
-	if end.PRIndex != 2 {
-		t.Fatalf("end of first stack: %+v", end)
+	if end.StackIndex != 2 {
+		t.Fatalf("end of list: %+v", end)
 	}
-	down := app.MoveSelection(end, stacks, app.DirDown)
-	if down.StackIndex != 1 || down.PRIndex != 2 {
-		t.Fatalf("down keeps layer index: %+v", down)
+	down := app.MoveSelection(sel, stacks, app.DirDown)
+	if down.StackIndex != 1 || down.PRIndex != 0 {
+		t.Fatalf("down: %+v", down)
 	}
-	home := app.MoveSelection(down, stacks, app.DirHome)
-	if home.PRIndex != 0 || home.StackIndex != 1 {
-		t.Fatalf("home: %+v", home)
+	home := app.MoveSelection(end, stacks, app.DirHome)
+	if home.StackIndex != 0 {
+		t.Fatalf("home of list: %+v", home)
 	}
 	clamped := app.ClampSelection(app.Selection{StackIndex: 99, PRIndex: 99}, stacks)
 	if clamped.StackIndex != 2 || clamped.PRIndex != 1 {

@@ -143,14 +143,14 @@ func TestKeyboardAndHoverRevealTheSameInspector(t *testing.T) {
 
 func TestCompactCardAndHomeEnd(t *testing.T) {
 	size := tui.TerminalSize{Width: 40, Height: 20}
-	m := applyKey(applyKey(makeUI(size, "mixed"), key("down")), key("end"))
-	if !strings.Contains(frameOf(m), "#213 Prepare") {
-		t.Fatalf("end of second stack:\n%s", frameOf(m))
+	m := applyKey(makeUI(size, "mixed"), key("end"))
+	if !strings.Contains(frameOf(m), "#241") {
+		t.Fatalf("end should jump to the last stack:\n%s", frameOf(m))
 	}
 	m = applyKey(m, key("home"))
 	frame := frameOf(m)
-	if !strings.Contains(frame, "#211 Add") {
-		t.Fatalf("home:\n%s", frame)
+	if !strings.Contains(frame, "#184") {
+		t.Fatalf("home should jump to the first stack:\n%s", frame)
 	}
 	if !strings.Contains(frame, "o open") {
 		t.Fatalf("compact card hint:\n%s", frame)
