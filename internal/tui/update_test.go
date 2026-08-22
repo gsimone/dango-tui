@@ -85,43 +85,6 @@ func TestSummariesAreAsyncAndStubbed(t *testing.T) {
 	}
 }
 
-func TestFetchLandsWhilePickerOpen(t *testing.T) {
-	fetch := func(string) ([]domain.Stack, error) {
-		return []domain.Stack{{
-			ID:  "s",
-			PRs: []domain.PullRequest{{Number: 1, Title: "alpha layer"}},
-		}}, nil
-	}
-	m := New(Options{Repo: "owner/name", Width: 80, Height: 24, Fetch: fetch})
-	if m.Picking {
-		t.Fatal("first paint is not the picker")
-	}
-	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
-	m = next.(Model)
-	if !m.Picking {
-		t.Fatal("p opens")
-	}
-	next, cmd := m.Update(fetchDoneMsg{
-		stacks: []domain.Stack{{
-			ID:  "n",
-			PRs: []domain.PullRequest{{Number: 9, Title: "later layer"}},
-		}},
-		live:  true,
-		token: m.fetchSeq,
-		at:    time.Now(),
-	})
-	m = next.(Model)
-	if cmd != nil {
-		t.Fatal("no provider means fetch must not start summaries")
-	}
-	if !m.Picking {
-		t.Fatal("fetch must not close the picker")
-	}
-	if len(m.stacks) != 1 || m.stacks[0].PRs[0].Title != "later layer" {
-		t.Fatalf("fetch should land under the picker: %+v", m.stacks)
-	}
-}
-
 func TestStatusWordsKeepStatusColor(t *testing.T) {
 	auth := New(Options{StoryID: "mixed", Width: 120, Height: 30}).Stacks()[0]
 	if got := stackHealthColor(auth); got != domain.Color("ciFailure") {
@@ -149,20 +112,30 @@ func TestLayerBallsUseStatusTokens(t *testing.T) {
 	}
 }
 
-func TestRowDangerInkMatchesListStatus(t *testing.T) {
+func TestInspectorStatusInkIsValueOnly(t *testing.T) {
 	auth := New(Options{StoryID: "mixed", Width: 120, Height: 30}).Stacks()[0]
-	ink, red := rowDangerInk(auth)
-	if !red || ink != stackHealthColor(auth) || ink != domain.Color("ciFailure") {
-		t.Fatalf("auth row is red; card values must use the list token, got %s red=%v", ink, red)
+	head := auth.PRs[len(auth.PRs)-1]
+	facts := inspectorFacts(head)
+	if facts[0].label != "status" || facts[0].value != "CI failing" {
+		t.Fatalf("status fact: %+v", facts[0])
 	}
-	composer := New(Options{StoryID: "mixed", Width: 120, Height: 30}).Stacks()[1]
-	if _, red := rowDangerInk(composer); red {
-		t.Fatal("queued row is not a red status")
+	if facts[0].fg != inspectorStatusColor(head) || facts[0].fg != domain.Color("ciFailure") {
+		t.Fatalf("status value must use status color, got %s", facts[0].fg)
 	}
-	blocked := New(Options{StoryID: "changes-requested", Width: 120, Height: 30}).Stacks()[0]
-	ink, red = rowDangerInk(blocked)
-	if !red || ink != domain.Color("reviewBlocked") {
-		t.Fatalf("blocked row must use reviewBlocked, got %s red=%v", ink, red)
+	paper := domain.Color("paper")
+	for _, fact := range facts[1:] {
+		if fact.fg != paper {
+			t.Fatalf("%s must stay paper, got %s", fact.label, fact.fg)
+		}
+	}
+
+	blocked := New(Options{StoryID: "changes-requested", Width: 120, Height: 30}).Stacks()[0].PRs[0]
+	if got := inspectorStatusColor(blocked); got != domain.Color("reviewBlocked") {
+		t.Fatalf("blocked status value %s", got)
+	}
+	merged := auth.PRs[0]
+	if inspectorStatusColor(merged) != domain.Color("merged") {
+		t.Fatalf("merged status value %s", inspectorStatusColor(merged))
 	}
 }
 

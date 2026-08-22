@@ -26,7 +26,6 @@ func main() {
 	args = cli.Resolve(args, ".")
 
 	model := tui.New(tui.Options{
-		StoryID:  args.Story,
 		Repo:     args.Repo,
 		Provider: args.Provider,
 	})
@@ -51,9 +50,9 @@ func main() {
 func helpText() string {
 	return "Usage: dango\n" +
 		"       dango --repo owner/name [--provider name@model]\n" +
-		"       dango -story mixed\n\n" +
-		"No flags: detect owner/name from git remote of cwd. dango.json sets the title provider.\n" +
-		"Missing dango.json = no generated title. --repo and --provider override. No settings screen.\n"
+		"       dango --repo testdata/test.json\n\n" +
+		"No flags: detect owner/name from git remote of cwd. dango.json / dango.yml / dango.yaml sets the title provider.\n" +
+		"Missing config file = no generated title. --repo is live gh or a stack dump. --provider overrides. No picker.\n"
 }
 
 func parseFrame(spec string) (int, int, error) {

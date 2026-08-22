@@ -27,8 +27,6 @@ type Model struct {
 	StoryIndex  int
 	State       app.State
 	Help        bool
-	Picking     bool
-	PickIndex   int
 	quitting    bool
 	Fetching    bool
 	Fetched     string
@@ -38,6 +36,8 @@ type Model struct {
 	Repo        string
 	Provider    summary.Provider
 	Live        bool
+	File        bool
+	file        string
 	stacks      []domain.Stack
 	cacheState  data.CacheState
 	fetchErr    error
@@ -65,15 +65,45 @@ func New(opts Options) Model {
 		m.fetch = live.Fetch
 	}
 
-	if opts.StoryID != "" || strings.TrimSpace(opts.Repo) == "" {
+	repo := strings.TrimSpace(opts.Repo)
+	if opts.StoryID != "" {
 		m.loadFixture(opts.StoryID)
+		return m
+	}
+	if data.IsStackFile(repo) {
+		m.loadFile(repo)
+		return m
+	}
+	if repo == "" {
+		m.loadFixture("")
 		return m
 	}
 
 	m.Live = true
-	m.Repo = strings.TrimSpace(opts.Repo)
+	m.Repo = repo
 	m.loadLive()
 	return m
+}
+
+func (m *Model) loadFile(path string) {
+	m.File = true
+	m.file = path
+	m.Fetched = "authored"
+	repo, stacks, err := data.LoadStacks(path)
+	if repo != "" {
+		m.Repo = repo
+	}
+	if err != nil {
+		m.fetchErr = err
+		m.cacheState = data.CacheError
+		if m.Repo == "" {
+			m.Repo = path
+		}
+		return
+	}
+	m.fetchErr = nil
+	m.stacks = stacks
+	m.cacheState = data.CacheCurrent
 }
 
 func (m *Model) loadFixture(storyID string) {
@@ -165,14 +195,14 @@ func relativeFetched(at, now time.Time) string {
 }
 
 func (m Model) repoLabel() string {
-	if m.Live && m.Repo != "" {
+	if m.Repo != "" {
 		return m.Repo
 	}
 	return "org/reponame"
 }
 
 func (m Model) Story() data.FixtureStory {
-	if m.Live {
+	if m.Live || m.File {
 		return data.FixtureStory{Stacks: m.stacks, CacheState: m.cacheState}
 	}
 	if m.StoryIndex < 0 || m.StoryIndex >= len(data.FixtureStories) {
@@ -257,16 +287,16 @@ func (m Model) emptyMessage() string {
 	if strings.TrimSpace(m.State.Query) != "" {
 		return "No match."
 	}
-	if m.Live && m.fetchErr != nil {
+	if m.fetchErr != nil {
 		return m.fetchErr.Error()
 	}
 	if m.cacheState == data.CacheError || m.Story().CacheState == data.CacheError {
-		if m.Live {
+		if m.Live || m.File {
 			return "Refresh failed. No stacks are available."
 		}
 		return "Refresh failed in this fixture. No cached stacks are available."
 	}
-	if m.Live {
+	if m.Live || m.File {
 		return "No open stacks in this repository."
 	}
 	return "No open stacks in this fixture repository."

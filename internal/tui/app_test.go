@@ -107,7 +107,11 @@ func TestHeaderCopyIsTwoLines(t *testing.T) {
 	if !strings.Contains(lines[1], "●-●-● DANGO") {
 		t.Fatalf("line 1 must be ●-●-● DANGO:\n%s", mixed)
 	}
-	if strings.Contains(mixed, "🍡") {
+	brand := strings.TrimSpace(lines[1])
+	if !strings.HasPrefix(brand, "●-●-● DANGO") {
+		t.Fatalf("mark is circles + DANGO only:\n%s", mixed)
+	}
+	if strings.Contains(mixed, "🍡") || strings.Contains(lines[1], "dumpling") {
 		t.Fatalf("dumpling is gone:\n%s", mixed)
 	}
 	if strings.Contains(lines[1], "o-o-o") {
@@ -421,6 +425,28 @@ func TestInspectorIsARightColumn(t *testing.T) {
 	}
 }
 
+func TestInspectorStatusColorStaysOnTheValue(t *testing.T) {
+	size := tui.TerminalSize{Width: 120, Height: 30}
+	m := applyKey(applyKey(makeUI(size, "mixed"), key("right")), key("right"))
+	raw := m.View()
+	frame := strip(raw)
+	if !strings.Contains(frame, "CI failing") {
+		t.Fatalf("status value should be CI failing:\n%s", frame)
+	}
+	if !strings.Contains(frame, "#186 Remove implicit session fallback") {
+		t.Fatalf("title stays paper copy, not a status wash:\n%s", frame)
+	}
+	if !strings.Contains(frame, "branch    gm/stacks-186") {
+		t.Fatalf("other facts stay labeled paper/meta rows:\n%s", frame)
+	}
+	if !strings.Contains(raw, ansiFG(domain.Color("ciFailure"))) {
+		t.Fatal("status value keeps the status color")
+	}
+	if !strings.Contains(raw, ansiFG(domain.Color("paper"))) {
+		t.Fatal("title and other values stay paper")
+	}
+}
+
 func TestInspectorIsLabeledRows(t *testing.T) {
 	size := tui.TerminalSize{Width: 120, Height: 30}
 	frame := frameOf(makeUI(size, "mixed"))
@@ -587,7 +613,6 @@ func TestHelpOverlayToggles(t *testing.T) {
 		"[ ←→ ] layer",
 		"[ o ] open",
 		"[ . ] copy",
-		"[ p ] provider",
 		"[ / ] filter",
 		"[ r ] refresh",
 		"[ q ] quit",
@@ -597,8 +622,8 @@ func TestHelpOverlayToggles(t *testing.T) {
 			t.Fatalf("help overlay missing %q:\n%s", needle, frame)
 		}
 	}
-	if strings.Contains(frame, "[ enter ]") {
-		t.Fatalf("help must not invent enter:\n%s", frame)
+	if strings.Contains(frame, "[ enter ]") || strings.Contains(frame, "[ p ] provider") {
+		t.Fatalf("help must not invent enter or a provider picker:\n%s", frame)
 	}
 	m = applyKey(m, key("?"))
 	closed := frameOf(m)
@@ -651,5 +676,24 @@ func TestFooterHasNoEnter(t *testing.T) {
 		if strings.Contains(frame, "[ enter ]") || strings.Contains(frame, "checkout") {
 			t.Fatalf("%dx%d still advertises enter/checkout:\n%s", size.Width, size.Height, frame)
 		}
+		if strings.Contains(frame, "[ p ]") {
+			t.Fatalf("%dx%d must not advertise a provider picker:\n%s", size.Width, size.Height, frame)
+		}
+	}
+}
+
+func TestPDoesNotOpenAPicker(t *testing.T) {
+	m := makeUI(tui.TerminalSize{Width: 80, Height: 24}, "mixed")
+	before := frameOf(m)
+	m = applyKey(m, key("p"))
+	after := frameOf(m)
+	if !strings.Contains(after, "auth cleanup") {
+		t.Fatalf("p must stay on the stack list:\n%s", after)
+	}
+	if strings.Contains(after, "codex@luna.medium") || strings.Contains(after, "▸ none") {
+		t.Fatalf("p must not open a provider list:\n%s", after)
+	}
+	if strings.Contains(after, "[ enter ]") && !strings.Contains(before, "[ enter ]") {
+		t.Fatalf("p must not invent picker chrome:\n%s", after)
 	}
 }

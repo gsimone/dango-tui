@@ -17,6 +17,8 @@ type fetchDoneMsg struct {
 	at     time.Time
 	token  int
 	live   bool
+	file   bool
+	slug   string
 }
 
 type summaryDoneMsg struct {
@@ -62,6 +64,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.clamp()
 				return m, m.startSummaries()
 			}
+		} else if msg.file || m.File {
+			m.Fetched = "authored"
+			if msg.slug != "" {
+				m.Repo = msg.slug
+			}
+			if msg.err != nil {
+				m.fetchErr = msg.err
+				m.cacheState = data.CacheError
+			} else {
+				m.fetchErr = nil
+				m.stacks = msg.stacks
+				m.cacheState = data.CacheCurrent
+				m.clamp()
+			}
 		} else {
 			m.Fetched = "last fetched 2 mins ago"
 		}
@@ -84,10 +100,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.Picking {
-		return m.handlePickerKey(msg)
-	}
-
 	if m.State.Searching {
 		switch msg.String() {
 		case "esc", "escape":
@@ -135,8 +147,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if pr, ok := m.SelectedPR(); ok {
 			return m, m.copyBranch(pr)
 		}
-	case "p":
-		m.openPicker()
 	case "a":
 		m.State.Feedback = "add · not wired"
 	case "r":
@@ -190,6 +200,13 @@ func (m *Model) applySummary(msg summaryDoneMsg) {
 func (m Model) refresh() (tea.Model, tea.Cmd) {
 	m.Fetching = true
 	m.State.Feedback = ""
+	if m.File {
+		path := m.file
+		return m, func() tea.Msg {
+			repo, stacks, err := data.LoadStacks(path)
+			return fetchDoneMsg{stacks: stacks, err: err, at: time.Now(), token: 0, live: false, file: true, slug: repo}
+		}
+	}
 	if !m.Live {
 		return m, tea.Tick(400*time.Millisecond, func(time.Time) tea.Msg { return fetchDoneMsg{} })
 	}
@@ -204,9 +221,6 @@ func (m Model) refresh() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleMouse(msg tea.MouseMsg) Model {
-	if m.Picking {
-		return m
-	}
 	x, y := mouseXY(msg)
 	action := mouseAction(msg)
 	stackIndex, prIndex, hit := m.ballHit(x, y)

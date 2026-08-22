@@ -1,6 +1,8 @@
 package tui_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -10,6 +12,25 @@ import (
 	"github.com/gsimone/dango-tui/internal/summary"
 	"github.com/gsimone/dango-tui/internal/tui"
 )
+
+func testdataJSON(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		p := filepath.Join(dir, "testdata", "test.json")
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+		next := filepath.Dir(dir)
+		if next == dir {
+			t.Fatal("testdata/test.json not found")
+		}
+		dir = next
+	}
+}
 
 func TestNoRepoUsesFixture(t *testing.T) {
 	m := tui.New(tui.Options{
@@ -220,6 +241,95 @@ func listRows(frame string) []string {
 		}
 	}
 	return out
+}
+
+func TestRepoJSONFilePaintsAuthoredStacks(t *testing.T) {
+	fetches := 0
+	m := tui.New(tui.Options{
+		Repo:   testdataJSON(t),
+		Width:  120,
+		Height: 30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			fetches++
+			t.Fatal("JSON --repo must not call gh")
+			return nil, nil
+		},
+	})
+	if fetches != 0 {
+		t.Fatalf("file path must not fetch, got %d", fetches)
+	}
+	if m.Live || !m.File {
+		t.Fatalf("file mode live=%v file=%v", m.Live, m.File)
+	}
+	if m.Repo != "example/stacks" {
+		t.Fatalf("header slug from dump, got %q", m.Repo)
+	}
+	frame := frameOf(m)
+	if !strings.Contains(frame, "example/stacks  •  4 stacks / 18 layers") {
+		t.Fatalf("authored header:\n%s", frame)
+	}
+	if !strings.Contains(frame, "●-●-● DANGO") || strings.Contains(frame, "🍡") {
+		t.Fatalf("mark:\n%s", frame)
+	}
+	rows := strings.Join(listRows(frame), "\n")
+	for _, name := range []string{"auth cleanup", "composer tokens", "sync rewrite", "schema cutover"} {
+		if !strings.Contains(rows, name) {
+			t.Fatalf("missing %q:\n%s", name, rows)
+		}
+	}
+	if strings.Contains(rows, "Freight layer 1") || strings.Contains(frame, "300 stacks") {
+		t.Fatalf("must not load chaos/random fixtures:\n%s", frame)
+	}
+	if strings.Contains(frame, "[ p ]") {
+		t.Fatalf("no picker:\n%s", frame)
+	}
+}
+
+func TestRepoJSONMissingFileIsErrorNotFixtures(t *testing.T) {
+	m := tui.New(tui.Options{
+		Repo:   filepath.Join(t.TempDir(), "missing.json"),
+		Width:  80,
+		Height: 24,
+		Fetch: func(string) ([]domain.Stack, error) {
+			t.Fatal("missing json must not fetch")
+			return nil, nil
+		},
+	})
+	if m.Live || !m.File {
+		t.Fatal("missing json stays file mode")
+	}
+	frame := frameOf(m)
+	if !strings.Contains(frame, "read ") || !strings.Contains(frame, "missing.json") {
+		t.Fatalf("loud file error:\n%s", frame)
+	}
+	if strings.Contains(frame, "org/reponame") || strings.Contains(frame, "300 stacks") {
+		t.Fatalf("must not fall back to fixtures:\n%s", frame)
+	}
+}
+
+func TestRepoOwnerNameStillFetches(t *testing.T) {
+	fetches := 0
+	m := tui.New(tui.Options{
+		Repo:   "gsimone/leva-2",
+		Width:  80,
+		Height: 24,
+		Fetch: func(repo string) ([]domain.Stack, error) {
+			fetches++
+			if repo != "gsimone/leva-2" {
+				t.Fatalf("repo %q", repo)
+			}
+			return []domain.Stack{{
+				ID:  "s",
+				PRs: []domain.PullRequest{{Number: 1, Title: "live layer"}},
+			}}, nil
+		},
+	})
+	if fetches != 1 || !m.Live || m.File {
+		t.Fatalf("owner/name is live gh, fetches=%d live=%v file=%v", fetches, m.Live, m.File)
+	}
+	if !strings.Contains(frameOf(m), "live layer") {
+		t.Fatalf("live list:\n%s", frameOf(m))
+	}
 }
 
 func TestFixtureRefreshStaysSimulated(t *testing.T) {

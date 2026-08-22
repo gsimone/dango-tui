@@ -69,37 +69,6 @@ func TestPreferDescriptionSkipsStub(t *testing.T) {
 	}
 }
 
-func TestCatalogIsProviderTypeWithNoneAndCodex(t *testing.T) {
-	cat := summary.Catalog()
-	if len(cat) < 3 || len(cat) > 5 {
-		t.Fatalf("catalog should be none plus 2–4 stubs, got %d", len(cat))
-	}
-	if !cat[0].Empty() || cat[0].Label() != "none" {
-		t.Fatalf("first row is none/off, got %+v", cat[0])
-	}
-	found := false
-	for _, p := range cat {
-		if p.Raw == "codex@luna.medium" && p.Name == "codex" && p.Model == "luna.medium" {
-			found = true
-		}
-		if summary.Choose(p).Provider != p {
-			t.Fatalf("choose must keep catalog provider %+v", p)
-		}
-		if p.Empty() {
-			if summary.Choose(p).Summarize(data.StoryByID("mixed").Stacks[0]) != "" {
-				t.Fatal("none must not invent a title")
-			}
-			continue
-		}
-		if p.Name == "" {
-			t.Fatalf("stub row must be a Provider, got %+v", p)
-		}
-	}
-	if !found {
-		t.Fatal("catalog must include codex@luna.medium")
-	}
-}
-
 func TestChooseThreadsProviderAndStaysLocal(t *testing.T) {
 	p := summary.ParseProvider("codex@luna.medium")
 	if p.Name != "codex" || p.Model != "luna.medium" {

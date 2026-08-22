@@ -7,13 +7,19 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/gsimone/dango-tui/internal/data"
 	"github.com/gsimone/dango-tui/internal/summary"
 )
 
-// Args is the flag-driven launch config. --repo fetches via gh. No repo or -story is fixtures.
+// IsStackFile reports whether --repo is a JSON stack dump, not owner/name.
+func IsStackFile(raw string) bool {
+	return data.IsStackFile(raw)
+}
+
+// Args is the flag-driven launch config. --repo is owner/name (live gh) or a
+// JSON stack file. No flags: detect git remote. No -story user mode.
 type Args struct {
 	Frame    string
-	Story    string
 	Repo     string
 	Provider summary.Provider
 }
@@ -33,17 +39,16 @@ func parse(args []string, usage io.Writer) (Args, error) {
 	fs := flag.NewFlagSet("dango", flag.ContinueOnError)
 	fs.SetOutput(usage)
 	frame := fs.String("frame", "", "print one frame (WxH, e.g. 80x24) and exit")
-	story := fs.String("story", "", "fixture story id; ignores live fetch")
-	repo := fs.String("repo", "", "GitHub repo as owner/name; fetch live PRs via gh")
+	repo := fs.String("repo", "", "owner/name (live gh) or a JSON file of authored stacks")
 	provider := fs.String("provider", "", "stack title summarizer (e.g. codex@luna.medium); optional, does not block fetch")
 	fs.Usage = func() {
 		fmt.Fprintln(usage, "Usage: dango")
 		fmt.Fprintln(usage, "       dango --repo owner/name [--provider name@model]")
-		fmt.Fprintln(usage, "       dango -story mixed")
+		fmt.Fprintln(usage, "       dango --repo testdata/test.json")
 		fmt.Fprintln(usage, "")
 		fmt.Fprintln(usage, "With no flags, owner/name comes from git remote of cwd.")
-		fmt.Fprintln(usage, "dango.json in that repo sets the title provider. Missing file = no generated title.")
-		fmt.Fprintln(usage, "--repo and --provider override. No settings screen.")
+		fmt.Fprintln(usage, "dango.json / dango.yml / dango.yaml sets the title provider. Missing file = no generated title.")
+		fmt.Fprintln(usage, "--repo is live gh or a stack dump. --provider overrides the config file. No picker.")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -52,16 +57,17 @@ func parse(args []string, usage io.Writer) (Args, error) {
 
 	out := Args{
 		Frame:    strings.TrimSpace(*frame),
-		Story:    strings.TrimSpace(*story),
 		Provider: ParseProvider(*provider),
 	}
-	if out.Story != "" {
+	rawRepo := strings.TrimSpace(*repo)
+	if rawRepo == "" {
 		return out, nil
 	}
-	if strings.TrimSpace(*repo) == "" {
+	if IsStackFile(rawRepo) {
+		out.Repo = rawRepo
 		return out, nil
 	}
-	normalized, err := NormalizeRepo(*repo)
+	normalized, err := NormalizeRepo(rawRepo)
 	if err != nil {
 		return Args{}, err
 	}

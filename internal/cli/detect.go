@@ -10,10 +10,12 @@ import (
 	"strings"
 )
 
-// Config is dango.json in a repo. Missing file means no generated title.
+// Config is dango.json / dango.yml / dango.yaml. Missing file means no generated title.
 type Config struct {
 	Provider string `json:"provider"`
 }
+
+var configNames = []string{"dango.json", "dango.yml", "dango.yaml"}
 
 func runGit(dir string, args ...string) ([]byte, error) {
 	cmd := exec.Command("git", args...)
@@ -80,40 +82,103 @@ func ParseRemote(raw string) (string, error) {
 	return NormalizeRepo(raw)
 }
 
-// ReadDangoJSON loads provider config from the repo root. Missing file is empty.
-func ReadDangoJSON(dir string) (Config, error) {
-	root := dir
-	if found, err := GitRoot(dir); err == nil && found != "" {
-		root = found
-	}
-	raw, err := os.ReadFile(filepath.Join(root, "dango.json"))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return Config{}, nil
+func configRoots(dir string) []string {
+	seen := map[string]bool{}
+	var roots []string
+	add := func(path string) {
+		if path == "" {
+			return
 		}
-		return Config{}, err
+		if seen[path] {
+			return
+		}
+		seen[path] = true
+		roots = append(roots, path)
 	}
+	if found, err := GitRoot(dir); err == nil && found != "" {
+		add(found)
+	}
+	add(dir)
+	return roots
+}
+
+func parseDangoYAML(raw []byte) (Config, error) {
 	var cfg Config
-	if err := json.Unmarshal(raw, &cfg); err != nil {
-		return Config{}, fmt.Errorf("dango.json: %w", err)
+	for _, line := range strings.Split(string(raw), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, val, ok := strings.Cut(line, ":")
+		if !ok || strings.TrimSpace(key) != "provider" {
+			continue
+		}
+		val = strings.TrimSpace(val)
+		if i := strings.Index(val, " #"); i >= 0 {
+			val = strings.TrimSpace(val[:i])
+		}
+		val = strings.Trim(val, `"'`)
+		cfg.Provider = val
 	}
-	cfg.Provider = strings.TrimSpace(cfg.Provider)
 	return cfg, nil
 }
 
-// Resolve fills repo from git remote and provider from dango.json when flags
-// are omitted. --repo and --provider win. -story stays fixtures.
-func Resolve(args Args, dir string) Args {
-	if args.Story != "" {
-		return args
+func parseDangoConfig(name string, raw []byte) (Config, error) {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".yml", ".yaml":
+		cfg, err := parseDangoYAML(raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("%s: %w", name, err)
+		}
+		return cfg, nil
+	default:
+		var cfg Config
+		if err := json.Unmarshal(raw, &cfg); err != nil {
+			return Config{}, fmt.Errorf("%s: %w", name, err)
+		}
+		return cfg, nil
 	}
+}
+
+// ReadDangoConfig loads provider config from dango.json, dango.yml, or
+// dango.yaml. Looks in the git root, then cwd. Missing file is empty.
+func ReadDangoConfig(dir string) (Config, error) {
+	for _, root := range configRoots(dir) {
+		for _, name := range configNames {
+			raw, err := os.ReadFile(filepath.Join(root, name))
+			if err != nil {
+				if os.IsNotExist(err) {
+					continue
+				}
+				return Config{}, err
+			}
+			cfg, err := parseDangoConfig(name, raw)
+			if err != nil {
+				return Config{}, err
+			}
+			cfg.Provider = strings.TrimSpace(cfg.Provider)
+			return cfg, nil
+		}
+	}
+	return Config{}, nil
+}
+
+// ReadDangoJSON loads provider config. Prefer ReadDangoConfig.
+func ReadDangoJSON(dir string) (Config, error) {
+	return ReadDangoConfig(dir)
+}
+
+// Resolve fills repo from git remote and provider from dango.json / dango.yml
+// / dango.yaml when flags are omitted. --repo (owner/name or a stack file)
+// and --provider win.
+func Resolve(args Args, dir string) Args {
 	if args.Repo == "" {
 		if repo, err := DetectRepo(dir); err == nil {
 			args.Repo = repo
 		}
 	}
-	if args.Provider.Raw == "" && args.Provider.Name == "" {
-		if cfg, err := ReadDangoJSON(dir); err == nil && cfg.Provider != "" {
+	if args.Provider.Empty() {
+		if cfg, err := ReadDangoConfig(dir); err == nil && cfg.Provider != "" {
 			args.Provider = ParseProvider(cfg.Provider)
 		}
 	}

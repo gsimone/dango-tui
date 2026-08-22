@@ -26,42 +26,8 @@ func ParseProvider(raw string) Provider {
 	return Provider{Raw: raw, Name: strings.TrimSpace(name), Model: strings.TrimSpace(model)}
 }
 
-// Catalog is the stub provider/model list. The empty row is off: no generated
-// title. Other rows are the same Provider type as --provider.
-func Catalog() []Provider {
-	return []Provider{
-		{},
-		ParseProvider("local"),
-		ParseProvider("codex@luna.medium"),
-		ParseProvider("codex@luna.high"),
-	}
-}
-
 func (p Provider) Empty() bool {
 	return p.Raw == "" && p.Name == ""
-}
-
-func (p Provider) Label() string {
-	if p.Empty() {
-		return "none"
-	}
-	if p.Raw != "" {
-		return p.Raw
-	}
-	if p.Model != "" {
-		return p.Name + "@" + p.Model
-	}
-	return p.Name
-}
-
-func SameProvider(a, b Provider) bool {
-	if a.Empty() || b.Empty() {
-		return a.Empty() && b.Empty()
-	}
-	if a.Raw != "" && b.Raw != "" {
-		return a.Raw == b.Raw
-	}
-	return a.Name == b.Name && a.Model == b.Model
 }
 
 // Local is the current summarizer: PreferDescription, then FromLayers.

@@ -51,24 +51,20 @@ func (m Model) renderFrame(width, height int) string {
 		mainBottom = mainTop
 	}
 
-	if m.Picking {
-		m.paintPicker(c, mainTop, mainBottom, surface, raised, paper, meta)
-	} else if StackedInspector(width) {
+	if StackedInspector(width) {
 		m.paintList(c, listWidth, mainTop, mainBottom, surface, raised, paper, meta, stick)
 	} else {
 		m.paintList(c, listWidth, mainTop, mainBottom, surface, raised, paper, meta, stick)
 		m.paintRule(c, mainTop, mainBottom, meta, surface)
 		m.paintInspectorPane(c, insp, surface, paper, meta)
 	}
-	if m.Help && !m.Picking {
+	if m.Help {
 		m.paintHelp(c, mainTop, mainBottom, raised, paper, meta)
 	}
 
 	footX := PadX
 	footW := max(1, inner)
-	if m.Picking {
-		paintKeyLegend(c, footX, footerY, footW, m.pickerFooter(), paper, meta, surface)
-	} else if m.State.Searching {
+	if m.State.Searching {
 		c.text(footX, footerY, "/", paper, surface, footW)
 		if q := m.State.Query; q != "" {
 			c.text(footX+1, footerY, q, meta, surface, max(1, footW-1))
@@ -122,12 +118,12 @@ func (m Model) paintRule(c *canvas, top, bottom int, meta, surface string) {
 func (m Model) footer() string {
 	compact := IsCompact(m.Width)
 	if compact {
-		return "[ ↑↓ ] stack  [ ←→ ] layer  [ . ] copy  [ p ]  [ / ]  [ ? ]  [ q ]"
+		return "[ ↑↓ ] stack  [ ←→ ] layer  [ . ] copy  [ / ]  [ ? ]  [ q ]"
 	}
 	if m.Width <= 90 {
-		return "[ ↑↓ ] stack  [ ←→ ] layer  [ o ] open  [ . ] copy  [ p ]  [ / ]  [ ? ]  [ q ]"
+		return "[ ↑↓ ] stack  [ ←→ ] layer  [ o ] open  [ . ] copy  [ / ]  [ ? ]  [ q ]"
 	}
-	return "[ ↑↓ ] stack  [ ←→ ] layer  [ o ] open  [ . ] copy  [ p ] provider  [ a ] add  [ r ] refresh  [ / ] filter  [ esc ]  [ ? ]  [ q ]"
+	return "[ ↑↓ ] stack  [ ←→ ] layer  [ o ] open  [ . ] copy  [ a ] add  [ r ] refresh  [ / ] filter  [ esc ]  [ ? ]  [ q ]"
 }
 
 func helpItems() [][2]string {
@@ -136,7 +132,6 @@ func helpItems() [][2]string {
 		{"←→", "layer"},
 		{"o", "open"},
 		{".", "copy"},
-		{"p", "provider"},
 		{"/", "filter"},
 		{"r", "refresh"},
 		{"q", "quit"},
@@ -326,43 +321,18 @@ type inspectorFact struct {
 }
 
 func inspectorFacts(pr domain.PullRequest) []inspectorFact {
+	paper := domain.Color("paper")
 	return []inspectorFact{
 		{"status", inspectorStatus(pr), inspectorStatusColor(pr)},
-		{"ci", inspectorCI(pr), inspectorCIColor(pr)},
-		{"review", inspectorReview(pr), inspectorReviewColor(pr)},
-		{"diff", fmt.Sprintf("+%d −%d", pr.Additions, pr.Deletions), domain.Color("paper")},
-		{"branch", pr.Branch, domain.Color("paper")},
+		{"ci", inspectorCI(pr), paper},
+		{"review", inspectorReview(pr), paper},
+		{"diff", fmt.Sprintf("+%d −%d", pr.Additions, pr.Deletions), paper},
+		{"branch", pr.Branch, paper},
 	}
 }
 
 func inspectorStatusColor(pr domain.PullRequest) string {
 	return domain.Color(domain.StateColorToken(domain.GetDisplayState(pr)))
-}
-
-func inspectorCIColor(pr domain.PullRequest) string {
-	switch pr.CI.State {
-	case domain.CISuccess:
-		return domain.Color("ready")
-	case domain.CIFailure:
-		return domain.Color("ciFailure")
-	case domain.CIPending:
-		return domain.Color("queued")
-	default:
-		return domain.Color("paper")
-	}
-}
-
-func inspectorReviewColor(pr domain.PullRequest) string {
-	if pr.Mergeable != nil && !*pr.Mergeable {
-		return domain.Color("reviewBlocked")
-	}
-	if pr.ChangesRequested {
-		return domain.Color("reviewBlocked")
-	}
-	if pr.Approvals > 0 {
-		return domain.Color("ready")
-	}
-	return domain.Color("paper")
 }
 
 func inspectorStatus(pr domain.PullRequest) string {
@@ -431,11 +401,6 @@ func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper
 		return
 	}
 
-	rowInk, rowRed := "", false
-	if stack, ok := m.SelectedStack(); ok {
-		rowInk, rowRed = rowDangerInk(stack)
-	}
-
 	maxLine := max(1, w)
 	id := "#" + itoa(pr.Number)
 	row := 0
@@ -450,7 +415,7 @@ func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper
 		return
 	}
 	row++
-	if m.Live {
+	if m.Live || m.File {
 		if stack, ok := m.SelectedStack(); ok {
 			if desc := strings.TrimSpace(stack.Description); desc != "" {
 				for _, line := range wrapWords(desc, maxLine) {
@@ -473,30 +438,13 @@ func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper
 		}
 		c.text(x, y+row, fact.label, meta, bg, min(inspectorLabelW, maxLine))
 		if maxLine > inspectorLabelW && fact.value != "" {
-			fg := fact.fg
-			if rowRed {
-				fg = rowInk
-			}
-			if fact.label == "diff" && !rowRed {
+			if fact.label == "diff" {
 				paintDiff(c, x+inspectorLabelW, y+row, pr, maxLine-inspectorLabelW, bg)
 			} else {
-				c.text(x+inspectorLabelW, y+row, fact.value, fg, bg, maxLine-inspectorLabelW)
+				c.text(x+inspectorLabelW, y+row, fact.value, fact.fg, bg, maxLine-inspectorLabelW)
 			}
 		}
 		row++
-	}
-}
-
-func rowDangerInk(stack domain.Stack) (string, bool) {
-	if len(stack.PRs) == 0 {
-		return "", false
-	}
-	state := domain.GetDisplayState(stack.PRs[len(stack.PRs)-1])
-	switch state {
-	case domain.StateCIFailure, domain.StateReviewBlocked:
-		return domain.Color(domain.StateColorToken(state)), true
-	default:
-		return "", false
 	}
 }
 
@@ -542,7 +490,7 @@ func (m Model) stackedPaneHeight(listWidth int) int {
 	title := "#" + itoa(pr.Number) + " " + pr.Title
 	lines := len(wrapWords(title, innerW))
 	descLines := 0
-	if m.Live {
+	if m.Live || m.File {
 		if stack, ok := m.SelectedStack(); ok {
 			if desc := strings.TrimSpace(stack.Description); desc != "" {
 				descLines = len(wrapWords(desc, innerW)) + 1
