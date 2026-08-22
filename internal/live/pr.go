@@ -15,6 +15,9 @@ type RemotePR struct {
 	BaseRefName      string
 	HeadSHA          string
 	Author           string
+	AuthorColor      string
+	AvatarURL        string
+	Labels           []domain.Label
 	Draft            bool
 	Merged           bool
 	Mergeable        string
@@ -41,6 +44,9 @@ func ToDomain(pr RemotePR) domain.PullRequest {
 		URL:              pr.URL,
 		Branch:           pr.HeadRefName,
 		Author:           pr.Author,
+		AuthorColor:      pr.AuthorColor,
+		AvatarURL:        pr.AvatarURL,
+		Labels:           append([]domain.Label(nil), pr.Labels...),
 		Draft:            pr.Draft,
 		Merged:           pr.Merged,
 		MergeQueueState:  pr.MergeQueueState,
@@ -63,6 +69,9 @@ func ToDomain(pr RemotePR) domain.PullRequest {
 		out.Mergeable = domain.MergeableTrue()
 	case "CONFLICTING":
 		out.Mergeable = domain.MergeableFalse()
+	}
+	if out.AuthorColor == "" {
+		out.AuthorColor = domain.LoginColor(out.Author)
 	}
 	return out
 }

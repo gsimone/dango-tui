@@ -462,6 +462,8 @@ func TestInspectorIsLabeledRows(t *testing.T) {
 		"review    no decision",
 		"diff      +43 −12",
 		"branch    gm/stacks-184",
+		"labels    bug auth",
+		"author    ● gianni",
 	}
 	for _, needle := range needles {
 		if !strings.Contains(frame, needle) {
@@ -493,6 +495,35 @@ func TestInspectorIsLabeledRows(t *testing.T) {
 	}
 	if strings.Contains(frame, "┌") || strings.Contains(frame, "└") {
 		t.Fatalf("inspector must not invent a box:\n%s", frame)
+	}
+}
+
+func TestInspectorLabelsAndAuthorRows(t *testing.T) {
+	size := tui.TerminalSize{Width: 120, Height: 30}
+	m := makeUI(size, "mixed")
+	raw := m.View()
+	frame := strip(raw)
+	if !strings.Contains(frame, "labels    bug auth") {
+		t.Fatalf("labeled row:\n%s", frame)
+	}
+	if !strings.Contains(frame, "author    ● gianni") {
+		t.Fatalf("author row:\n%s", frame)
+	}
+	if !strings.Contains(raw, ansiFG("#d73a4a")) {
+		t.Fatal("bug label must use its GitHub hex")
+	}
+	if !strings.Contains(raw, ansiFG("#0e8a16")) {
+		t.Fatal("auth label must use its GitHub hex")
+	}
+	wantDot := domain.LoginColor("gianni")
+	if !strings.Contains(raw, ansiFG(wantDot)) {
+		t.Fatalf("author ● must use stable login color %s", wantDot)
+	}
+	if !strings.Contains(raw, ansiFG(domain.Color("ciFailure"))) {
+		t.Fatal("status value ink stays on the status value")
+	}
+	if strings.Contains(frame, "[ p ]") {
+		t.Fatalf("no picker:\n%s", frame)
 	}
 }
 

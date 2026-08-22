@@ -55,6 +55,12 @@ func TestLoadStacksTestdata(t *testing.T) {
 	if stacks[0].PRs[0].Title != "Split auth scope from session checks" {
 		t.Fatalf("named PR: %+v", stacks[0].PRs[0])
 	}
+	if len(stacks[0].PRs[0].Labels) != 2 || stacks[0].PRs[0].Labels[0].Name != "bug" || stacks[0].PRs[0].Labels[0].Color != "#d73a4a" {
+		t.Fatalf("file labels: %+v", stacks[0].PRs[0].Labels)
+	}
+	if stacks[0].PRs[0].Author != "gianni" || stacks[0].PRs[0].AuthorColor != domain.LoginColor("gianni") {
+		t.Fatalf("file author: %+v", stacks[0].PRs[0])
+	}
 	if domain.GetDisplayState(stacks[0].PRs[2]) != domain.StateCIFailure {
 		t.Fatalf("mixed CI on auth head: %s", domain.GetDisplayState(stacks[0].PRs[2]))
 	}

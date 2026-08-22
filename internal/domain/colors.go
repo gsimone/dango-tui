@@ -3,6 +3,7 @@ package domain
 import (
 	"math"
 	"math/rand/v2"
+	"strings"
 	"sync"
 )
 
@@ -173,4 +174,50 @@ func ProcessLogoDots() [3]string {
 		processLogo = PickLogoDots(rand.IntN)
 	})
 	return processLogo
+}
+
+// NormalizeHex accepts GitHub label colors ("d73a4a" or "#D73A4A") and
+// returns a #rrggbb token. Invalid input is empty.
+func NormalizeHex(raw string) string {
+	raw = strings.TrimSpace(raw)
+	raw = strings.TrimPrefix(raw, "#")
+	if len(raw) == 3 {
+		raw = string([]byte{raw[0], raw[0], raw[1], raw[1], raw[2], raw[2]})
+	}
+	if len(raw) != 6 {
+		return ""
+	}
+	for i := 0; i < 6; i++ {
+		c := raw[i]
+		if c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F' {
+			continue
+		}
+		return ""
+	}
+	out := [7]byte{'#'}
+	for i := 0; i < 6; i++ {
+		c := raw[i]
+		if c >= 'A' && c <= 'F' {
+			c += 'a' - 'A'
+		}
+		out[i+1] = c
+	}
+	return string(out[:])
+}
+
+// LoginColor is a stable ink from a login. Same login, same hex, every frame.
+func LoginColor(login string) string {
+	login = strings.TrimSpace(login)
+	if login == "" {
+		return Color("meta")
+	}
+	var h uint32 = 2166136261
+	for i := 0; i < len(login); i++ {
+		h ^= uint32(login[i])
+		h *= 16777619
+	}
+	r := int(70 + h%150)
+	g := int(70 + (h>>8)%150)
+	b := int(70 + (h>>16)%150)
+	return sprintfHex(r, g, b)
 }

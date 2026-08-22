@@ -16,12 +16,20 @@ type CISummary struct {
 	Total   int
 }
 
+type Label struct {
+	Name  string
+	Color string // #rrggbb from GitHub, or empty
+}
+
 type PullRequest struct {
 	Number           int
 	Title            string
 	URL              string
 	Branch           string
 	Author           string
+	AuthorColor      string // ● ink; avatar sample or login-stable fallback
+	AvatarURL        string
+	Labels           []Label
 	Draft            bool
 	Merged           bool
 	Mergeable        *bool

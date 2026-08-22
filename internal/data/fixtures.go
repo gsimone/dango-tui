@@ -12,6 +12,7 @@ type PullRequestFixtureInput struct {
 	URL              string
 	Branch           string
 	Author           string
+	Labels           []domain.Label
 	Draft            *bool
 	Merged           *bool
 	Mergeable        *bool
@@ -130,6 +131,10 @@ func PRFixture(input PullRequestFixtureInput) domain.PullRequest {
 	if input.CI != nil {
 		pr.CI = *input.CI
 	}
+	if len(input.Labels) > 0 {
+		pr.Labels = append([]domain.Label(nil), input.Labels...)
+	}
+	pr.AuthorColor = domain.LoginColor(pr.Author)
 	return pr
 }
 
@@ -227,7 +232,12 @@ var FixtureStories = []FixtureStory{
 		Label: "mixed health",
 		Stacks: []domain.Stack{
 			StackFixture(StackFixtureInput{Number: 1, Name: "auth cleanup", Description: desc("Simplify authentication boundaries"), PRs: []domain.PullRequest{
-				pr(184, "Split auth scope from session checks", domain.StateMerged),
+				pr(184, "Split auth scope from session checks", domain.StateMerged, PullRequestFixtureInput{
+					Labels: []domain.Label{
+						{Name: "bug", Color: "#d73a4a"},
+						{Name: "auth", Color: "#0e8a16"},
+					},
+				}),
 				pr(185, "Keep service identity explicit", domain.StateReady),
 				pr(186, "Remove implicit session fallback", domain.StateCIFailure),
 			}}),

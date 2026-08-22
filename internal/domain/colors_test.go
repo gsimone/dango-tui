@@ -117,6 +117,32 @@ func TestLogoTokensExact(t *testing.T) {
 	}
 }
 
+func TestNormalizeHexAndLoginColor(t *testing.T) {
+	if got := domain.NormalizeHex("d73a4a"); got != "#d73a4a" {
+		t.Fatalf("github label: %q", got)
+	}
+	if got := domain.NormalizeHex("#D73A4A"); got != "#d73a4a" {
+		t.Fatalf("hashed: %q", got)
+	}
+	if got := domain.NormalizeHex("abc"); got != "#aabbcc" {
+		t.Fatalf("short: %q", got)
+	}
+	if domain.NormalizeHex("nope") != "" || domain.NormalizeHex("") != "" {
+		t.Fatal("invalid hex must be empty")
+	}
+	a := domain.LoginColor("gianni")
+	b := domain.LoginColor("gianni")
+	if a != b || a == "" || a[0] != '#' {
+		t.Fatalf("login color must be stable, got %q %q", a, b)
+	}
+	if domain.LoginColor("gianni") == domain.LoginColor("lina") {
+		t.Fatal("different logins should not collide on this pair")
+	}
+	if domain.LoginColor("") != domain.Color("meta") {
+		t.Fatal("empty login is meta")
+	}
+}
+
 func TestPickLogoDotsAreDistinct(t *testing.T) {
 	seq := 0
 	intn := func(n int) int {

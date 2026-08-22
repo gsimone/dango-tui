@@ -314,20 +314,69 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 
 const inspectorLabelW = 10
 
+type inspectorPart struct {
+	text string
+	fg   string
+}
+
 type inspectorFact struct {
 	label string
 	value string
 	fg    string
+	parts []inspectorPart
 }
 
 func inspectorFacts(pr domain.PullRequest) []inspectorFact {
 	paper := domain.Color("paper")
+	meta := domain.Color("meta")
 	return []inspectorFact{
-		{"status", inspectorStatus(pr), inspectorStatusColor(pr)},
-		{"ci", inspectorCI(pr), paper},
-		{"review", inspectorReview(pr), paper},
-		{"diff", fmt.Sprintf("+%d −%d", pr.Additions, pr.Deletions), paper},
-		{"branch", pr.Branch, paper},
+		{"status", inspectorStatus(pr), inspectorStatusColor(pr), nil},
+		{"ci", inspectorCI(pr), paper, nil},
+		{"review", inspectorReview(pr), paper, nil},
+		{"diff", fmt.Sprintf("+%d −%d", pr.Additions, pr.Deletions), paper, nil},
+		{"branch", pr.Branch, paper, nil},
+		inspectorLabelsFact(pr, meta),
+		inspectorAuthorFact(pr, paper, meta),
+	}
+}
+
+func inspectorLabelsFact(pr domain.PullRequest, meta string) inspectorFact {
+	if len(pr.Labels) == 0 {
+		return inspectorFact{label: "labels", value: "none", fg: meta, parts: []inspectorPart{{text: "none", fg: meta}}}
+	}
+	var parts []inspectorPart
+	var names []string
+	for i, lab := range pr.Labels {
+		if i > 0 {
+			parts = append(parts, inspectorPart{text: " ", fg: meta})
+		}
+		fg := domain.NormalizeHex(lab.Color)
+		if fg == "" {
+			fg = meta
+		}
+		parts = append(parts, inspectorPart{text: lab.Name, fg: fg})
+		names = append(names, lab.Name)
+	}
+	return inspectorFact{label: "labels", value: strings.Join(names, " "), fg: meta, parts: parts}
+}
+
+func inspectorAuthorFact(pr domain.PullRequest, paper, meta string) inspectorFact {
+	login := strings.TrimSpace(pr.Author)
+	if login == "" {
+		return inspectorFact{label: "author", value: "none", fg: meta, parts: []inspectorPart{{text: "none", fg: meta}}}
+	}
+	ink := pr.AuthorColor
+	if ink == "" {
+		ink = domain.LoginColor(login)
+	}
+	return inspectorFact{
+		label: "author",
+		value: "● " + login,
+		fg:    paper,
+		parts: []inspectorPart{
+			{text: "●", fg: ink},
+			{text: " " + login, fg: paper},
+		},
 	}
 }
 
@@ -437,15 +486,32 @@ func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper
 			break
 		}
 		c.text(x, y+row, fact.label, meta, bg, min(inspectorLabelW, maxLine))
-		if maxLine > inspectorLabelW && fact.value != "" {
-			if fact.label == "diff" {
-				paintDiff(c, x+inspectorLabelW, y+row, pr, maxLine-inspectorLabelW, bg)
-			} else {
-				c.text(x+inspectorLabelW, y+row, fact.value, fact.fg, bg, maxLine-inspectorLabelW)
-			}
+		if maxLine > inspectorLabelW && (fact.value != "" || len(fact.parts) > 0) {
+			paintFactValue(c, x+inspectorLabelW, y+row, fact, pr, maxLine-inspectorLabelW, bg)
 		}
 		row++
 	}
+}
+
+func paintFactValue(c *canvas, x, y int, fact inspectorFact, pr domain.PullRequest, maxW int, bg string) {
+	if fact.label == "diff" {
+		paintDiff(c, x, y, pr, maxW, bg)
+		return
+	}
+	if len(fact.parts) > 0 {
+		cx, remain := x, maxW
+		for _, part := range fact.parts {
+			if remain <= 0 {
+				return
+			}
+			c.text(cx, y, part.text, part.fg, bg, remain)
+			w := displayWidth(part.text)
+			cx += w
+			remain -= w
+		}
+		return
+	}
+	c.text(x, y, fact.value, fact.fg, bg, maxW)
 }
 
 func paintDiff(c *canvas, x, y int, pr domain.PullRequest, maxW int, bg string) {

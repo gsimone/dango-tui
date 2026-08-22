@@ -124,8 +124,15 @@ func TestInspectorStatusInkIsValueOnly(t *testing.T) {
 	}
 	paper := domain.Color("paper")
 	for _, fact := range facts[1:] {
-		if fact.fg != paper {
-			t.Fatalf("%s must stay paper, got %s", fact.label, fact.fg)
+		switch fact.label {
+		case "labels", "author":
+			if len(fact.parts) == 0 {
+				t.Fatalf("%s needs painted parts", fact.label)
+			}
+		default:
+			if fact.fg != paper {
+				t.Fatalf("%s must stay paper, got %s", fact.label, fact.fg)
+			}
 		}
 	}
 

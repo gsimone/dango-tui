@@ -10,6 +10,11 @@
           "number": 184,
           "title": "Split auth scope from session checks",
           "branch": "gm/auth-scope",
+          "author": "gianni",
+          "labels": [
+            {"name": "bug", "color": "d73a4a"},
+            {"name": "auth", "color": "0e8a16"}
+          ],
           "state": "merged",
           "additions": 43,
           "deletions": 12

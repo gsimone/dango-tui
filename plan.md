@@ -13,6 +13,7 @@ Shipping order (Cassandra / Gianmarco). Do not skip ahead.
 - No picker screen. No `[ p ] provider`. Picker is dead.
 - Header is packed `●-●-● DANGO` only. No dumpling. No emoji.
 - Inspector: status color on the status value only. Title and other facts stay paper/meta. Diff keeps +/− colors.
+- Same inspector card also has `labels` (each name in its GitHub hex; empty is `none` in meta) and `author` (`●` + login; ● is avatar-dominant or a stable login color). No new chrome.
 
 ## Later (keep here; do not ship until asked)
 
@@ -30,3 +31,4 @@ Shipping order (Cassandra / Gianmarco). Do not skip ahead.
 - Packed `●-●-●` logo (U+25CF). Three Pablo inks. No dumpling.
 - List balls use meaning colors, not logo hues.
 - Footer: bracketed keys. No enter / checkout. `?` help overlay.
+- Inspector `labels` + `author` rows. Live labels/avatarUrl come from `gh pr list --json`. No Go GitHub API client.

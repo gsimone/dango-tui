@@ -109,13 +109,14 @@ func fetchWith(run runner, repo string) ([]domain.Stack, error) {
 	for _, item := range listed {
 		prs = append(prs, item.toRemote())
 	}
+	applyAuthorColors(prs)
 	applyNativeStacks(run, repo, prs)
 	return GroupStacks(prs, defaultBranch), nil
 }
 
 var prListFields = []string{
 	"number", "title", "url", "headRefName", "baseRefName", "headRefOid",
-	"author", "isDraft", "state", "mergeable", "mergeStateStatus",
+	"author", "labels", "isDraft", "state", "mergeable", "mergeStateStatus",
 	"reviewDecision", "latestReviews", "reviews",
 	"additions", "deletions", "changedFiles", "body", "statusCheckRollup",
 }
@@ -128,7 +129,13 @@ type ghRepo struct {
 }
 
 type ghActor struct {
-	Login string `json:"login"`
+	Login     string `json:"login"`
+	AvatarURL string `json:"avatarUrl"`
+}
+
+type ghLabel struct {
+	Name  string `json:"name"`
+	Color string `json:"color"`
 }
 
 type ghReview struct {
@@ -149,6 +156,7 @@ type ghPR struct {
 	BaseRefName       string     `json:"baseRefName"`
 	HeadRefOid        string     `json:"headRefOid"`
 	Author            ghActor    `json:"author"`
+	Labels            []ghLabel  `json:"labels"`
 	IsDraft           bool       `json:"isDraft"`
 	State             string     `json:"state"`
 	Mergeable         string     `json:"mergeable"`
@@ -170,6 +178,14 @@ func (p ghPR) toRemote() RemotePR {
 	if strings.EqualFold(p.MergeStateStatus, "QUEUED") {
 		queue = "QUEUED"
 	}
+	labels := make([]domain.Label, 0, len(p.Labels))
+	for _, lab := range p.Labels {
+		name := strings.TrimSpace(lab.Name)
+		if name == "" {
+			continue
+		}
+		labels = append(labels, domain.Label{Name: name, Color: domain.NormalizeHex(lab.Color)})
+	}
 	return RemotePR{
 		Number:           p.Number,
 		Title:            p.Title,
@@ -178,6 +194,8 @@ func (p ghPR) toRemote() RemotePR {
 		BaseRefName:      p.BaseRefName,
 		HeadSHA:          p.HeadRefOid,
 		Author:           p.Author.Login,
+		AvatarURL:        strings.TrimSpace(p.Author.AvatarURL),
+		Labels:           labels,
 		Draft:            p.IsDraft,
 		Merged:           strings.EqualFold(p.State, "MERGED"),
 		Mergeable:        p.Mergeable,

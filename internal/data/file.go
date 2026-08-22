@@ -25,16 +25,22 @@ type FileStack struct {
 	PRs         []FilePR `json:"prs"`
 }
 
+type FileLabel struct {
+	Name  string `json:"name"`
+	Color string `json:"color"`
+}
+
 type FilePR struct {
-	Number       int    `json:"number"`
-	Title        string `json:"title"`
-	URL          string `json:"url"`
-	Branch       string `json:"branch"`
-	Author       string `json:"author"`
-	State        string `json:"state"`
-	Additions    int    `json:"additions"`
-	Deletions    int    `json:"deletions"`
-	ChangedFiles int    `json:"changedFiles"`
+	Number       int         `json:"number"`
+	Title        string      `json:"title"`
+	URL          string      `json:"url"`
+	Branch       string      `json:"branch"`
+	Author       string      `json:"author"`
+	Labels       []FileLabel `json:"labels"`
+	State        string      `json:"state"`
+	Additions    int         `json:"additions"`
+	Deletions    int         `json:"deletions"`
+	ChangedFiles int         `json:"changedFiles"`
 }
 
 // IsStackFile reports whether --repo names a JSON stack dump, not owner/name.
@@ -111,6 +117,14 @@ func (s FileStack) toDomain(n int) domain.Stack {
 
 func (p FilePR) toDomain() domain.PullRequest {
 	state := parseFileState(p.State)
+	labels := make([]domain.Label, 0, len(p.Labels))
+	for _, lab := range p.Labels {
+		name := strings.TrimSpace(lab.Name)
+		if name == "" {
+			continue
+		}
+		labels = append(labels, domain.Label{Name: name, Color: domain.NormalizeHex(lab.Color)})
+	}
 	in := PullRequestFixtureInput{
 		State:  state,
 		Number: p.Number,
@@ -118,6 +132,7 @@ func (p FilePR) toDomain() domain.PullRequest {
 		URL:    p.URL,
 		Branch: p.Branch,
 		Author: p.Author,
+		Labels: labels,
 	}
 	if p.Additions != 0 {
 		in.Additions = intPtr(p.Additions)
