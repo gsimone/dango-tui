@@ -587,6 +587,7 @@ func TestHelpOverlayToggles(t *testing.T) {
 		"[ ←→ ] layer",
 		"[ o ] open",
 		"[ . ] copy",
+		"[ p ] provider",
 		"[ / ] filter",
 		"[ r ] refresh",
 		"[ q ] quit",

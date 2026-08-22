@@ -27,6 +27,8 @@ type Model struct {
 	StoryIndex  int
 	State       app.State
 	Help        bool
+	Picking     bool
+	PickIndex   int
 	quitting    bool
 	Fetching    bool
 	Fetched     string
@@ -111,7 +113,7 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) startSummaries() tea.Cmd {
-	if !m.Live || (m.Provider.Raw == "" && m.Provider.Name == "") {
+	if !m.Live || m.Provider.Empty() {
 		return nil
 	}
 	token := m.fetchSeq

@@ -26,6 +26,44 @@ func ParseProvider(raw string) Provider {
 	return Provider{Raw: raw, Name: strings.TrimSpace(name), Model: strings.TrimSpace(model)}
 }
 
+// Catalog is the stub provider/model list. The empty row is off: no generated
+// title. Other rows are the same Provider type as --provider.
+func Catalog() []Provider {
+	return []Provider{
+		{},
+		ParseProvider("local"),
+		ParseProvider("codex@luna.medium"),
+		ParseProvider("codex@luna.high"),
+	}
+}
+
+func (p Provider) Empty() bool {
+	return p.Raw == "" && p.Name == ""
+}
+
+func (p Provider) Label() string {
+	if p.Empty() {
+		return "none"
+	}
+	if p.Raw != "" {
+		return p.Raw
+	}
+	if p.Model != "" {
+		return p.Name + "@" + p.Model
+	}
+	return p.Name
+}
+
+func SameProvider(a, b Provider) bool {
+	if a.Empty() || b.Empty() {
+		return a.Empty() && b.Empty()
+	}
+	if a.Raw != "" && b.Raw != "" {
+		return a.Raw == b.Raw
+	}
+	return a.Name == b.Name && a.Model == b.Model
+}
+
 // Local is the current summarizer: PreferDescription, then FromLayers.
 func Local() Summarizer {
 	return PreferDescription{Fallback: FromLayers{}}
@@ -48,7 +86,7 @@ func (c Chosen) Summarize(stack domain.Stack) string {
 	if c.Inner != nil {
 		return c.Inner.Summarize(stack)
 	}
-	if c.Provider.Raw == "" && c.Provider.Name == "" {
+	if c.Provider.Empty() {
 		return ""
 	}
 	return Local().Summarize(stack)
@@ -56,7 +94,7 @@ func (c Chosen) Summarize(stack domain.Stack) string {
 
 // Choose threads --provider into the stack-title summarizer.
 func Choose(p Provider) Chosen {
-	if p.Raw == "" && p.Name == "" {
+	if p.Empty() {
 		return Chosen{Provider: p, Inner: none{}}
 	}
 	return Chosen{Provider: p, Inner: Local()}

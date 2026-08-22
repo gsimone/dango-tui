@@ -84,6 +84,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.Picking {
+		return m.handlePickerKey(msg)
+	}
+
 	if m.State.Searching {
 		switch msg.String() {
 		case "esc", "escape":
@@ -131,6 +135,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if pr, ok := m.SelectedPR(); ok {
 			return m, m.copyBranch(pr)
 		}
+	case "p":
+		m.openPicker()
 	case "a":
 		m.State.Feedback = "add · not wired"
 	case "r":
@@ -198,6 +204,9 @@ func (m Model) refresh() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleMouse(msg tea.MouseMsg) Model {
+	if m.Picking {
+		return m
+	}
 	x, y := mouseXY(msg)
 	action := mouseAction(msg)
 	stackIndex, prIndex, hit := m.ballHit(x, y)

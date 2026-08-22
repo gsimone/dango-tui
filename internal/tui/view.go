@@ -51,20 +51,24 @@ func (m Model) renderFrame(width, height int) string {
 		mainBottom = mainTop
 	}
 
-	if StackedInspector(width) {
+	if m.Picking {
+		m.paintPicker(c, mainTop, mainBottom, surface, raised, paper, meta)
+	} else if StackedInspector(width) {
 		m.paintList(c, listWidth, mainTop, mainBottom, surface, raised, paper, meta, stick)
 	} else {
 		m.paintList(c, listWidth, mainTop, mainBottom, surface, raised, paper, meta, stick)
 		m.paintRule(c, mainTop, mainBottom, meta, surface)
 		m.paintInspectorPane(c, insp, surface, paper, meta)
 	}
-	if m.Help {
+	if m.Help && !m.Picking {
 		m.paintHelp(c, mainTop, mainBottom, raised, paper, meta)
 	}
 
 	footX := PadX
 	footW := max(1, inner)
-	if m.State.Searching {
+	if m.Picking {
+		paintKeyLegend(c, footX, footerY, footW, m.pickerFooter(), paper, meta, surface)
+	} else if m.State.Searching {
 		c.text(footX, footerY, "/", paper, surface, footW)
 		if q := m.State.Query; q != "" {
 			c.text(footX+1, footerY, q, meta, surface, max(1, footW-1))
@@ -118,12 +122,12 @@ func (m Model) paintRule(c *canvas, top, bottom int, meta, surface string) {
 func (m Model) footer() string {
 	compact := IsCompact(m.Width)
 	if compact {
-		return "[ ↑↓ ] stack  [ ←→ ] layer  [ . ] copy  [ / ]  [ ? ]  [ q ]"
+		return "[ ↑↓ ] stack  [ ←→ ] layer  [ . ] copy  [ p ]  [ / ]  [ ? ]  [ q ]"
 	}
 	if m.Width <= 90 {
-		return "[ ↑↓ ] stack  [ ←→ ] layer  [ o ] open  [ . ] copy  [ / ]  [ ? ]  [ q ]"
+		return "[ ↑↓ ] stack  [ ←→ ] layer  [ o ] open  [ . ] copy  [ p ]  [ / ]  [ ? ]  [ q ]"
 	}
-	return "[ ↑↓ ] stack  [ ←→ ] layer  [ o ] open  [ . ] copy  [ a ] add  [ r ] refresh  [ / ] filter  [ esc ]  [ ? ]  [ q ]"
+	return "[ ↑↓ ] stack  [ ←→ ] layer  [ o ] open  [ . ] copy  [ p ] provider  [ a ] add  [ r ] refresh  [ / ] filter  [ esc ]  [ ? ]  [ q ]"
 }
 
 func helpItems() [][2]string {
@@ -132,6 +136,7 @@ func helpItems() [][2]string {
 		{"←→", "layer"},
 		{"o", "open"},
 		{".", "copy"},
+		{"p", "provider"},
 		{"/", "filter"},
 		{"r", "refresh"},
 		{"q", "quit"},

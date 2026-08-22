@@ -85,6 +85,43 @@ func TestSummariesAreAsyncAndStubbed(t *testing.T) {
 	}
 }
 
+func TestFetchLandsWhilePickerOpen(t *testing.T) {
+	fetch := func(string) ([]domain.Stack, error) {
+		return []domain.Stack{{
+			ID:  "s",
+			PRs: []domain.PullRequest{{Number: 1, Title: "alpha layer"}},
+		}}, nil
+	}
+	m := New(Options{Repo: "owner/name", Width: 80, Height: 24, Fetch: fetch})
+	if m.Picking {
+		t.Fatal("first paint is not the picker")
+	}
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
+	m = next.(Model)
+	if !m.Picking {
+		t.Fatal("p opens")
+	}
+	next, cmd := m.Update(fetchDoneMsg{
+		stacks: []domain.Stack{{
+			ID:  "n",
+			PRs: []domain.PullRequest{{Number: 9, Title: "later layer"}},
+		}},
+		live:  true,
+		token: m.fetchSeq,
+		at:    time.Now(),
+	})
+	m = next.(Model)
+	if cmd != nil {
+		t.Fatal("no provider means fetch must not start summaries")
+	}
+	if !m.Picking {
+		t.Fatal("fetch must not close the picker")
+	}
+	if len(m.stacks) != 1 || m.stacks[0].PRs[0].Title != "later layer" {
+		t.Fatalf("fetch should land under the picker: %+v", m.stacks)
+	}
+}
+
 func TestStatusWordsKeepStatusColor(t *testing.T) {
 	auth := New(Options{StoryID: "mixed", Width: 120, Height: 30}).Stacks()[0]
 	if got := stackHealthColor(auth); got != domain.Color("ciFailure") {
