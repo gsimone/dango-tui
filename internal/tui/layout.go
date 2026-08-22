@@ -51,18 +51,20 @@ func innerWidth(termWidth int) int {
 	return max(1, termWidth-PadX*2)
 }
 
+func StackedInspector(termWidth int) bool { return termWidth < 100 }
+
 func InspectorColumnWidth(width int) int {
 	inner := innerWidth(width)
-	if width <= 50 {
-		return 14
+	if StackedInspector(width) {
+		return inner
 	}
-	if width >= 100 {
-		return min(48, max(40, inner*38/100))
-	}
-	return max(32, min(38, inner-40))
+	return min(48, max(40, inner*38/100))
 }
 
 func ListPaneWidth(termWidth int) int {
+	if StackedInspector(termWidth) {
+		return innerWidth(termWidth)
+	}
 	insp := InspectorColumnWidth(termWidth)
 	return max(12, innerWidth(termWidth)-1-insp)
 }
@@ -97,6 +99,17 @@ type CardPlacement struct {
 }
 
 func GetInspectorSize(size TerminalSize) CardPlacement {
+	if StackedInspector(size.Width) {
+		width := innerWidth(size.Width)
+		top := ListStartY + 1
+		return CardPlacement{
+			Left:    PadX,
+			Top:     top,
+			Width:   width,
+			Height:  max(3, size.Height-1-top),
+			Compact: size.Width <= 50,
+		}
+	}
 	width := InspectorColumnWidth(size.Width)
 	left := InspectorLeft(size.Width)
 	rightLimit := size.Width - PadX

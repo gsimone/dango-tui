@@ -146,3 +146,37 @@ func clip(value string, maxWidth int) string {
 func displayWidth(value string) int {
 	return utf8.RuneCountInString(value)
 }
+
+func wrapWords(value string, width int) []string {
+	if width < 1 {
+		return nil
+	}
+	var lines []string
+	var cur string
+	flush := func() {
+		if cur != "" {
+			lines = append(lines, cur)
+			cur = ""
+		}
+	}
+	for _, word := range strings.Fields(value) {
+		for utf8.RuneCountInString(word) > width {
+			flush()
+			runes := []rune(word)
+			lines = append(lines, string(runes[:width]))
+			word = string(runes[width:])
+		}
+		if cur == "" {
+			cur = word
+			continue
+		}
+		if utf8.RuneCountInString(cur)+1+utf8.RuneCountInString(word) <= width {
+			cur += " " + word
+			continue
+		}
+		flush()
+		cur = word
+	}
+	flush()
+	return lines
+}

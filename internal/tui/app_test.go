@@ -188,7 +188,7 @@ func TestLocalFilter(t *testing.T) {
 	if !strings.Contains(frame, "composer tokens") {
 		t.Fatalf("filtered stack missing:\n%s", frame)
 	}
-	if strings.Contains(frame, "Simplify authentication boundaries") {
+	if strings.Contains(frame, "auth cleanup") {
 		t.Fatalf("unfiltered stack still visible:\n%s", frame)
 	}
 }

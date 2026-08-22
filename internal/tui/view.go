@@ -51,9 +51,13 @@ func (m Model) renderFrame(width, height int) string {
 		mainBottom = mainTop
 	}
 
-	m.paintList(c, listWidth, mainTop, mainBottom, surface, raised, paper, meta, stick)
-	m.paintRule(c, mainTop, mainBottom, meta, surface)
-	m.paintInspectorPane(c, insp, surface, paper, meta)
+	if StackedInspector(width) {
+		m.paintList(c, listWidth, mainTop, mainBottom, surface, raised, paper, meta, stick)
+	} else {
+		m.paintList(c, listWidth, mainTop, mainBottom, surface, raised, paper, meta, stick)
+		m.paintRule(c, mainTop, mainBottom, meta, surface)
+		m.paintInspectorPane(c, insp, surface, paper, meta)
+	}
 
 	if m.State.Searching {
 		c.fill(PadX, footerY, inner, 1, raised)
@@ -118,12 +122,11 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 		return
 	}
 	sel := app.ClampSelection(m.State.Selection, stacks)
-	maxRows := max(0, bottom-top)
+	y := top
 	for i, stack := range stacks {
-		if i >= maxRows {
+		if y >= bottom {
 			break
 		}
-		y := top + i
 		layout := GetListRowLayout(listWidth, m.Width, len(stack.PRs))
 		rowBg := surface
 		nameFg := meta
@@ -155,37 +158,19 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 			}
 			c.set(ballX+prIndex*2+1, y, connector, stick, rowBg)
 		}
-
-		if !layout.Compact {
-			descX := ballX + layout.BallsWidth + 1
-			remain := max(0, PadX+listWidth-descX)
-			c.text(descX, y, clip(stackHealth(stack)+" · "+stack.Description, remain), meta, rowBg, remain)
+		y++
+		if StackedInspector(m.Width) && selectedStack && m.State.CardVisible {
+			inspH := m.stackedPaneHeight(listWidth)
+			if y+inspH > bottom {
+				inspH = max(1, bottom-y)
+			}
+			place := CardPlacement{Left: PadX, Top: y, Width: max(1, listWidth), Height: inspH, Compact: IsCompact(m.Width)}
+			m.paintInspectorPane(c, place, surface, paper, meta)
+			y += inspH
 		}
 	}
 }
 
-func stackHealth(stack domain.Stack) string {
-	if len(stack.PRs) == 0 {
-		return "no layers"
-	}
-	head := stack.PRs[len(stack.PRs)-1]
-	switch domain.GetDisplayState(head) {
-	case domain.StateReady:
-		return "head ready"
-	case domain.StateCIFailure:
-		return "head CI failed"
-	case domain.StateReviewBlocked:
-		return "head blocked"
-	case domain.StateQueued:
-		return "head queued"
-	case domain.StateDraft:
-		return "head draft"
-	case domain.StateMerged:
-		return "merged"
-	default:
-		return "head pending"
-	}
-}
 
 func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper, meta string) {
 	x, y, w, h := place.Left, place.Top, place.Width, place.Height
@@ -198,11 +183,18 @@ func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper
 		return
 	}
 
-	maxLine := max(8, w)
+	maxLine := max(1, w)
 	state := domain.GetDisplayState(pr)
 	headline := domain.DisplayStateLabel[state] + " · " + domain.DisplayStateDetail(pr)
-	c.text(x, y, "#"+itoa(pr.Number)+" "+pr.Title, paper, surface, maxLine)
-	row := 1
+	title := "#" + itoa(pr.Number) + " " + pr.Title
+	row := 0
+	for _, line := range wrapWords(title, maxLine) {
+		if row >= h {
+			break
+		}
+		c.text(x, y+row, line, paper, surface, maxLine)
+		row++
+	}
 	if h <= row {
 		return
 	}
@@ -289,6 +281,20 @@ func reviewLine(pr domain.PullRequest) string {
 	return "Review ◌ no decision yet"
 }
 
+func (m Model) stackedPaneHeight(listWidth int) int {
+	pr, ok := m.SelectedPR()
+	if !ok {
+		return 3
+	}
+	title := "#" + itoa(pr.Number) + " " + pr.Title
+	lines := len(wrapWords(title, max(1, listWidth)))
+	extra := 6
+	if IsCompact(m.Width) {
+		extra = 6
+	}
+	return max(3, lines+extra)
+}
+
 func (m Model) ballHit(x, y int) (stackIndex, prIndex int, ok bool) {
 	stacks := m.Stacks()
 	if len(stacks) == 0 {
@@ -298,7 +304,19 @@ func (m Model) ballHit(x, y int) (stackIndex, prIndex int, ok bool) {
 	if y < ListStartY || y >= m.Height-1 || x < PadX || x >= PadX+listWidth {
 		return 0, 0, false
 	}
-	stackIndex = y - ListStartY
+	sel := app.ClampSelection(m.State.Selection, stacks)
+	rowY := ListStartY
+	stackIndex = -1
+	for i := range stacks {
+		if y == rowY {
+			stackIndex = i
+			break
+		}
+		rowY++
+		if StackedInspector(m.Width) && i == sel.StackIndex && m.State.CardVisible {
+			rowY += m.stackedPaneHeight(listWidth)
+		}
+	}
 	if stackIndex < 0 || stackIndex >= len(stacks) {
 		return 0, 0, false
 	}
