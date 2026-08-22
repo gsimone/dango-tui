@@ -23,6 +23,23 @@ func TestStatusWordsKeepStatusColor(t *testing.T) {
 	}
 }
 
+func TestRowDangerInkMatchesListStatus(t *testing.T) {
+	auth := New(Options{StoryID: "mixed", Width: 120, Height: 30}).Stacks()[0]
+	ink, red := rowDangerInk(auth)
+	if !red || ink != stackHealthColor(auth) || ink != domain.Color("ciFailure") {
+		t.Fatalf("auth row is red; card values must use the list token, got %s red=%v", ink, red)
+	}
+	composer := New(Options{StoryID: "mixed", Width: 120, Height: 30}).Stacks()[1]
+	if _, red := rowDangerInk(composer); red {
+		t.Fatal("queued row is not a red status")
+	}
+	blocked := New(Options{StoryID: "changes-requested", Width: 120, Height: 30}).Stacks()[0]
+	ink, red = rowDangerInk(blocked)
+	if !red || ink != domain.Color("reviewBlocked") {
+		t.Fatalf("blocked row must use reviewBlocked, got %s red=%v", ink, red)
+	}
+}
+
 func TestDotCopiesBranchAndDoesNotCheckout(t *testing.T) {
 	var copied string
 	old := copyText
@@ -56,8 +73,11 @@ func TestDotCopiesBranchAndDoesNotCheckout(t *testing.T) {
 	if strings.Contains(cleared, "Copied gm/stacks-184") {
 		t.Fatalf("copy confirmation should clear:\n%s", cleared)
 	}
-	if !strings.Contains(cleared, "[ ↑↓ ] stack") || !strings.Contains(cleared, "[ enter ] checkout") || !strings.Contains(cleared, "[ o ] open") || !strings.Contains(cleared, "[ . ] copy") {
+	if !strings.Contains(cleared, "[ ↑↓ ] stack") || !strings.Contains(cleared, "[ o ] open") || !strings.Contains(cleared, "[ . ] copy") {
 		t.Fatalf("footer should return to the key legend:\n%s", cleared)
+	}
+	if strings.Contains(cleared, "[ enter ]") {
+		t.Fatalf("enter must leave the footer:\n%s", cleared)
 	}
 }
 
@@ -79,8 +99,11 @@ func TestOpenRestoresFooterAfterResult(t *testing.T) {
 	if strings.Contains(okFrame, "Opening ") {
 		t.Fatalf("success must not leave Opening stuck:\n%s", okFrame)
 	}
-	if !strings.Contains(okFrame, "[ ↑↓ ] stack") || !strings.Contains(okFrame, "[ enter ] checkout") || !strings.Contains(okFrame, "[ o ] open") || !strings.Contains(okFrame, "[ . ] copy") {
+	if !strings.Contains(okFrame, "[ ↑↓ ] stack") || !strings.Contains(okFrame, "[ o ] open") || !strings.Contains(okFrame, "[ . ] copy") {
 		t.Fatalf("success should restore the key legend:\n%s", okFrame)
+	}
+	if strings.Contains(okFrame, "[ enter ]") {
+		t.Fatalf("enter must leave the footer:\n%s", okFrame)
 	}
 
 	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("o")})
@@ -94,8 +117,11 @@ func TestOpenRestoresFooterAfterResult(t *testing.T) {
 	if strings.Contains(failFrame, "Opening ") || strings.Contains(failFrame, "Could not open") {
 		t.Fatalf("failure must not lock the footer:\n%s", failFrame)
 	}
-	if !strings.Contains(failFrame, "[ ↑↓ ] stack") || !strings.Contains(failFrame, "[ enter ] checkout") || !strings.Contains(failFrame, "[ o ] open") || !strings.Contains(failFrame, "[ . ] copy") {
+	if !strings.Contains(failFrame, "[ ↑↓ ] stack") || !strings.Contains(failFrame, "[ o ] open") || !strings.Contains(failFrame, "[ . ] copy") {
 		t.Fatalf("failure should restore the key legend:\n%s", failFrame)
+	}
+	if strings.Contains(failFrame, "[ enter ]") {
+		t.Fatalf("enter must leave the footer:\n%s", failFrame)
 	}
 }
 

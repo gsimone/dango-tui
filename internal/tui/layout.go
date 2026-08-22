@@ -121,6 +121,7 @@ type CardPlacement struct {
 	Width   int
 	Height  int
 	Compact bool
+	Boxed   bool
 }
 
 func GetInspectorSize(size TerminalSize) CardPlacement {

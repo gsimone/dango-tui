@@ -44,10 +44,11 @@ go run ./cmd/dango --frame 80x24      # print one frame and exit
 | --- | --- |
 | `↑` / `↓` | Select a stack |
 | `←` / `→`, `Home` / `End` | Select a layer from base to head |
-| hover / click a ball | Inspect / simulate checkout |
-| `Enter`, `o`, `r` | Simulate checkout, open, refresh |
+| hover / click a ball | Inspect / select that layer |
+| `o`, `.`, `r` | Open the PR URL, copy the branch, simulate refresh |
 | `/` | Filter local fixtures |
-| `Esc`, `?`, `q` | Close, toggle concise help, quit safely |
+| `?` | Open or close the help overlay |
+| `Esc`, `q` | Close, quit safely |
 
 ## Test
 

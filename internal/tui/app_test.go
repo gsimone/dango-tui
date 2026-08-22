@@ -161,18 +161,26 @@ func TestCompactCardAndHomeEnd(t *testing.T) {
 	assertFits(t, frame, 40)
 }
 
-func TestBallHitCellsCheckout(t *testing.T) {
+func TestBallHitCellsSelect(t *testing.T) {
 	size := tui.TerminalSize{Width: 80, Height: 24}
 	first := data.FixtureStories[0].Stacks[0]
 	point := tui.GetBallPoint(size, 0, 1, len(first.PRs))
 	m, _ := makeUI(size, "mixed").Update(mousePress(point.X+1, point.Y))
-	if !strings.Contains(frameOf(m.(tui.Model)), "Checked out gm/stacks-185 · fixture simulation") {
-		t.Fatalf("connector click:\n%s", frameOf(m.(tui.Model)))
+	frame := frameOf(m.(tui.Model))
+	if !strings.Contains(frame, "#185 Keep service identity") {
+		t.Fatalf("click should select:\n%s", frame)
+	}
+	if strings.Contains(frame, "Checked out") {
+		t.Fatalf("click must not checkout:\n%s", frame)
 	}
 	head := tui.GetBallPoint(size, 0, 2, len(first.PRs))
 	m, _ = m.Update(mousePress(head.X+1, head.Y))
-	if !strings.Contains(frameOf(m.(tui.Model)), "Checked out gm/stacks-186 · fixture simulation") {
-		t.Fatalf("head trailing cell click:\n%s", frameOf(m.(tui.Model)))
+	frame = frameOf(m.(tui.Model))
+	if !strings.Contains(frame, "#186 Remove implicit session fallback") {
+		t.Fatalf("head trailing cell click:\n%s", frame)
+	}
+	if strings.Contains(frame, "Checked out") {
+		t.Fatalf("click must not checkout:\n%s", frame)
 	}
 	if tui.GetRowLayout(80, len(first.PRs)).BallsWidth != tui.BallColW {
 		t.Fatal("ball column should stay locked")
@@ -242,8 +250,11 @@ func TestEightyColumnFooterAndFocus(t *testing.T) {
 	if !strings.Contains(frame, "●") {
 		t.Fatalf("focused layer:\n%s", frame)
 	}
-	if !strings.Contains(frame, "[ ↑↓ ] stack") || !strings.Contains(frame, "[ enter ] checkout") || !strings.Contains(frame, "[ o ] open") || !strings.Contains(frame, "[ . ] copy") {
+	if !strings.Contains(frame, "[ ↑↓ ] stack") || !strings.Contains(frame, "[ o ] open") || !strings.Contains(frame, "[ . ] copy") {
 		t.Fatalf("80-col footer should be a key strip:\n%s", frame)
+	}
+	if strings.Contains(frame, "[ enter ]") {
+		t.Fatalf("enter must leave the footer:\n%s", frame)
 	}
 	if strings.Contains(frame, "fixture cache ·") || strings.Contains(frame, " · ") && strings.Contains(frame, "q quit") {
 		t.Fatalf("footer must not be a middot sentence:\n%s", frame)
@@ -298,8 +309,8 @@ func TestQQuits(t *testing.T) {
 
 func TestSimulatedActionsStayHonest(t *testing.T) {
 	m := applyKey(makeUI(tui.TerminalSize{Width: 80, Height: 24}, "mixed"), key("enter"))
-	if !strings.Contains(frameOf(m), "Checked out gm/stacks-184 · fixture simulation") {
-		t.Fatalf("checkout:\n%s", frameOf(m))
+	if strings.Contains(frameOf(m), "Checked out") {
+		t.Fatalf("enter must not checkout:\n%s", frameOf(m))
 	}
 	m = applyKey(m, key("o"))
 	if !strings.Contains(frameOf(m), "Opening https://github.com/example/stacks/pull/184") {
@@ -464,8 +475,8 @@ func TestHoverFillsBallAndShowsInspector(t *testing.T) {
 	point := tui.GetBallPoint(size, 0, 1, len(first.PRs))
 	m, _ := makeUI(size, "mixed").Update(mouseMove(point.X, point.Y))
 	frame := frameOf(m.(tui.Model))
-	if strings.Contains(frame, "┌") {
-		t.Fatalf("hover must not drop a postcard on the list:\n%s", frame)
+	if !strings.Contains(frame, "┌") || !strings.Contains(frame, "└") {
+		t.Fatalf("stacked hover card needs one inset box:\n%s", frame)
 	}
 	if !strings.Contains(frame, "#185 Keep service identity") {
 		t.Fatalf("hover inspector:\n%s", frame)
@@ -498,5 +509,60 @@ func TestTypeIsThreeInks(t *testing.T) {
 	}
 	if !strings.Contains(frame, "ci failed") {
 		t.Fatalf("status words missing:\n%s", frame)
+	}
+}
+
+func TestHelpOverlayToggles(t *testing.T) {
+	m := makeUI(tui.TerminalSize{Width: 80, Height: 24}, "mixed")
+	idle := frameOf(m)
+	if strings.Contains(idle, "[ ? ] close") {
+		t.Fatalf("help should start closed:\n%s", idle)
+	}
+	m = applyKey(m, key("?"))
+	frame := frameOf(m)
+	for _, needle := range []string{
+		"[ ↑↓ ] stack",
+		"[ ←→ ] layer",
+		"[ o ] open",
+		"[ . ] copy",
+		"[ / ] filter",
+		"[ r ] refresh",
+		"[ q ] quit",
+		"[ ? ] close",
+	} {
+		if !strings.Contains(frame, needle) {
+			t.Fatalf("help overlay missing %q:\n%s", needle, frame)
+		}
+	}
+	if strings.Contains(frame, "[ enter ]") {
+		t.Fatalf("help must not invent enter:\n%s", frame)
+	}
+	m = applyKey(m, key("?"))
+	closed := frameOf(m)
+	if strings.Contains(closed, "[ ? ] close") {
+		t.Fatalf("? should close help:\n%s", closed)
+	}
+}
+
+func TestStackedCardIsInsetBox(t *testing.T) {
+	stacked := frameOf(makeUI(tui.TerminalSize{Width: 80, Height: 24}, "mixed"))
+	if !strings.Contains(stacked, "┌") || !strings.Contains(stacked, "└") {
+		t.Fatalf("stacked card needs one dim box:\n%s", stacked)
+	}
+	if !strings.Contains(stacked, "│ #184") && !strings.Contains(stacked, "│  #184") {
+		t.Fatalf("stacked card needs padding inside the box:\n%s", stacked)
+	}
+	wide := frameOf(makeUI(tui.TerminalSize{Width: 120, Height: 30}, "mixed"))
+	if strings.Contains(wide, "┌") || strings.Contains(wide, "└") {
+		t.Fatalf("wide pane must stay borderless:\n%s", wide)
+	}
+}
+
+func TestFooterHasNoEnter(t *testing.T) {
+	for _, size := range []tui.TerminalSize{{Width: 40, Height: 20}, {Width: 80, Height: 24}, {Width: 120, Height: 30}} {
+		frame := frameOf(makeUI(size, "mixed"))
+		if strings.Contains(frame, "[ enter ]") || strings.Contains(frame, "checkout") {
+			t.Fatalf("%dx%d still advertises enter/checkout:\n%s", size.Width, size.Height, frame)
+		}
 	}
 }

@@ -59,6 +59,9 @@ func (m Model) renderFrame(width, height int) string {
 		m.paintRule(c, mainTop, mainBottom, meta, surface)
 		m.paintInspectorPane(c, insp, surface, paper, meta)
 	}
+	if m.Help {
+		m.paintHelp(c, mainTop, mainBottom, raised, paper, meta)
+	}
 
 	footX := PadX
 	footW := max(1, inner)
@@ -101,19 +104,63 @@ func (m Model) paintRule(c *canvas, top, bottom int, meta, surface string) {
 
 func (m Model) footer() string {
 	compact := IsCompact(m.Width)
-	if m.Help {
-		if compact {
-			return "[ ↑↓ ] stack  [ enter ]  [ o ]  [ . ]  [ r ]  [ esc ]  [ q ]"
-		}
-		return "[ ↑↓ ] stack  [ enter ] checkout  [ o ] open  [ . ] copy  [ r ] refresh  [ esc ]  [ q ]"
-	}
 	if compact {
 		return "[ ↑↓ ] stack  [ ←→ ] layer  [ . ] copy  [ / ]  [ ? ]  [ q ]"
 	}
 	if m.Width <= 90 {
-		return "[ ↑↓ ] stack  [ ←→ ] layer  [ enter ] checkout  [ o ] open  [ . ] copy  [ / ]  [ ? ]  [ q ]"
+		return "[ ↑↓ ] stack  [ ←→ ] layer  [ o ] open  [ . ] copy  [ / ]  [ ? ]  [ q ]"
 	}
-	return "[ ↑↓ ] stack  [ ←→ ] layer  [ enter ] checkout  [ o ] open  [ . ] copy  [ a ] add  [ r ] refresh  [ / ] filter  [ esc ]  [ ? ]  [ q ]"
+	return "[ ↑↓ ] stack  [ ←→ ] layer  [ o ] open  [ . ] copy  [ a ] add  [ r ] refresh  [ / ] filter  [ esc ]  [ ? ]  [ q ]"
+}
+
+func helpItems() [][2]string {
+	return [][2]string{
+		{"↑↓", "stack"},
+		{"←→", "layer"},
+		{"o", "open"},
+		{".", "copy"},
+		{"/", "filter"},
+		{"r", "refresh"},
+		{"q", "quit"},
+		{"?", "close"},
+	}
+}
+
+func (m Model) paintHelp(c *canvas, top, bottom int, raised, paper, meta string) {
+	items := helpItems()
+	innerW := 0
+	for _, item := range items {
+		w := displayWidth("[ " + item[0] + " ] " + item[1])
+		if w > innerW {
+			innerW = w
+		}
+	}
+	pad := 1
+	w := innerW + 2 + pad*2
+	h := len(items) + 2 + pad*2
+	if maxW := innerWidth(m.Width); w > maxW {
+		w = maxW
+	}
+	if maxH := max(3, bottom-top); h > maxH {
+		h = maxH
+	}
+	x, y := PadX, top
+	c.box(x, y, w, h, domain.Color("border"), raised, paper)
+	cx := x + 1 + pad
+	cy := y + 1 + pad
+	cw := max(1, w-2-pad*2)
+	row := 0
+	for _, item := range items {
+		if cy+row >= y+h-1-pad {
+			break
+		}
+		key := "[ " + item[0] + " ]"
+		c.text(cx, cy+row, key, paper, raised, cw)
+		if displayWidth(key) < cw {
+			c.text(cx+displayWidth(key), cy+row, " "+item[1], meta, raised, max(1, cw-displayWidth(key)))
+		}
+		row++
+	}
 }
 
 func splitLegendItem(item string) (key, action string) {
@@ -245,7 +292,7 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 			if y+inspH > bottom {
 				inspH = max(1, bottom-y)
 			}
-			place := CardPlacement{Left: PadX, Top: y, Width: max(1, listWidth), Height: inspH, Compact: IsCompact(m.Width)}
+			place := CardPlacement{Left: PadX, Top: y, Width: max(1, listWidth), Height: inspH, Compact: IsCompact(m.Width), Boxed: true}
 			m.paintInspectorPane(c, place, surface, paper, meta)
 			y += inspH
 		}
@@ -257,16 +304,47 @@ const inspectorLabelW = 10
 type inspectorFact struct {
 	label string
 	value string
+	fg    string
 }
 
 func inspectorFacts(pr domain.PullRequest) []inspectorFact {
 	return []inspectorFact{
-		{"status", inspectorStatus(pr)},
-		{"ci", inspectorCI(pr)},
-		{"review", inspectorReview(pr)},
-		{"diff", fmt.Sprintf("+%d −%d", pr.Additions, pr.Deletions)},
-		{"branch", pr.Branch},
+		{"status", inspectorStatus(pr), inspectorStatusColor(pr)},
+		{"ci", inspectorCI(pr), inspectorCIColor(pr)},
+		{"review", inspectorReview(pr), inspectorReviewColor(pr)},
+		{"diff", fmt.Sprintf("+%d −%d", pr.Additions, pr.Deletions), domain.Color("paper")},
+		{"branch", pr.Branch, domain.Color("paper")},
 	}
+}
+
+func inspectorStatusColor(pr domain.PullRequest) string {
+	return domain.Color(domain.StateColorToken(domain.GetDisplayState(pr)))
+}
+
+func inspectorCIColor(pr domain.PullRequest) string {
+	switch pr.CI.State {
+	case domain.CISuccess:
+		return domain.Color("ready")
+	case domain.CIFailure:
+		return domain.Color("ciFailure")
+	case domain.CIPending:
+		return domain.Color("queued")
+	default:
+		return domain.Color("paper")
+	}
+}
+
+func inspectorReviewColor(pr domain.PullRequest) string {
+	if pr.Mergeable != nil && !*pr.Mergeable {
+		return domain.Color("reviewBlocked")
+	}
+	if pr.ChangesRequested {
+		return domain.Color("reviewBlocked")
+	}
+	if pr.Approvals > 0 {
+		return domain.Color("ready")
+	}
+	return domain.Color("paper")
 }
 
 func inspectorStatus(pr domain.PullRequest) string {
@@ -310,10 +388,34 @@ func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper
 	if w < 1 || h < 1 {
 		return
 	}
-	c.fill(x, y, w, h, surface)
+	bg := surface
+	if place.Boxed {
+		c.box(x, y, w, h, meta, surface, paper)
+		x++
+		y++
+		w = max(0, w-2)
+		h = max(0, h-2)
+		if w < 1 || h < 1 {
+			return
+		}
+		pad := 1
+		if w > pad*2 && h > pad*2 {
+			x += pad
+			y += pad
+			w -= pad * 2
+			h -= pad * 2
+		}
+	} else {
+		c.fill(x, y, w, h, surface)
+	}
 	pr, ok := m.SelectedPR()
 	if !m.State.CardVisible || !ok {
 		return
+	}
+
+	rowInk, rowRed := "", false
+	if stack, ok := m.SelectedStack(); ok {
+		rowInk, rowRed = rowDangerInk(stack)
 	}
 
 	maxLine := max(1, w)
@@ -323,7 +425,7 @@ func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper
 		if row >= h {
 			return
 		}
-		c.text(x, y+row, line, paper, surface, maxLine)
+		c.text(x, y+row, line, paper, bg, maxLine)
 		row++
 	}
 	if row >= h {
@@ -334,11 +436,42 @@ func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper
 		if row >= h {
 			break
 		}
-		c.text(x, y+row, fact.label, meta, surface, min(inspectorLabelW, maxLine))
+		c.text(x, y+row, fact.label, meta, bg, min(inspectorLabelW, maxLine))
 		if maxLine > inspectorLabelW && fact.value != "" {
-			c.text(x+inspectorLabelW, y+row, fact.value, paper, surface, maxLine-inspectorLabelW)
+			fg := fact.fg
+			if rowRed {
+				fg = rowInk
+			}
+			if fact.label == "diff" && !rowRed {
+				paintDiff(c, x+inspectorLabelW, y+row, pr, maxLine-inspectorLabelW, bg)
+			} else {
+				c.text(x+inspectorLabelW, y+row, fact.value, fg, bg, maxLine-inspectorLabelW)
+			}
 		}
 		row++
+	}
+}
+
+func rowDangerInk(stack domain.Stack) (string, bool) {
+	if len(stack.PRs) == 0 {
+		return "", false
+	}
+	state := domain.GetDisplayState(stack.PRs[len(stack.PRs)-1])
+	switch state {
+	case domain.StateCIFailure, domain.StateReviewBlocked:
+		return domain.Color(domain.StateColorToken(state)), true
+	default:
+		return "", false
+	}
+}
+
+func paintDiff(c *canvas, x, y int, pr domain.PullRequest, maxW int, bg string) {
+	plus := fmt.Sprintf("+%d", pr.Additions)
+	minus := fmt.Sprintf("−%d", pr.Deletions)
+	c.text(x, y, plus, domain.Color("ready"), bg, maxW)
+	gap := displayWidth(plus) + 1
+	if gap < maxW {
+		c.text(x+gap, y, minus, domain.Color("ciFailure"), bg, maxW-gap)
 	}
 }
 
@@ -376,7 +509,7 @@ func stackHealth(stack domain.Stack) string {
 func (m Model) listOrigin(n, selected, top, bottom int) int {
 	room := max(1, bottom-top)
 	if StackedInspector(m.Width) && m.State.CardVisible {
-		room = max(1, room-8)
+		room = max(1, room-m.stackedPaneHeight(ListPaneWidth(m.Width)))
 	}
 	if selected < room {
 		return 0
@@ -388,13 +521,15 @@ func (m Model) listOrigin(n, selected, top, bottom int) int {
 }
 
 func (m Model) stackedPaneHeight(listWidth int) int {
+	border, pad := 1, 1
+	innerW := max(1, listWidth-2*(border+pad))
 	pr, ok := m.SelectedPR()
 	if !ok {
-		return 3
+		return 2*border + 2*pad + 1
 	}
 	title := "#" + itoa(pr.Number) + " " + pr.Title
-	lines := len(wrapWords(title, max(1, listWidth)))
-	return max(3, lines+1+len(inspectorFacts(pr)))
+	lines := len(wrapWords(title, innerW))
+	return max(2*border+2*pad+1, 2*border+2*pad+lines+1+len(inspectorFacts(pr)))
 }
 
 func (m Model) ballHit(x, y int) (stackIndex, prIndex int, ok bool) {

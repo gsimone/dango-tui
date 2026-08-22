@@ -83,10 +83,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.choose(app.MoveSelection(m.State.Selection, m.Stacks(), app.DirHome), true)
 	case "end":
 		m.choose(app.MoveSelection(m.State.Selection, m.Stacks(), app.DirEnd), true)
-	case "enter":
-		if pr, ok := m.SelectedPR(); ok {
-			m.checkout(pr)
-		}
 	case "o":
 		if pr, ok := m.SelectedPR(); ok {
 			return m, m.open(pr)
@@ -102,13 +98,18 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.State.Feedback = ""
 		return m, tea.Tick(400*time.Millisecond, func(time.Time) tea.Msg { return fetchDoneMsg{} })
 	case "/":
+		m.Help = false
 		m.State.Query = ""
 		m.State.Searching = true
 		m.State.CardVisible = false
 	case "?":
 		m.Help = !m.Help
 	case "esc", "escape":
-		m.State.CardVisible = false
+		if m.Help {
+			m.Help = false
+		} else {
+			m.State.CardVisible = false
+		}
 	case "q":
 		m.quitting = true
 		return m, tea.Quit
@@ -125,10 +126,7 @@ func (m Model) handleMouse(msg tea.MouseMsg) Model {
 	switch action {
 	case mousePress:
 		if hit {
-			if stacks := m.Stacks(); stackIndex < len(stacks) && prIndex < len(stacks[stackIndex].PRs) {
-				m.choose(app.Selection{StackIndex: stackIndex, PRIndex: prIndex}, true)
-				m.checkout(stacks[stackIndex].PRs[prIndex])
-			}
+			m.choose(app.Selection{StackIndex: stackIndex, PRIndex: prIndex}, true)
 		}
 	case mouseMotion:
 		if hit {
