@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gsimone/dango-tui/internal/domain"
+	"github.com/gsimone/dango-tui/internal/live"
 	"github.com/gsimone/dango-tui/internal/summary"
 	"github.com/gsimone/dango-tui/internal/tui"
 )
@@ -28,6 +29,38 @@ func TestNoRepoUsesFixture(t *testing.T) {
 	}
 	if strings.Contains(frame, "pass --repo") {
 		t.Fatalf("no empty/help when fixtures load:\n%s", frame)
+	}
+}
+
+func TestLiveMissingGHShowsErrorNotFixtures(t *testing.T) {
+	fetches := 0
+	m := tui.New(tui.Options{
+		Repo:   "owner/name",
+		Width:  80,
+		Height: 24,
+		Fetch: func(string) ([]domain.Stack, error) {
+			fetches++
+			return nil, live.ErrGHMissing
+		},
+	})
+	if fetches != 1 {
+		t.Fatalf("live --repo must fetch, got %d", fetches)
+	}
+	if !m.Live || m.Repo != "owner/name" {
+		t.Fatalf("must stay live, got live=%v repo=%q", m.Live, m.Repo)
+	}
+	if n := len(m.Stacks()); n != 0 {
+		t.Fatalf("must not load fixtures, got %d stacks", n)
+	}
+	frame := frameOf(m)
+	if !strings.Contains(frame, "gh CLI not found") || !strings.Contains(frame, "cli.github.com") {
+		t.Fatalf("error pane must show the loud gh sentence:\n%s", frame)
+	}
+	if strings.Contains(frame, "org/reponame") {
+		t.Fatalf("must not fall back to the fixture slug:\n%s", frame)
+	}
+	if strings.Contains(frame, "300 stacks") {
+		t.Fatalf("must not load chaos fixtures:\n%s", frame)
 	}
 }
 

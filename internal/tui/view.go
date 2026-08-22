@@ -221,7 +221,15 @@ func paintKeyLegend(c *canvas, x, y, maxWidth int, legend, paper, meta, bg strin
 func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised, paper, meta, stick string) {
 	stacks := m.Stacks()
 	if len(stacks) == 0 {
-		c.text(PadX, top, m.emptyMessage(), meta, surface, max(1, listWidth))
+		width := max(1, listWidth)
+		y := top
+		for _, line := range wrapWords(m.emptyMessage(), width) {
+			if y >= bottom {
+				break
+			}
+			c.text(PadX, y, line, meta, surface, width)
+			y++
+		}
 		return
 	}
 	sel := app.ClampSelection(m.State.Selection, stacks)

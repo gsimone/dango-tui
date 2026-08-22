@@ -9,6 +9,7 @@ Shipping order (Cassandra / Gianmarco). Do not skip ahead.
 - Header line 2 is the `--repo` slug + live counts.
 - `-story` still forces fixtures and ignores live fetch.
 - `--provider` is optional and never blocks fetch or first paint.
+- Missing `gh` fails loudly (`LookPath` / `runGH`). No fixture fallback.
 - No picker. No settings screen.
 
 ## Next PR (after fetch)

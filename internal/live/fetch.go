@@ -3,6 +3,7 @@ package live
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -10,10 +11,48 @@ import (
 	"github.com/gsimone/dango-tui/internal/domain"
 )
 
+// ErrGHMissing is the loud failure when the gh CLI is not on PATH.
+var ErrGHMissing = errors.New("dango: gh CLI not found. Install https://cli.github.com and retry.")
+
 // FetchFunc loads stacks for owner/name. Tests inject a fake; production uses Fetch.
 type FetchFunc func(repo string) ([]domain.Stack, error)
 
 type runner func(args ...string) ([]byte, error)
+
+var lookPath = exec.LookPath
+
+func requireGH() error {
+	if _, err := lookPath("gh"); err != nil {
+		return ErrGHMissing
+	}
+	return nil
+}
+
+func isGHNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, ErrGHMissing) || errors.Is(err, exec.ErrNotFound) {
+		return true
+	}
+	var pathErr *exec.Error
+	return errors.As(err, &pathErr) && errors.Is(pathErr.Err, exec.ErrNotFound)
+}
+
+func mapGHError(err error, stderr string, args []string) error {
+	if err == nil {
+		return nil
+	}
+	if isGHNotFound(err) {
+		return ErrGHMissing
+	}
+	msg := strings.TrimSpace(stderr)
+	if msg == "" {
+		msg = err.Error()
+	}
+	n := min(len(args), 4)
+	return fmt.Errorf("gh %s: %s", strings.Join(args[:n], " "), msg)
+}
 
 func runGH(args ...string) ([]byte, error) {
 	cmd := exec.Command("gh", args...)
@@ -21,17 +60,16 @@ func runGH(args ...string) ([]byte, error) {
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
-		msg := strings.TrimSpace(stderr.String())
-		if msg == "" {
-			msg = err.Error()
-		}
-		return nil, fmt.Errorf("gh %s: %s", strings.Join(args[:min(len(args), 4)], " "), msg)
+		return nil, mapGHError(err, stderr.String(), args)
 	}
 	return out, nil
 }
 
 // Fetch loads open PRs for repo via gh and groups them into stacks.
 func Fetch(repo string) ([]domain.Stack, error) {
+	if err := requireGH(); err != nil {
+		return nil, err
+	}
 	return fetchWith(runGH, repo)
 }
 
@@ -41,7 +79,11 @@ func fetchWith(run runner, repo string) ([]domain.Stack, error) {
 		return nil, fmt.Errorf("pass --repo owner/name")
 	}
 	defaultBranch := "main"
-	if raw, err := run("repo", "view", repo, "--json", "nameWithOwner,defaultBranchRef"); err == nil {
+	if raw, err := run("repo", "view", repo, "--json", "nameWithOwner,defaultBranchRef"); err != nil {
+		if isGHNotFound(err) {
+			return nil, ErrGHMissing
+		}
+	} else {
 		var viewed ghRepo
 		if json.Unmarshal(raw, &viewed) == nil {
 			if viewed.DefaultBranchRef.Name != "" {
@@ -56,7 +98,7 @@ func fetchWith(run runner, repo string) ([]domain.Stack, error) {
 	raw, err := run("pr", "list", "--repo", repo, "--state", "open", "--limit", "200",
 		"--json", strings.Join(prListFields, ","))
 	if err != nil {
-		return nil, err
+		return nil, mapGHError(err, "", []string{"pr", "list"})
 	}
 	var listed []ghPR
 	if err := json.Unmarshal(raw, &listed); err != nil {

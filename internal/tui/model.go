@@ -256,7 +256,7 @@ func (m Model) emptyMessage() string {
 		return "No match."
 	}
 	if m.Live && m.fetchErr != nil {
-		return "Could not fetch " + m.Repo + "."
+		return m.fetchErr.Error()
 	}
 	if m.cacheState == data.CacheError || m.Story().CacheState == data.CacheError {
 		if m.Live {
