@@ -43,6 +43,7 @@ type Stack struct {
 	BaseRef     string
 	PRs         []PullRequest
 	Description string
+	Summary     string
 }
 
 type PrDisplayState string

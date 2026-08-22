@@ -202,37 +202,48 @@ func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper
 	state := domain.GetDisplayState(pr)
 	headline := domain.DisplayStateLabel[state] + " · " + domain.DisplayStateDetail(pr)
 	c.text(x, y, "#"+itoa(pr.Number)+" "+pr.Title, paper, surface, maxLine)
-	if h < 2 {
+	row := 1
+	if h <= row {
 		return
 	}
-	c.text(x, y+1, headline, meta, surface, maxLine)
+	if stack, ok := m.SelectedStack(); ok && stack.Summary != "" {
+		c.text(x, y+row, stack.Summary, meta, surface, maxLine)
+		row++
+	}
+	if h <= row {
+		return
+	}
+	c.text(x, y+row, headline, meta, surface, maxLine)
+	row++
 
 	ci := ciLine(pr)
 	review := reviewLine(pr)
 	diff := fmt.Sprintf("+%d −%d · %d files", pr.Additions, pr.Deletions, pr.ChangedFiles)
 	hint := "o open"
 	if place.Compact {
-		if h > 2 {
-			c.text(x, y+2, ci+" · "+review, meta, surface, maxLine)
+		if h > row {
+			c.text(x, y+row, ci+" · "+review, meta, surface, maxLine)
+			row++
 		}
-		if h > 3 {
-			c.text(x, y+3, diff, meta, surface, maxLine)
+		if h > row {
+			c.text(x, y+row, diff, meta, surface, maxLine)
+			row++
 		}
-		if h > 4 {
-			c.text(x, y+4, pr.Branch, meta, surface, maxLine)
+		if h > row {
+			c.text(x, y+row, pr.Branch, meta, surface, maxLine)
+			row++
 		}
-		if h > 5 {
-			c.text(x, y+5, hint, meta, surface, maxLine)
+		if h > row {
+			c.text(x, y+row, hint, meta, surface, maxLine)
 		}
 		return
 	}
-	lines := []string{ci, review, diff, pr.Branch, hint}
-	for i, line := range lines {
-		row := y + 2 + i
-		if row >= y+h {
+	for _, line := range []string{ci, review, diff, pr.Branch, hint} {
+		if row >= h {
 			break
 		}
-		c.text(x, row, line, meta, surface, maxLine)
+		c.text(x, y+row, line, meta, surface, maxLine)
+		row++
 	}
 }
 

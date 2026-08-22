@@ -345,6 +345,26 @@ func TestInspectorIsARightColumn(t *testing.T) {
 	}
 }
 
+func TestInspectorShowsOneSummaryLine(t *testing.T) {
+	size := tui.TerminalSize{Width: 120, Height: 30}
+	frame := frameOf(makeUI(size, "mixed"))
+	if !strings.Contains(frame, "#184 Split auth scope from session checks") {
+		t.Fatalf("paper title missing:\n%s", frame)
+	}
+	hits := 0
+	for _, line := range strings.Split(frame, "\n") {
+		if strings.Contains(line, "split auth scope") {
+			hits++
+		}
+	}
+	if hits != 1 {
+		t.Fatalf("summary must be one meta line under the title, got %d:\n%s", hits, frame)
+	}
+	if strings.Contains(frame, "┌") || strings.Contains(frame, "└") {
+		t.Fatalf("summary must not invent a box:\n%s", frame)
+	}
+}
+
 func TestHoverFillsBallAndShowsInspector(t *testing.T) {
 	size := tui.TerminalSize{Width: 80, Height: 24}
 	first := data.FixtureStories[0].Stacks[0]

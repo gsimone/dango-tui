@@ -1,6 +1,9 @@
 package data
 
-import "github.com/gsimone/dango-tui/internal/domain"
+import (
+	"github.com/gsimone/dango-tui/internal/domain"
+	"github.com/gsimone/dango-tui/internal/summary"
+)
 
 type PullRequestFixtureInput struct {
 	State            domain.PrDisplayState
@@ -333,6 +336,18 @@ var FixtureStories = []FixtureStory{
 			StackFixture(StackFixtureInput{Number: 13, Name: "migration train", Description: desc("Ten independent layers, still one readable line"), PRs: largeStackPRs()}),
 		},
 	},
+}
+
+func init() {
+	applySummaries(FixtureStories, summary.FromLayers{})
+}
+
+func applySummaries(stories []FixtureStory, s summary.Summarizer) {
+	for i := range stories {
+		for j := range stories[i].Stacks {
+			stories[i].Stacks[j].Summary = s.Summarize(stories[i].Stacks[j])
+		}
+	}
 }
 
 func largeStackPRs() []domain.PullRequest {
