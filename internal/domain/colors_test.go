@@ -57,3 +57,23 @@ func abs(v float64) float64 {
 	}
 	return v
 }
+
+func TestChromeHexLocks(t *testing.T) {
+	want := map[string]string{
+		"surface":       "#14120f",
+		"surfaceRaised": "#242018",
+		"text":          "#efeae2",
+		"stick":         "#8f8678",
+	}
+	for name, hex := range want {
+		if got := domain.Color(name); got != hex {
+			t.Fatalf("%s: got %s want %s", name, got, hex)
+		}
+	}
+	if _, ok := domain.ChromeHex["ready"]; ok {
+		t.Fatal("ready must not be chrome-locked")
+	}
+	if domain.Color("ready") == domain.Color("stick") {
+		t.Fatal("status color collided with connector")
+	}
+}

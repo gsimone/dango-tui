@@ -34,6 +34,7 @@ func (m Model) renderFrame(width, height int) string {
 	text := domain.Color("text")
 	muted := domain.Color("muted")
 	focus := domain.Color("focus")
+	stick := domain.Color("stick")
 
 	c := newCanvas(width, height, surface)
 	compact := IsCompact(width)
@@ -98,7 +99,7 @@ func (m Model) renderFrame(width, height int) string {
 		listBottom = inspY
 	}
 
-	m.paintList(c, listWidth, mainTop, listBottom, surface, raised, text, muted, border)
+	m.paintList(c, listWidth, mainTop, listBottom, surface, raised, text, muted, stick)
 	m.paintInspector(c, inspX, inspY, inspW, inspH, insp.Compact, raised, focus, text, muted, surface)
 
 	if m.State.Searching {
@@ -143,7 +144,7 @@ func (m Model) footer() string {
 	return full
 }
 
-func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised, text, muted, border string) {
+func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised, text, muted, stick string) {
 	stacks := m.Stacks()
 	if len(stacks) == 0 {
 		c.text(1, top, m.emptyMessage(), muted, surface, max(1, listWidth-2))
@@ -180,14 +181,13 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 			bg := rowBg
 			if selected {
 				glyph = '◉'
-				bg = border
 			}
 			c.set(ballX+prIndex*2, y, glyph, fg, bg)
 			connector := '—'
 			if prIndex == len(stack.PRs)-1 {
 				connector = ' '
 			}
-			c.set(ballX+prIndex*2+1, y, connector, border, bg)
+			c.set(ballX+prIndex*2+1, y, connector, stick, bg)
 		}
 
 		if !layout.Compact {
