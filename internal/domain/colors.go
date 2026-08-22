@@ -87,7 +87,7 @@ var OKLCHTokens = map[string]OKLCH{
 }
 
 // ChromeHex locks the field, selected row, type, and connectors to the mark.
-// Readable type is paper or meta only. Status tokens keep their OKLCH hues.
+// Type is paper or meta. Status words keep their OKLCH hues.
 var ChromeHex = map[string]string{
 	"surface":       "#14120f",
 	"surfaceRaised": "#242018",

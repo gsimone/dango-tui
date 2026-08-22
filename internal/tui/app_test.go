@@ -275,8 +275,8 @@ func TestResizeAndCardClamp(t *testing.T) {
 		if placement.Left+placement.Width > size.Width-tui.PadX {
 			t.Fatalf("inspector overflows right at %dx%d: %+v", size.Width, size.Height, placement)
 		}
-		if placement.Top+placement.Height > size.Height-1 {
-			t.Fatalf("inspector overflows bottom at %dx%d: %+v", size.Width, size.Height, placement)
+		if placement.Top+placement.Height > tui.ListBottomY(size.Height) {
+			t.Fatalf("inspector overflows into footer air at %dx%d: %+v", size.Width, size.Height, placement)
 		}
 	}
 	large := data.StoryByID("large-stack").Stacks[0]
@@ -332,8 +332,14 @@ func TestInspectorIsARightColumn(t *testing.T) {
 	if strings.TrimSpace(lines[0]) != "" {
 		t.Fatalf("expected one blank row at the top:\n%s", wide)
 	}
-	if strings.TrimSpace(lines[3]) != "" || strings.TrimSpace(lines[4]) != "" {
-		t.Fatalf("expected two blank rows after the header:\n%s", wide)
+	if strings.TrimSpace(lines[3]) != "" {
+		t.Fatalf("expected one blank row under the header:\n%s", wide)
+	}
+	if strings.TrimSpace(lines[4]) == "" {
+		t.Fatalf("list should start after one header air row:\n%s", wide)
+	}
+	if strings.TrimSpace(lines[len(lines)-2]) != "" {
+		t.Fatalf("expected one blank row over the footer:\n%s", wide)
 	}
 	place := tui.GetInspectorSize(size)
 	if place.Left < 60 {
@@ -385,18 +391,28 @@ func TestHoverFillsBallAndShowsInspector(t *testing.T) {
 	}
 }
 
-func TestTypeIsPaperOrMeta(t *testing.T) {
-	raw := makeUI(tui.TerminalSize{Width: 80, Height: 24}, "mixed").View()
+func TestTypeIsThreeInks(t *testing.T) {
+	raw := makeUI(tui.TerminalSize{Width: 120, Height: 30}, "mixed").View()
 	paper := ansiFG(domain.Color("paper"))
 	meta := ansiFG(domain.Color("meta"))
+	failed := ansiFG(domain.Color("ciFailure"))
 	if !strings.Contains(raw, paper) {
-		t.Fatal("selected stack name / inspector title must use paper ink")
+		t.Fatal("selected stack name and PR id must use paper ink")
 	}
 	if !strings.Contains(raw, meta) {
 		t.Fatal("everything else must use meta")
 	}
+	if !strings.Contains(raw, failed) {
+		t.Fatal("failed / ready / blocked must keep their status colors")
+	}
 	frame := strip(raw)
+	if !strings.Contains(frame, "↑↓") || !strings.Contains(frame, "stack") {
+		t.Fatalf("footer key legend missing:\n%s", frame)
+	}
 	if strings.Contains(frame, "fixture cache ·") {
 		t.Fatalf("idle footer is still a middot status sentence:\n%s", frame)
+	}
+	if !strings.Contains(frame, "ci failed") {
+		t.Fatalf("status words missing:\n%s", frame)
 	}
 }

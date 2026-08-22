@@ -7,9 +7,21 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/gsimone/dango-tui/internal/domain"
 )
 
 var ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\x07]*(?:\x07|\x1b\\)`)
+
+func TestStatusWordsKeepStatusColor(t *testing.T) {
+	auth := New(Options{StoryID: "mixed", Width: 120, Height: 30}).Stacks()[0]
+	if got := stackHealthColor(auth); got != domain.Color("ciFailure") {
+		t.Fatalf("auth head should be ciFailure, got %s", got)
+	}
+	composer := New(Options{StoryID: "mixed", Width: 120, Height: 30}).Stacks()[1]
+	if got := stackHealthColor(composer); got != domain.Color("queued") {
+		t.Fatalf("composer head should be queued, got %s", got)
+	}
+}
 
 func TestDotCopiesBranchAndDoesNotCheckout(t *testing.T) {
 	var copied string

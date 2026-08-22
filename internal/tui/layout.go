@@ -22,9 +22,15 @@ const (
 	PadX       = 2
 	PadTop     = 1
 	HeaderRows = 2
-	AirRows    = 2
+	AirRows    = 1
 	ListStartY = PadTop + HeaderRows + AirRows
 )
+
+// ListBottomY is the first row the list/inspector must not paint: one blank
+// row over the footer.
+func ListBottomY(height int) int {
+	return max(ListStartY, height-2)
+}
 
 func GetRowLayout(width int, prCount int) RowLayout {
 	return rowLayout(max(1, width-PadX*2), prCount, width <= 50)
@@ -121,7 +127,7 @@ func GetInspectorSize(size TerminalSize) CardPlacement {
 			Left:    PadX,
 			Top:     top,
 			Width:   width,
-			Height:  max(3, size.Height-1-top),
+			Height:  max(3, ListBottomY(size.Height)-top),
 			Compact: size.Width <= 50,
 		}
 	}
@@ -135,7 +141,7 @@ func GetInspectorSize(size TerminalSize) CardPlacement {
 		Left:    left,
 		Top:     ListStartY,
 		Width:   width,
-		Height:  max(3, size.Height-1-ListStartY),
+		Height:  max(3, ListBottomY(size.Height)-ListStartY),
 		Compact: size.Width <= 50,
 	}
 }
@@ -151,8 +157,8 @@ func ClampCardPlacement(size TerminalSize, _ struct{ X, Y int }) CardPlacement {
 	if place.Top < 1 {
 		place.Top = 1
 	}
-	if place.Top+place.Height > size.Height-1 {
-		place.Height = max(3, size.Height-1-place.Top)
+	if place.Top+place.Height > ListBottomY(size.Height) {
+		place.Height = max(3, ListBottomY(size.Height)-place.Top)
 	}
 	return place
 }

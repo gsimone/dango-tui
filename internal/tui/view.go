@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/gsimone/dango-tui/internal/app"
 	"github.com/gsimone/dango-tui/internal/domain"
@@ -42,11 +43,11 @@ func (m Model) renderFrame(width, height int) string {
 	m.paintBrand(c, width, surface, meta, stick)
 	metaLine := fmt.Sprintf("%d stacks / %d layers · local deterministic data", m.stackCount(), m.layerCount())
 	c.text(PadX, PadTop+1, metaLine, meta, surface, inner)
-	// two blank rows of air before the list (y=3,4).
+	// one blank row under the header, then the list.
 
 	footerY := height - 1
 	mainTop := ListStartY
-	mainBottom := footerY - 1
+	mainBottom := ListBottomY(height)
 	if mainBottom < mainTop {
 		mainBottom = mainTop
 	}
@@ -62,16 +63,14 @@ func (m Model) renderFrame(width, height int) string {
 	footX := PadX
 	footW := max(1, inner)
 	if m.State.Searching {
-		query := m.State.Query
-		if query == "" {
-			c.text(footX, footerY, "/", meta, surface, footW)
-		} else {
-			c.text(footX, footerY, "/"+query, meta, surface, footW)
+		c.text(footX, footerY, "/", paper, surface, footW)
+		if q := m.State.Query; q != "" {
+			c.text(footX+1, footerY, q, meta, surface, max(1, footW-1))
 		}
 	} else if m.State.Feedback != "" {
 		c.text(footX, footerY, m.State.Feedback, meta, surface, footW)
 	} else {
-		c.text(footX, footerY, m.footer(), meta, surface, footW)
+		paintKeyLegend(c, footX, footerY, footW, m.footer(), paper, meta, surface)
 	}
 
 	return c.render()
@@ -115,6 +114,37 @@ func (m Model) footer() string {
 		return "↑↓ stack  ←→ layer  enter checkout  o open  . copy  /  ?  q"
 	}
 	return "↑↓ stack  ←→ layer  enter checkout  o open  . copy  a add  r refresh  / filter  esc  ?  q"
+}
+
+func paintKeyLegend(c *canvas, x, y, maxWidth int, legend, paper, meta, bg string) {
+	remain := maxWidth
+	first := true
+	for _, item := range strings.Split(legend, "  ") {
+		if remain <= 0 {
+			return
+		}
+		if !first {
+			c.text(x, y, "  ", meta, bg, remain)
+			n := min(2, remain)
+			x += n
+			remain -= n
+		}
+		first = false
+		key, action, ok := strings.Cut(item, " ")
+		write := func(s, fg string) {
+			if remain <= 0 || s == "" {
+				return
+			}
+			c.text(x, y, s, fg, bg, remain)
+			w := min(displayWidth(s), remain)
+			x += w
+			remain -= w
+		}
+		write(key, paper)
+		if ok {
+			write(" "+action, meta)
+		}
+	}
 }
 
 func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised, paper, meta, stick string) {
@@ -192,7 +222,7 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 		}
 		remain := min(statusW, max(0, PadX+listWidth-statusX))
 		if remain >= 4 {
-			c.text(statusX, y, clip(stackHealth(stack), remain), meta, rowBg, remain)
+			c.text(statusX, y, clip(stackHealth(stack), remain), stackHealthColor(stack), rowBg, remain)
 		}
 		y++
 		if StackedInspector(m.Width) && selectedStack && m.State.CardVisible {
@@ -220,14 +250,21 @@ func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper
 
 	maxLine := max(1, w)
 	state := domain.GetDisplayState(pr)
-	headline := domain.DisplayStateLabel[state] + " · " + domain.DisplayStateDetail(pr)
-	title := "#" + itoa(pr.Number) + " " + pr.Title
+	id := "#" + itoa(pr.Number)
 	row := 0
-	for _, line := range wrapWords(title, maxLine) {
+	for i, line := range wrapWords(id+" "+pr.Title, maxLine) {
 		if row >= h {
 			break
 		}
-		c.text(x, y+row, line, paper, surface, maxLine)
+		if i == 0 && strings.HasPrefix(line, id) {
+			c.text(x, y+row, id, paper, surface, maxLine)
+			rest := strings.TrimPrefix(line, id)
+			if rest != "" {
+				c.text(x+displayWidth(id), y+row, rest, meta, surface, max(1, maxLine-displayWidth(id)))
+			}
+		} else {
+			c.text(x, y+row, line, meta, surface, maxLine)
+		}
 		row++
 	}
 	if h <= row {
@@ -240,7 +277,12 @@ func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper
 	if h <= row {
 		return
 	}
-	c.text(x, y+row, headline, meta, surface, maxLine)
+	label := domain.DisplayStateLabel[state]
+	c.text(x, y+row, label, domain.Color(domain.StateColorToken(state)), surface, maxLine)
+	detail := " · " + domain.DisplayStateDetail(pr)
+	if displayWidth(label) < maxLine {
+		c.text(x+displayWidth(label), y+row, detail, meta, surface, maxLine-displayWidth(label))
+	}
 	row++
 
 	ci := ciLine(pr)
@@ -316,6 +358,14 @@ func reviewLine(pr domain.PullRequest) string {
 	return "Review ◌ no decision yet"
 }
 
+func stackHealthColor(stack domain.Stack) string {
+	if len(stack.PRs) == 0 {
+		return domain.Color("meta")
+	}
+	head := stack.PRs[len(stack.PRs)-1]
+	return domain.Color(domain.StateColorToken(domain.GetDisplayState(head)))
+}
+
 func stackHealth(stack domain.Stack) string {
 	if len(stack.PRs) == 0 {
 		return "no layers"
@@ -373,11 +423,11 @@ func (m Model) ballHit(x, y int) (stackIndex, prIndex int, ok bool) {
 		return 0, 0, false
 	}
 	listWidth := ListPaneWidth(m.Width)
-	if y < ListStartY || y >= m.Height-1 || x < PadX || x >= PadX+listWidth {
+	if y < ListStartY || y >= ListBottomY(m.Height) || x < PadX || x >= PadX+listWidth {
 		return 0, 0, false
 	}
 	sel := app.ClampSelection(m.State.Selection, stacks)
-	start := m.listOrigin(len(stacks), sel.StackIndex, ListStartY, m.Height-1)
+	start := m.listOrigin(len(stacks), sel.StackIndex, ListStartY, ListBottomY(m.Height))
 	rowY := ListStartY
 	stackIndex = -1
 	for i := start; i < len(stacks); i++ {
