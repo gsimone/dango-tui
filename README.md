@@ -31,7 +31,7 @@ The app is a native terminal UI, not a dev server. It handles 40×20, 80×24,
 120×30, and 160×40 terminals: the inspector docks below the list at compact
 sizes and becomes a stable right pane on wide terminals.
 
-`go run ./cmd/dango` is the app with local fixture data. There is no GitHub
+`go run ./cmd/dango` is the app: local fixture / test data. There is no live GitHub fetch yet. `o` opens the PR URL in your browser. There is no GitHub
 client yet — checkout / open / refresh are labelled simulations.
 
 ```bash

@@ -97,11 +97,6 @@ func (m *Model) checkout(pr domain.PullRequest) {
 	m.State.CardVisible = true
 }
 
-func (m *Model) open(pr domain.PullRequest) {
-	m.State.Feedback = "Opened #" + itoa(pr.Number) + " · fixture simulation"
-	m.State.CardVisible = true
-}
-
 func (m *Model) clamp() {
 	m.State.Selection = app.ClampSelection(m.State.Selection, m.Stacks())
 }

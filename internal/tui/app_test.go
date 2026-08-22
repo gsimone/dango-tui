@@ -282,7 +282,7 @@ func TestSimulatedActionsStayHonest(t *testing.T) {
 		t.Fatalf("checkout:\n%s", frameOf(m))
 	}
 	m = applyKey(m, key("o"))
-	if !strings.Contains(frameOf(m), "Opened #184 · fixture simulation") {
+	if !strings.Contains(frameOf(m), "Opening https://github.com/example/stacks/pull/184") {
 		t.Fatalf("open:\n%s", frameOf(m))
 	}
 	m = applyKey(m, key("r"))

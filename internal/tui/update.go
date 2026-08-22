@@ -19,6 +19,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleMouse(msg), nil
 	case tea.KeyMsg:
 		return m.handleKey(msg)
+	case openResultMsg:
+		if msg.err != nil {
+			m.State.Feedback = "Could not open " + msg.url
+		}
+		return m, nil
 	}
 	return m, nil
 }
@@ -69,7 +74,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "o":
 		if pr, ok := m.SelectedPR(); ok {
-			m.open(pr)
+			return m, m.open(pr)
 		}
 	case "r":
 		m.State.Feedback = "Fixture data refreshed · no network"
