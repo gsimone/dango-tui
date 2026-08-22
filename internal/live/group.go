@@ -37,17 +37,10 @@ func GroupStacks(prs []RemotePR, defaultBranch string) []domain.Stack {
 	sort.SliceStable(stacks, func(i, j int) bool {
 		return stackKey(stacks[i]) > stackKey(stacks[j])
 	})
-	s := summary.PreferDescription{Fallback: summary.FromLayers{}}
 	for i := range stacks {
 		stacks[i].Number = i + 1
-		if stacks[i].Summary == "" {
-			stacks[i].Summary = s.Summarize(stacks[i])
-		}
-		if stacks[i].Description == "" {
-			stacks[i].Description = stacks[i].Summary
-		}
 	}
-	return stacks
+	return summary.Apply(stacks, summary.Choose(summary.Provider{}))
 }
 
 func stackKey(stack domain.Stack) int {

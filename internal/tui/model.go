@@ -6,16 +6,16 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gsimone/dango-tui/internal/app"
-	"github.com/gsimone/dango-tui/internal/cli"
 	"github.com/gsimone/dango-tui/internal/data"
 	"github.com/gsimone/dango-tui/internal/domain"
 	"github.com/gsimone/dango-tui/internal/live"
+	"github.com/gsimone/dango-tui/internal/summary"
 )
 
 type Options struct {
 	StoryID  string
 	Repo     string
-	Provider cli.Provider
+	Provider summary.Provider
 	Width    int
 	Height   int
 	Fetch    live.FetchFunc
@@ -34,13 +34,14 @@ type Model struct {
 	fetchSeq    int
 	LogoDots    [3]string
 	Repo        string
-	Provider    cli.Provider
+	Provider    summary.Provider
 	Live        bool
 	stacks      []domain.Stack
 	cacheState  data.CacheState
 	fetchErr    error
 	fetchedAt   time.Time
 	fetch       live.FetchFunc
+	summarizer  summary.Summarizer
 }
 
 func New(opts Options) Model {
@@ -52,12 +53,13 @@ func New(opts Options) Model {
 		height = 24
 	}
 	m := Model{
-		Width:    width,
-		Height:   height,
-		State:    app.InitialState(),
-		LogoDots: domain.ProcessLogoDots(),
-		Provider: opts.Provider,
-		fetch:    opts.Fetch,
+		Width:      width,
+		Height:     height,
+		State:      app.InitialState(),
+		LogoDots:   domain.ProcessLogoDots(),
+		Provider:   opts.Provider,
+		fetch:      opts.Fetch,
+		summarizer: summary.Choose(opts.Provider),
 	}
 	if m.fetch == nil {
 		m.fetch = live.Fetch
@@ -102,7 +104,7 @@ func (m *Model) loadLive() {
 		return
 	}
 	m.fetchErr = nil
-	m.stacks = stacks
+	m.stacks = summary.Apply(stacks, m.summarizer)
 	m.cacheState = data.CacheCurrent
 }
 

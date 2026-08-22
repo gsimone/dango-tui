@@ -8,6 +8,7 @@ import (
 	"github.com/gsimone/dango-tui/internal/app"
 	"github.com/gsimone/dango-tui/internal/data"
 	"github.com/gsimone/dango-tui/internal/domain"
+	"github.com/gsimone/dango-tui/internal/summary"
 )
 
 type fetchDoneMsg struct {
@@ -49,7 +50,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cacheState = data.CacheError
 			} else {
 				m.fetchErr = nil
-				m.stacks = msg.stacks
+				m.stacks = summary.Apply(msg.stacks, m.summarizer)
 				m.cacheState = data.CacheCurrent
 				m.clamp()
 			}

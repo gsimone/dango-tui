@@ -69,6 +69,26 @@ func TestPreferDescriptionSkipsStub(t *testing.T) {
 	}
 }
 
+func TestChooseThreadsProviderAndStaysLocal(t *testing.T) {
+	p := summary.ParseProvider("codex@luna.medium")
+	if p.Name != "codex" || p.Model != "luna.medium" {
+		t.Fatalf("parse %+v", p)
+	}
+	got := summary.Choose(p)
+	if got.Provider != p {
+		t.Fatalf("choose must keep provider, got %+v", got.Provider)
+	}
+	stack := data.StoryByID("mixed").Stacks[0]
+	local := summary.Local().Summarize(stack)
+	if got.Summarize(stack) != local {
+		t.Fatalf("no network summarizer yet; want local %q, got %q", local, got.Summarize(stack))
+	}
+	empty := summary.Choose(summary.Provider{})
+	if empty.Summarize(stack) != local {
+		t.Fatal("empty provider must still use Local")
+	}
+}
+
 func TestLoadStoresSummariesOnFixtureStacks(t *testing.T) {
 	stack := data.StoryByID("mixed").Stacks[0]
 	if stack.Summary == "" {

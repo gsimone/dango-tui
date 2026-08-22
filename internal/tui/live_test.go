@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/gsimone/dango-tui/internal/cli"
 	"github.com/gsimone/dango-tui/internal/domain"
+	"github.com/gsimone/dango-tui/internal/summary"
 	"github.com/gsimone/dango-tui/internal/tui"
 )
 
@@ -133,7 +133,7 @@ func TestLiveRepoHeaderAndTwoColumns(t *testing.T) {
 func TestProviderIsStoredAndIgnoredOnScreen(t *testing.T) {
 	with := tui.New(tui.Options{
 		Repo:     "owner/name",
-		Provider: cli.ParseProvider("codex@luna.medium"),
+		Provider: summary.ParseProvider("codex@luna.medium"),
 		Width:    80,
 		Height:   24,
 		Fetch: func(string) ([]domain.Stack, error) {
