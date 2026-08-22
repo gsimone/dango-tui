@@ -13,9 +13,10 @@ import (
 
 func main() {
 	frame := flag.String("frame", "", "print a fixture frame (WxH, e.g. 80x24) and exit")
+	story := flag.String("story", "", "fixture story id (pair, freight, chaos, mixed)")
 	flag.Parse()
 
-	model := tui.New(tui.Options{})
+	model := tui.New(tui.Options{StoryID: *story})
 
 	if *frame != "" {
 		width, height, err := parseFrame(*frame)

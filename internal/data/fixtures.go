@@ -337,6 +337,23 @@ var FixtureStories = []FixtureStory{
 		},
 	},
 	{
+		ID:    "pair",
+		Label: "two layers",
+		Stacks: []domain.Stack{
+			StackFixture(StackFixtureInput{Number: 1, Name: "pair", Description: desc("Two layers only"), PRs: []domain.PullRequest{
+				pr(701, "Tiny left", domain.StateMerged),
+				pr(702, "Tiny right", domain.StateOpen),
+			}}),
+		},
+	},
+	{
+		ID:    "freight",
+		Label: "twenty layers",
+		Stacks: []domain.Stack{
+			StackFixture(StackFixtureInput{Number: 2, Name: "freight train", Description: desc("Twenty layers"), PRs: twentyLayerPRs()}),
+		},
+	},
+	{
 		ID:     "chaos",
 		Label:  "chaos load",
 		Stacks: chaosStacks(),
