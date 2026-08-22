@@ -141,10 +141,26 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 		rowBg := surface
 		nameFg := meta
 		selectedStack := i == sel.StackIndex
+		focus := 0
 		if selectedStack {
 			rowBg = raised
 			nameFg = paper
-			c.fill(PadX, y, listWidth, 1, rowBg)
+			focus = sel.PRIndex
+		}
+		from, show, lead, tail := ballWindow(len(stack.PRs), focus)
+		ballW := show
+		if show > 1 {
+			ballW += show - 1
+		}
+		if lead {
+			ballW += 4
+		}
+		if tail {
+			ballW += 4
+		}
+		statusX := PadX + nameW + 1 + ballW + 1
+		if selectedStack {
+			c.fill(PadX, y, min(listWidth, statusX+statusW-PadX), 1, rowBg)
 		}
 		marker := "· "
 		if selectedStack {
@@ -152,7 +168,6 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 		}
 		c.text(PadX, y, marker+stack.Name, nameFg, rowBg, nameW)
 
-		from, show, lead, tail := ballWindow(len(stack.PRs), map[bool]int{true: sel.PRIndex, false: 0}[selectedStack])
 		ballX := PadX + nameW + 1
 		x := ballX
 		if lead {
@@ -181,7 +196,6 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 		if tail {
 			c.text(x, y, "...", meta, rowBg, 3)
 		}
-		statusX := PadX + listWidth - statusW
 		remain := max(0, PadX+listWidth-statusX)
 		if remain >= 4 {
 			c.text(statusX, y, clip(stackHealth(stack), remain), meta, rowBg, remain)
