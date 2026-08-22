@@ -76,6 +76,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if pr, ok := m.SelectedPR(); ok {
 			return m, m.open(pr)
 		}
+	case "a":
+		m.State.Feedback = "add · not wired"
 	case "r":
 		m.State.Feedback = "Fixture data refreshed · no network"
 	case "/":

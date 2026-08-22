@@ -47,7 +47,7 @@ func (m Model) renderFrame(width, height int) string {
 		title = title + " / example/stacks"
 	}
 	inner := max(1, width-2)
-	c.text(1, 0, title, focus, surface, inner-displayWidth(badge)-1)
+	c.text(1, 0, title, text, surface, inner-displayWidth(badge)-1)
 	c.text(width-1-displayWidth(badge), 0, badge, muted, surface, displayWidth(badge))
 
 	meta := fmt.Sprintf("%d stacks / %d layers · local deterministic data", m.stackCount(), m.layerCount())
@@ -121,12 +121,12 @@ func (m Model) footer() string {
 		}
 		return "enter checkout · o open · r refresh · esc close · q quit"
 	}
-	full := "↑↓ stack  ←→ layer  enter checkout  o open  r refresh  / filter  esc close  ? help  q quit"
+	full := "↑↓ stack  ←→ layer  enter checkout  o open  a add  r refresh  / filter  esc close  ? help  q quit"
 	if compact {
 		return "↑↓ stack · ←→ layer · / find · ? help"
 	}
 	if m.Width <= 90 {
-		return "↑↓ stack · ←→ layer · enter checkout · / filter · ? help · q quit"
+		return "↑↓ stack · ←→ layer · enter checkout · / filter · a add · ? help · q quit"
 	}
 	return full
 }
@@ -149,9 +149,7 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 		nameFg := muted
 		selectedStack := i == sel.StackIndex
 		if selectedStack {
-			rowBg = raised
 			nameFg = text
-			c.fill(1, y, max(1, listWidth-2), 1, rowBg)
 		}
 		marker := "· "
 		if selectedStack {
@@ -170,11 +168,11 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 				glyph = '●'
 			}
 			c.set(ballX+prIndex*2, y, glyph, fg, bg)
-			connector := '—'
+			connector := '-'
 			if prIndex == len(stack.PRs)-1 {
 				connector = ' '
 			}
-			c.set(ballX+prIndex*2+1, y, connector, stick, bg)
+			c.set(ballX+prIndex*2+1, y, connector, muted, bg)
 		}
 
 		if !layout.Compact {
@@ -232,32 +230,28 @@ func (m Model) paintInspector(c *canvas, x, y, w, h int, compact bool, raised, f
 		return
 	}
 
-	cardW := min(w, GetInspectorSize(TerminalSize{Width: m.Width, Height: m.Height}).Width)
-	cardH := min(h, GetInspectorSize(TerminalSize{Width: m.Width, Height: m.Height}).Height)
-	c.box(x, y, cardW, cardH, focus, raised, text)
-	maxLine := max(8, cardW-4)
+	maxLine := max(8, w)
 	state := domain.GetDisplayState(pr)
-	stateFg := domain.Color(domain.StateColorToken(state))
 	headline := domain.DisplayStateLabel[state] + " · " + domain.DisplayStateDetail(pr)
-	c.text(x+2, y+1, "#"+itoa(pr.Number)+" "+pr.Title, text, raised, maxLine)
-	c.text(x+2, y+2, headline, stateFg, raised, maxLine)
+	c.text(x, y, "#"+itoa(pr.Number)+" "+pr.Title, text, surface, maxLine)
+	c.text(x, y+1, headline, muted, surface, maxLine)
 
 	ci := ciLine(pr)
 	review := reviewLine(pr)
 	diff := fmt.Sprintf("+%d −%d · %d files", pr.Additions, pr.Deletions, pr.ChangedFiles)
-	hint := "click checkout · o open"
+	hint := "o open"
 	if compact {
-		c.text(x+2, y+3, ci+" · "+review, muted, raised, maxLine)
-		c.text(x+2, y+4, diff, text, raised, maxLine)
-		c.text(x+2, y+5, pr.Branch, muted, raised, maxLine)
-		c.text(x+2, y+6, hint, focus, raised, maxLine)
+		c.text(x, y+2, ci+" · "+review, muted, surface, maxLine)
+		c.text(x, y+3, diff, muted, surface, maxLine)
+		c.text(x, y+4, pr.Branch, muted, surface, maxLine)
+		c.text(x, y+5, hint, muted, surface, maxLine)
 		return
 	}
-	c.text(x+2, y+3, ci, muted, raised, maxLine)
-	c.text(x+2, y+4, review, muted, raised, maxLine)
-	c.text(x+2, y+5, diff, text, raised, maxLine)
-	c.text(x+2, y+6, pr.Branch, muted, raised, maxLine)
-	c.text(x+2, y+7, hint, focus, raised, maxLine)
+	c.text(x, y+2, ci, muted, surface, maxLine)
+	c.text(x, y+3, review, muted, surface, maxLine)
+	c.text(x, y+4, diff, muted, surface, maxLine)
+	c.text(x, y+5, pr.Branch, muted, surface, maxLine)
+	c.text(x, y+6, hint, muted, surface, maxLine)
 }
 
 func ciLine(pr domain.PullRequest) string {

@@ -107,7 +107,7 @@ func TestKeyboardAndHoverRevealTheSameInspector(t *testing.T) {
 	if !strings.Contains(keyboard, "#185 Keep service identity explicit") {
 		t.Fatalf("keyboard inspector:\n%s", keyboard)
 	}
-	if !strings.Contains(keyboard, "○—●—○") {
+	if !strings.Contains(keyboard, "○-●-○") {
 		t.Fatalf("keyboard selection glyph:\n%s", keyboard)
 	}
 
@@ -134,7 +134,7 @@ func TestCompactCardAndHomeEnd(t *testing.T) {
 	if !strings.Contains(frame, "#211 Add token catalogue") {
 		t.Fatalf("home:\n%s", frame)
 	}
-	if !strings.Contains(frame, "click checkout · o open") {
+	if !strings.Contains(frame, "o open") {
 		t.Fatalf("compact card hint:\n%s", frame)
 	}
 	if !strings.Contains(frame, "↑↓ stack · ←→ layer · / find · ? help") {
