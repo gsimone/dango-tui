@@ -131,7 +131,6 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 	}
 	statusW := 8
 	nameW = min(nameW, max(8, listWidth-statusW-8))
-	ballBudget := max(2, listWidth-nameW-1-statusW-1)
 	start := m.listOrigin(len(stacks), sel.StackIndex, top, bottom)
 	y := top
 	for i := start; i < len(stacks); i++ {
@@ -153,20 +152,17 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 		}
 		c.text(PadX, y, marker+stack.Name, nameFg, rowBg, nameW)
 
-		n := len(stack.PRs)
-		show := n
-		extra := 0
-		need := n * 2
-		if need > ballBudget {
-			countW := displayWidth("+" + itoa(n))
-			show = max(1, (ballBudget-countW)/2)
-			if show > n {
-				show = n
-			}
-			extra = n - show
-		}
+		from, show, lead, tail := ballWindow(len(stack.PRs), map[bool]int{true: sel.PRIndex, false: 0}[selectedStack])
 		ballX := PadX + nameW + 1
-		for prIndex := 0; prIndex < show; prIndex++ {
+		x := ballX
+		if lead {
+			c.text(x, y, "...", meta, rowBg, 3)
+			x += 3
+			c.set(x, y, '-', stick, rowBg)
+			x++
+		}
+		for i := 0; i < show; i++ {
+			prIndex := from + i
 			pr := stack.PRs[prIndex]
 			state := domain.GetDisplayState(pr)
 			fg := domain.Color(domain.StateColorToken(state))
@@ -175,15 +171,17 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 			if selected {
 				glyph = '●'
 			}
-			c.set(ballX+prIndex*2, y, glyph, fg, rowBg)
-			if prIndex < show-1 {
-				c.set(ballX+prIndex*2+1, y, '-', stick, rowBg)
+			c.set(x, y, glyph, fg, rowBg)
+			x++
+			if i < show-1 || tail {
+				c.set(x, y, '-', stick, rowBg)
+				x++
 			}
 		}
-		if extra > 0 {
-			c.text(ballX+show*2, y, "+"+itoa(extra), meta, rowBg, ballBudget-show*2)
+		if tail {
+			c.text(x, y, "...", meta, rowBg, 3)
 		}
-		statusX := PadX + nameW + 1 + ballBudget + 1
+		statusX := PadX + listWidth - statusW
 		remain := max(0, PadX+listWidth-statusX)
 		if remain >= 4 {
 			c.text(statusX, y, clip(stackHealth(stack), remain), meta, rowBg, remain)
@@ -399,4 +397,25 @@ func (m Model) ballHit(x, y int) (stackIndex, prIndex int, ok bool) {
 		return 0, 0, false
 	}
 	return stackIndex, prIndex, true
+}
+
+func ballWindow(n, focus int) (from, show int, lead, tail bool) {
+	if n <= 5 {
+		return 0, n, false, false
+	}
+	if focus < 0 {
+		focus = 0
+	}
+	if focus > n-1 {
+		focus = n - 1
+	}
+	from = (focus / 3) * 3
+	if from > n-3 {
+		from = n - 3
+	}
+	show = 3
+	if from+show > n {
+		show = n - from
+	}
+	return from, show, from > 0, from+show < n
 }
