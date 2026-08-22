@@ -225,8 +225,6 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 	if gutter < 1 {
 		gutter = ColGutter
 	}
-	statusW := layout.StatusWidth
-	statusX := PadX + nameW + gutter + layout.BallsWidth + gutter
 	start := m.listOrigin(len(stacks), sel.StackIndex, top, bottom)
 	y := top
 	for i := start; i < len(stacks); i++ {
@@ -286,10 +284,6 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 				c.set(x, y, '-', stick, rowBg)
 				x++
 			}
-		}
-		remain := min(statusW, max(0, PadX+listWidth-statusX))
-		if remain >= 4 {
-			c.text(statusX, y, clip(stackHealth(stack), remain), stackHealthColor(stack), rowBg, remain)
 		}
 		y++
 		if StackedInspector(m.Width) && selectedStack && m.State.CardVisible {
@@ -486,29 +480,6 @@ func stackHealthColor(stack domain.Stack) string {
 	}
 	head := stack.PRs[len(stack.PRs)-1]
 	return domain.Color(domain.StateColorToken(domain.GetDisplayState(head)))
-}
-
-func stackHealth(stack domain.Stack) string {
-	if len(stack.PRs) == 0 {
-		return "no layers"
-	}
-	head := stack.PRs[len(stack.PRs)-1]
-	switch domain.GetDisplayState(head) {
-	case domain.StateReady:
-		return "ready"
-	case domain.StateCIFailure:
-		return "ci failed"
-	case domain.StateReviewBlocked:
-		return "blocked"
-	case domain.StateQueued:
-		return "queued"
-	case domain.StateDraft:
-		return "draft"
-	case domain.StateMerged:
-		return "merged"
-	default:
-		return "pending"
-	}
 }
 
 func (m Model) listOrigin(n, selected, top, bottom int) int {

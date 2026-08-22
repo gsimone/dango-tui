@@ -6,18 +6,16 @@ type TerminalSize struct {
 }
 
 type RowLayout struct {
-	Compact          bool
-	NameWidth        int
-	BallsWidth       int
-	StatusWidth      int
-	DescriptionWidth int
-	Gutter           int
+	Compact     bool
+	NameWidth   int
+	BallsWidth  int
+	StatusWidth int
+	Gutter      int
 }
 
 const (
-	BallColW   = 20
-	StatusColW = 9
-	ColGutter  = 2
+	BallColW  = 20
+	ColGutter = 2
 )
 
 const (
@@ -57,17 +55,16 @@ func rowLayout(contentWidth int, prCount int, compact bool) RowLayout {
 	balls := BallColW
 	gutter := ColGutter
 	nameWidth := lockedNameWidth(contentWidth, compact)
-	need := nameWidth + gutter + balls + gutter + StatusColW
+	need := nameWidth + gutter + balls
 	if need > contentWidth {
-		nameWidth = max(8, contentWidth-balls-StatusColW-2*gutter)
+		nameWidth = max(8, contentWidth-balls-gutter)
 	}
 	return RowLayout{
-		Compact:          compact,
-		NameWidth:        nameWidth,
-		BallsWidth:       balls,
-		StatusWidth:      StatusColW,
-		DescriptionWidth: StatusColW,
-		Gutter:           gutter,
+		Compact:     compact,
+		NameWidth:   nameWidth,
+		BallsWidth:  balls,
+		StatusWidth: 0,
+		Gutter:      gutter,
 	}
 }
 

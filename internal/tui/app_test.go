@@ -493,9 +493,11 @@ func TestListColumnsHaveGutters(t *testing.T) {
 	if layout.Gutter < tui.ColGutter {
 		t.Fatalf("gutter too small: %d", layout.Gutter)
 	}
+	if layout.StatusWidth != 0 {
+		t.Fatalf("status is not a list column, StatusWidth=%d", layout.StatusWidth)
+	}
 	nameEnd := tui.PadX + layout.NameWidth
 	ballStart := nameEnd + layout.Gutter
-	statusStart := ballStart + layout.BallsWidth + layout.Gutter
 	var row string
 	for _, line := range strings.Split(frame, "\n") {
 		if strings.Contains(line, "freight train") {
@@ -506,18 +508,22 @@ func TestListColumnsHaveGutters(t *testing.T) {
 	if row == "" {
 		t.Fatalf("freight row missing:\n%s", frame)
 	}
-	runes := []rune(row)
-	if statusStart >= len(runes) {
-		t.Fatalf("row shorter than status column: %q", row)
+	listPart := row
+	if idx := strings.Index(row, "│"); idx >= 0 {
+		listPart = row[:idx]
+	}
+	runes := []rune(listPart)
+	if ballStart >= len(runes) {
+		t.Fatalf("row shorter than ball column: %q", listPart)
 	}
 	for x := nameEnd; x < ballStart; x++ {
 		if runes[x] != ' ' {
-			t.Fatalf("name/balls gutter smeared at %d: %q", x, row)
+			t.Fatalf("name/balls gutter smeared at %d: %q", x, listPart)
 		}
 	}
-	for x := ballStart + layout.BallsWidth; x < statusStart; x++ {
-		if runes[x] != ' ' {
-			t.Fatalf("balls/status gutter smeared at %d: %q", x, row)
+	for _, word := range []string{"pending", "ready", "blocked", "ci failed", "queued", "draft", "merged"} {
+		if strings.Contains(listPart, word) {
+			t.Fatalf("list row must not carry status words %q: %q", word, listPart)
 		}
 	}
 	if tui.GetRowLayout(80, 3).Gutter < tui.ColGutter {
@@ -563,8 +569,8 @@ func TestTypeIsThreeInks(t *testing.T) {
 	if strings.Contains(frame, "fixture cache ·") {
 		t.Fatalf("idle footer is still a middot status sentence:\n%s", frame)
 	}
-	if !strings.Contains(frame, "ci failed") {
-		t.Fatalf("status words missing:\n%s", frame)
+	if strings.Contains(frame, "ci failed") {
+		t.Fatalf("status words must leave the list; keep them on balls and in the inspector:\n%s", frame)
 	}
 }
 
