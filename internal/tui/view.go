@@ -87,7 +87,7 @@ func (m Model) paintBrand(c *canvas, width int, surface, paper, meta, stick stri
 		if token == "" || !domain.IsLogoToken(token) {
 			token = domain.LogoTokens[i]
 		}
-		c.set(x, PadTop, 'o', domain.Color(token), surface)
+		c.set(x, PadTop, '●', domain.Color(token), surface)
 		if i < 2 {
 			c.set(x+1, PadTop, '-', stick, surface)
 		}

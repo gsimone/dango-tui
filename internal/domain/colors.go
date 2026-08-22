@@ -97,7 +97,7 @@ var OKLCHTokens = map[string]OKLCH{
 	"logoPink":      {0.70, 0.18, 350},
 }
 
-// LogoTokens is the seven-ink palette for the header o-o-o mark only.
+// LogoTokens is the seven-ink palette for the header ●-●-● mark only.
 var LogoTokens = []string{
 	"logoRed", "logoOrange", "logoYellow", "logoGreen", "logoBlue", "logoPurple", "logoPink",
 }
