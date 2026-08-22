@@ -74,7 +74,7 @@ func dominantHex(raw []byte) (string, error) {
 		return "", fmt.Errorf("empty image")
 	}
 	stepX, stepY := max(1, w/16), max(1, h/16)
-	type bucket struct{ r, g, b, n int }
+	type bucket struct{ r, g, b, n, chroma int }
 	hist := map[uint32]*bucket{}
 	var best *bucket
 	for y := bounds.Min.Y; y < bounds.Max.Y; y += stepY {
@@ -84,7 +84,7 @@ func dominantHex(raw []byte) (string, error) {
 				continue
 			}
 			r, g, b := int(cr>>8), int(cg>>8), int(cb>>8)
-			if r+g+b > 720 || r+g+b < 24 {
+			if r+g+b > 720 || r+g+b < 24 || domain.IsLowChroma(r, g, b) {
 				continue
 			}
 			key := uint32(r>>4)<<8 | uint32(g>>4)<<4 | uint32(b>>4)
@@ -97,13 +97,19 @@ func dominantHex(raw []byte) (string, error) {
 			slot.g += g
 			slot.b += b
 			slot.n++
-			if best == nil || slot.n > best.n {
+			avgR, avgG, avgB := slot.r/slot.n, slot.g/slot.n, slot.b/slot.n
+			slot.chroma = domain.RGBChroma(avgR, avgG, avgB)
+			if best == nil || slot.chroma > best.chroma || (slot.chroma == best.chroma && slot.n > best.n) {
 				best = slot
 			}
 		}
 	}
-	if best == nil || best.n == 0 {
-		return "", fmt.Errorf("no opaque pixels")
+	if best == nil || best.n == 0 || best.chroma < domain.LowChroma {
+		return "", fmt.Errorf("no chromatic pixels")
 	}
-	return domain.NormalizeHex(fmt.Sprintf("%02x%02x%02x", best.r/best.n, best.g/best.n, best.b/best.n)), nil
+	hex := domain.NormalizeHex(fmt.Sprintf("%02x%02x%02x", best.r/best.n, best.g/best.n, best.b/best.n))
+	if domain.IsLowChromaHex(hex) {
+		return "", fmt.Errorf("sampled grey")
+	}
+	return hex, nil
 }

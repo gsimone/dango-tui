@@ -205,19 +205,76 @@ func NormalizeHex(raw string) string {
 	return string(out[:])
 }
 
+// ParseRGB reads #rrggbb. ok is false if the token is not a hex color.
+func ParseRGB(hex string) (r, g, b int, ok bool) {
+	hex = NormalizeHex(hex)
+	if hex == "" {
+		return 0, 0, 0, false
+	}
+	n := func(c byte) int {
+		switch {
+		case c >= '0' && c <= '9':
+			return int(c - '0')
+		default:
+			return int(c - 'a' + 10)
+		}
+	}
+	r = n(hex[1])<<4 | n(hex[2])
+	g = n(hex[3])<<4 | n(hex[4])
+	b = n(hex[5])<<4 | n(hex[6])
+	return r, g, b, true
+}
+
+// RGBChroma is max-min of the channels. Grey is near 0.
+func RGBChroma(r, g, b int) int {
+	mx, mn := r, r
+	if g > mx {
+		mx = g
+	}
+	if b > mx {
+		mx = b
+	}
+	if g < mn {
+		mn = g
+	}
+	if b < mn {
+		mn = b
+	}
+	return mx - mn
+}
+
+// LowChroma is near-grey, including paper and meta.
+const LowChroma = 40
+
+func IsLowChroma(r, g, b int) bool {
+	return RGBChroma(r, g, b) < LowChroma
+}
+
+func IsLowChromaHex(hex string) bool {
+	r, g, b, ok := ParseRGB(hex)
+	if !ok {
+		return true
+	}
+	if hex == Color("meta") || hex == Color("paper") || hex == Color("stick") {
+		return true
+	}
+	return IsLowChroma(r, g, b)
+}
+
 // LoginColor is a stable ink from a login. Same login, same hex, every frame.
+// It stays chromatic: never paper, meta, or a grey wash.
 func LoginColor(login string) string {
 	login = strings.TrimSpace(login)
-	if login == "" {
-		return Color("meta")
-	}
 	var h uint32 = 2166136261
 	for i := 0; i < len(login); i++ {
 		h ^= uint32(login[i])
 		h *= 16777619
 	}
-	r := int(70 + h%150)
-	g := int(70 + (h>>8)%150)
-	b := int(70 + (h>>16)%150)
-	return sprintfHex(r, g, b)
+	hue := float64(h % 360)
+	light := 0.62 + float64((h>>9)%12)/100
+	hex := OKLCHToHex(OKLCH{light, 0.17, hue})
+	if IsLowChromaHex(hex) {
+		hex = OKLCHToHex(OKLCH{0.68, 0.18, hue})
+	}
+	return hex
 }

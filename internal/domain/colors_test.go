@@ -138,8 +138,17 @@ func TestNormalizeHexAndLoginColor(t *testing.T) {
 	if domain.LoginColor("gianni") == domain.LoginColor("lina") {
 		t.Fatal("different logins should not collide on this pair")
 	}
-	if domain.LoginColor("") != domain.Color("meta") {
-		t.Fatal("empty login is meta")
+	for _, login := range []string{"", "gianni", "gm", "lina", "gsimone"} {
+		hex := domain.LoginColor(login)
+		if domain.IsLowChromaHex(hex) {
+			t.Fatalf("LoginColor(%q)=%s is grey/meta/paper", login, hex)
+		}
+		if hex == domain.Color("meta") || hex == domain.Color("paper") {
+			t.Fatalf("LoginColor(%q) must not be chrome grey", login)
+		}
+	}
+	if domain.IsLowChromaHex(domain.Color("meta")) != true || domain.IsLowChromaHex("#d73a4a") {
+		t.Fatal("meta is low chroma; bug red is not")
 	}
 }
 

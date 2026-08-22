@@ -325,6 +325,22 @@ func TestRepoJSONFilePaintsAuthoredStacks(t *testing.T) {
 	if strings.Contains(rows, "Freight layer 1") || strings.Contains(frame, "300 stacks") {
 		t.Fatalf("must not load chaos/random fixtures:\n%s", frame)
 	}
+	if !strings.Contains(frame, "labels    bug auth") {
+		t.Fatalf("testdata labels stay authored:\n%s", frame)
+	}
+	if !strings.Contains(frame, "author    ● gianni") {
+		t.Fatalf("testdata author row:\n%s", frame)
+	}
+	first := m.Stacks()[0].PRs[0]
+	if first.Labels[0].Color != "#d73a4a" || first.Labels[1].Color != "#0e8a16" {
+		t.Fatalf("keep testdata hexes: %+v", first.Labels)
+	}
+	if domain.IsLowChromaHex(first.AuthorColor) {
+		t.Fatalf("--repo testdata author ● is grey: %s", first.AuthorColor)
+	}
+	if len(m.Stacks()[0].PRs[1].Labels) != 0 {
+		t.Fatalf("do not invent labels on unlabeled testdata PRs: %+v", m.Stacks()[0].PRs[1].Labels)
+	}
 	if strings.Contains(frame, "[ p ]") {
 		t.Fatalf("no picker:\n%s", frame)
 	}

@@ -61,6 +61,12 @@ func TestLoadStacksTestdata(t *testing.T) {
 	if stacks[0].PRs[0].Author != "gianni" || stacks[0].PRs[0].AuthorColor != domain.LoginColor("gianni") {
 		t.Fatalf("file author: %+v", stacks[0].PRs[0])
 	}
+	if domain.IsLowChromaHex(stacks[0].PRs[0].AuthorColor) {
+		t.Fatalf("file author ● must not be grey: %s", stacks[0].PRs[0].AuthorColor)
+	}
+	if len(stacks[0].PRs[1].Labels) != 0 || len(stacks[0].PRs[2].Labels) != 0 {
+		t.Fatalf("do not invent labels: %+v %+v", stacks[0].PRs[1].Labels, stacks[0].PRs[2].Labels)
+	}
 	if domain.GetDisplayState(stacks[0].PRs[2]) != domain.StateCIFailure {
 		t.Fatalf("mixed CI on auth head: %s", domain.GetDisplayState(stacks[0].PRs[2]))
 	}

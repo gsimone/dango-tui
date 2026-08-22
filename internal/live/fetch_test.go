@@ -98,6 +98,45 @@ func TestFetchMapsLabelsAndAuthor(t *testing.T) {
 	}
 }
 
+func TestDominantHexPrefersChromaticBucket(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 16, 16))
+	grey := color.RGBA{R: 140, G: 140, B: 142, A: 255}
+	red := color.RGBA{R: 200, G: 40, B: 40, A: 255}
+	for y := 0; y < 16; y++ {
+		for x := 0; x < 16; x++ {
+			img.Set(x, y, grey)
+		}
+	}
+	for y := 0; y < 4; y++ {
+		for x := 0; x < 4; x++ {
+			img.Set(x, y, red)
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	hex, err := dominantHex(buf.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, g, b, ok := domain.ParseRGB(hex)
+	if !ok || r < 160 || g > 80 || b > 80 {
+		t.Fatalf("wanted the red patch, got %s", hex)
+	}
+
+	greyOnly := solidPNG(t, 140, 140, 142)
+	if _, err := dominantHex(greyOnly); err == nil {
+		t.Fatal("grey-only avatar must not invent a color")
+	}
+	old := getURL
+	getURL = func(string) ([]byte, error) { return greyOnly, nil }
+	t.Cleanup(func() { getURL = old })
+	if got := resolveAuthorColor("gm", "https://avatars.example/grey.png"); got != domain.LoginColor("gm") {
+		t.Fatalf("grey avatar falls back to login, got %s", got)
+	}
+}
+
 func TestAvatarFetchFailureFallsBackToLogin(t *testing.T) {
 	old := getURL
 	getURL = func(string) ([]byte, error) { return nil, errors.New("nope") }
