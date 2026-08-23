@@ -8,7 +8,8 @@ Agent titles/descriptions.
 
 - Fetch paints first with the real gh names. Never block first paint on a summarizer.
 - When a description lands it fills the inspector pane in place — same rows, no card morph, no spinner on the list.
-- Title swaps the list name in place.
+- Title swaps the list name in place when the generated clause is not the gh title.
+- `--provider local` / `demo` invent one `Covers {clause}.` sentence. Never paste `pr.Body`, HTML comments, or `CURSOR_AGENT` markers. Never echo GhTitle. No Codex network call.
 - Provider from `dango.json` / `dango.yml` / `dango.yaml`, or `--provider` which wins. No new flags.
 - Missing provider = no generated title. Keep the gh name.
 - Pablo chrome (this PR only): pane fills in place, same rows, no card morph, no list spinner.

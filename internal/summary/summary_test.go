@@ -151,13 +151,17 @@ func TestRunWritesTitleAndDescription(t *testing.T) {
 
 	named := stack
 	named.Description = "Already summarized by a model."
+	named.PRs[0].Body = "<!-- CURSOR_AGENT_PR_BODY_BEGIN --> raw body dump"
 	kept := summary.Run(summary.Job{
 		Provider: summary.ParseProvider("local"),
 		ID:       "stack-1",
 		Stack:    named,
 	})
-	if kept.Description != "Already summarized by a model." {
-		t.Fatalf("real description should win: %q", kept.Description)
+	if kept.Description == "Already summarized by a model." || strings.Contains(kept.Description, "CURSOR_AGENT") || strings.Contains(kept.Description, "raw body") {
+		t.Fatalf("local invents a sentence, it does not paste body or stored dump: %q", kept.Description)
+	}
+	if !strings.HasPrefix(kept.Description, "Covers ") {
+		t.Fatalf("invented sentence: %q", kept.Description)
 	}
 }
 
@@ -190,11 +194,41 @@ func TestRunDoesNotEchoGhTitle(t *testing.T) {
 		ID:       "stack-1",
 		Stack:    withBody,
 	})
-	if !strings.Contains(bodied.Description, "Pin each bound host") {
-		t.Fatalf("body should win: %q", bodied.Description)
+	if strings.Contains(bodied.Description, "Pin each bound host") {
+		t.Fatalf("must not paste pr.Body: %q", bodied.Description)
 	}
-	if strings.EqualFold(bodied.Description, gh) {
-		t.Fatalf("body path echoed gh title: %q", bodied.Description)
+	if !strings.HasPrefix(bodied.Description, "Covers ") {
+		t.Fatalf("demo invents a sentence: %q", bodied.Description)
+	}
+}
+
+func TestDescribeIgnoresAgentPRBody(t *testing.T) {
+	raw := "<!-- CURSOR_AGENT_PR_BODY_BEGIN -->\nLinear: [LEV-182](https://linear.app/leva/issue/LEV-182) Pin each bound host.\n<!-- CURSOR_AGENT_PR_BODY_END -->"
+	stack := domain.Stack{
+		Name: "LEV-182: Bound hosts to the session",
+		PRs: []domain.PullRequest{{
+			Title: "LEV-182: Bound hosts to the session",
+			Body:  raw,
+		}},
+	}
+	got := summary.Describe(stack)
+	if got == "" {
+		t.Fatal("Describe must invent a sentence")
+	}
+	if strings.Contains(got, "CURSOR_AGENT") || strings.Contains(got, "<!--") || strings.Contains(got, "-->") {
+		t.Fatalf("agent comment leaked: %q", got)
+	}
+	if strings.Contains(got, raw) || strings.Contains(got, "linear.app") || strings.Contains(got, "Pin each bound host") {
+		t.Fatalf("raw body leaked: %q", got)
+	}
+	if strings.Contains(got, "\n") {
+		t.Fatalf("must be one sentence: %q", got)
+	}
+	if got == stack.PRs[0].Title || strings.EqualFold(got, stack.PRs[0].Title) {
+		t.Fatalf("must not be GhTitle: %q", got)
+	}
+	if !strings.HasPrefix(got, "Covers ") || !strings.HasSuffix(got, ".") {
+		t.Fatalf("want a covers-clause sentence, got %q", got)
 	}
 }
 

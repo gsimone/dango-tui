@@ -152,7 +152,7 @@ func TestSummaryDonePaneDescriptionIsNotGhTitle(t *testing.T) {
 		return []domain.Stack{{
 			ID:   "s",
 			Name: gh,
-			PRs:  []domain.PullRequest{{Number: 182, Title: gh, Body: "Pin each bound host to the worker that opened the session."}},
+			PRs:  []domain.PullRequest{{Number: 182, Title: gh, Body: "<!-- CURSOR_AGENT_PR_BODY_BEGIN -->\nPin each bound host to the worker.\n"}},
 		}}, nil
 	}
 	m := New(Options{
@@ -166,7 +166,7 @@ func TestSummaryDonePaneDescriptionIsNotGhTitle(t *testing.T) {
 	if !strings.Contains(strings.Join(listNames(before), "\n"), "LEV-182") {
 		t.Fatalf("first paint is the gh name:\n%s", before)
 	}
-	if strings.Contains(before, "Pin each bound host") || strings.Contains(before, "Covers ") {
+	if strings.Contains(before, "Pin each bound host") || strings.Contains(before, "Covers ") || strings.Contains(before, "CURSOR_AGENT") {
 		t.Fatalf("first paint must not wait on generated copy:\n%s", before)
 	}
 	statusAt := factRow(before, "status")
@@ -176,8 +176,8 @@ func TestSummaryDonePaneDescriptionIsNotGhTitle(t *testing.T) {
 		ID:       "s",
 		Stack:    m.stacks[0],
 	})
-	if res.Description == "" || res.Description == gh {
-		t.Fatalf("Run must write a distinct description, got %q", res.Description)
+	if res.Description == "" || res.Description == gh || strings.Contains(res.Description, "CURSOR_AGENT") || strings.Contains(res.Description, "Pin each") {
+		t.Fatalf("Run must invent a sentence, not paste body: %q", res.Description)
 	}
 
 	next, cmd := m.Update(summaryDoneMsg{token: m.fetchSeq, id: "s", title: res.Title, description: res.Description})
@@ -189,7 +189,10 @@ func TestSummaryDonePaneDescriptionIsNotGhTitle(t *testing.T) {
 	if m.stacks[0].Description == gh || strings.EqualFold(m.stacks[0].Description, gh) {
 		t.Fatalf("landed description echoed gh title: %q", m.stacks[0].Description)
 	}
-	if !strings.Contains(after, m.stacks[0].Description) && !strings.Contains(after, "Pin each bound host") {
+	if strings.Contains(after, "CURSOR_AGENT") || strings.Contains(after, "<!--") || strings.Contains(after, "Pin each bound host") {
+		t.Fatalf("raw body leaked into the pane:\n%s", after)
+	}
+	if !strings.Contains(after, m.stacks[0].Description) {
 		t.Fatalf("pane must show the generated sentence:\n%s", after)
 	}
 	if after == before {

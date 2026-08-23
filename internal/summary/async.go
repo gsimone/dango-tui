@@ -86,55 +86,6 @@ func clauseFromLayers(stack domain.Stack) string {
 	return strings.TrimSpace(joinTitles(titles))
 }
 
-func oneLine(s string, maxRunes int) string {
-	s = strings.ReplaceAll(s, "\r", "")
-	if i := strings.Index(strings.ToLower(s), "managed by graphite"); i >= 0 {
-		s = s[:i]
-	}
-	s = strings.TrimSpace(s)
-	if i := strings.Index(s, "\n\n"); i >= 0 {
-		s = s[:i]
-	}
-	var kept []string
-	for _, line := range strings.Split(s, "\n") {
-		line = strings.TrimSpace(strings.TrimLeft(line, "#>"))
-		if line == "" || strings.HasPrefix(line, "- #") || strings.HasPrefix(line, "* #") {
-			continue
-		}
-		kept = append(kept, line)
-	}
-	s = strings.Join(strings.Fields(strings.Join(kept, " ")), " ")
-	if maxRunes < 1 {
-		return s
-	}
-	runes := []rune(s)
-	if len(runes) <= maxRunes {
-		return s
-	}
-	cut := runes[:maxRunes]
-	if i := strings.LastIndex(string(cut), " "); i >= 24 {
-		cut = []rune(string(cut)[:i])
-	}
-	return strings.TrimSpace(string(cut))
-}
-
-func realDesc(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" || raw == "A deterministic fixture stack" {
-		return ""
-	}
-	return oneLine(raw, 180)
-}
-
-func firstBody(stack domain.Stack) string {
-	for _, pr := range stack.PRs {
-		if line := oneLine(pr.Body, 180); line != "" {
-			return line
-		}
-	}
-	return ""
-}
-
 func distinct(s, gh, title string) bool {
 	s = strings.TrimSpace(s)
 	return s != "" && !sameFold(s, gh) && !sameFold(s, title)
@@ -153,17 +104,11 @@ func Title(stack domain.Stack) string {
 	return ""
 }
 
-// Describe writes inspector copy that is not the gh title and not the
-// generated list title. A real stack/PR body wins; otherwise one clause
-// from the layers.
+// Describe writes one invented inspector sentence. It never pastes
+// pr.Body, HTML comments, CURSOR_AGENT markers, or markdown links.
 func Describe(stack domain.Stack) string {
 	gh := ghName(stack)
 	title := Title(stack)
-	for _, cand := range []string{realDesc(stack.Description), firstBody(stack)} {
-		if distinct(cand, gh, title) {
-			return cand
-		}
-	}
 	if clause := clauseFromLayers(stack); clause != "" {
 		desc := "Covers " + clause + "."
 		if distinct(desc, gh, title) {
