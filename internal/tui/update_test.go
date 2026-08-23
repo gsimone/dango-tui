@@ -27,7 +27,7 @@ func TestRelativeFetched(t *testing.T) {
 	}
 }
 
-func TestSummariesAreAsyncAndStubbed(t *testing.T) {
+func TestSummariesAreAsyncAndLandInPlace(t *testing.T) {
 	fetch := func(string) ([]domain.Stack, error) {
 		return []domain.Stack{{
 			ID:  "s",
@@ -44,33 +44,41 @@ func TestSummariesAreAsyncAndStubbed(t *testing.T) {
 	if len(m.stacks) != 1 || m.stacks[0].Name != "alpha layer" || m.stacks[0].Summary != "" {
 		t.Fatalf("first paint is the gh name, no generated title: %+v", m.stacks)
 	}
-	if cmd := m.Init(); cmd == nil {
+	first := stripANSI(m.View())
+	if !strings.Contains(strings.Join(listNames(first), "\n"), "alpha layer") {
+		t.Fatalf("first paint keeps the gh name:\n%s", first)
+	}
+	if strings.Contains(first, "alpha layer and beta layer") {
+		t.Fatalf("first paint must not wait on a generated title:\n%s", first)
+	}
+	cmd := m.Init()
+	if cmd == nil {
 		t.Fatal("provider must kick a summary cmd after first paint")
 	}
 	if m.Fetching || strings.Contains(stripANSI(m.View()), "⠋") {
 		t.Fatal("title wait must not be a spinner")
 	}
-	if cmd := New(Options{Repo: "owner/name", Width: 80, Height: 24, Fetch: fetch}).Init(); cmd != nil {
+	if New(Options{Repo: "owner/name", Width: 80, Height: 24, Fetch: fetch}).Init() != nil {
 		t.Fatal("missing provider must not start summaries")
 	}
 
-	next, cmd := m.Update(summaryDoneMsg{token: m.fetchSeq, id: "s"})
+	next, extra := m.Update(summaryDoneMsg{token: m.fetchSeq, id: "s"})
 	m = next.(Model)
-	if cmd != nil || m.stacks[0].Name != "alpha layer" {
+	if extra != nil || m.stacks[0].Name != "alpha layer" {
 		t.Fatalf("empty generated title keeps the gh name: %+v", m.stacks[0])
 	}
 
-	next, cmd = m.Update(summaryDoneMsg{token: m.fetchSeq, id: "s", description: "later"})
+	next, extra = m.Update(summaryDoneMsg{token: m.fetchSeq, id: "s", description: "later"})
 	m = next.(Model)
-	if cmd != nil || m.stacks[0].Name != "alpha layer" || m.stacks[0].Description != "later" {
+	if extra != nil || m.stacks[0].Name != "alpha layer" || m.stacks[0].Description != "later" {
 		t.Fatalf("description is inspector-only: %+v", m.stacks[0])
 	}
 	if !strings.Contains(stripANSI(m.View()), "later") {
 		t.Fatal("description fills the inspector pane")
 	}
 
-	next, cmd = m.Update(summaryDoneMsg{token: m.fetchSeq, id: "s", title: "from hook", description: "later"})
-	if cmd != nil {
+	next, extra = m.Update(summaryDoneMsg{token: m.fetchSeq, id: "s", title: "from hook", description: "later"})
+	if extra != nil {
 		t.Fatal("summary fill is not a new fetch")
 	}
 	m = next.(Model)
@@ -83,6 +91,88 @@ func TestSummariesAreAsyncAndStubbed(t *testing.T) {
 	if m.stacks[0].Name != "from hook" {
 		t.Fatal("stale summary must not overwrite")
 	}
+
+	live := New(Options{
+		Repo:     "owner/name",
+		Provider: summary.ParseProvider("codex@luna.medium"),
+		Width:    80,
+		Height:   24,
+		Fetch:    fetch,
+	})
+	landed := applyCmd(live, live.Init())
+	if landed.stacks[0].Name != "alpha layer and beta layer" {
+		t.Fatalf("real Run must land the generated title: %+v", landed.stacks[0])
+	}
+	if landed.stacks[0].Description == "" {
+		t.Fatal("real Run must land an inspector description")
+	}
+	after := stripANSI(landed.View())
+	if !strings.Contains(after, landed.stacks[0].Description) {
+		t.Fatalf("description fills the inspector:\n%s", after)
+	}
+	if strings.Contains(after, "⠋") {
+		t.Fatalf("in-place fill is not a spinner:\n%s", after)
+	}
+	if len(listNames(after)) != len(listNames(first)) {
+		t.Fatalf("title swap must not rebuild the table: before %v after %v", listNames(first), listNames(after))
+	}
+
+	mocked := New(Options{
+		Repo:     "owner/name",
+		Provider: summary.ParseProvider("mock@test"),
+		Width:    80,
+		Height:   24,
+		Fetch:    fetch,
+		Summarize: func(job summary.Job) summary.Result {
+			if job.Provider.Raw != "mock@test" || job.ID != "s" {
+				t.Fatalf("job %+v", job)
+			}
+			return summary.Result{ID: job.ID, Title: "mocked title", Description: "mocked inspector copy"}
+		},
+	})
+	if strings.Contains(stripANSI(mocked.View()), "mocked title") {
+		t.Fatal("mocked provider must not block first paint")
+	}
+	mocked = applyCmd(mocked, mocked.Init())
+	if mocked.stacks[0].Name != "mocked title" || mocked.stacks[0].Description != "mocked inspector copy" {
+		t.Fatalf("mocked provider must run: %+v", mocked.stacks[0])
+	}
+	mockedFrame := stripANSI(mocked.View())
+	if !strings.Contains(strings.Join(listNames(mockedFrame), "\n"), "mocked title") {
+		t.Fatalf("mocked title replaces the list name:\n%s", mockedFrame)
+	}
+	if !strings.Contains(mockedFrame, "mocked inspector copy") {
+		t.Fatalf("mocked description fills the inspector:\n%s", mockedFrame)
+	}
+}
+
+func applyCmd(m Model, cmd tea.Cmd) Model {
+	if cmd == nil {
+		return m
+	}
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, c := range batch {
+			m = applyCmd(m, c)
+		}
+		return m
+	}
+	next, nextCmd := m.Update(msg)
+	return applyCmd(next.(Model), nextCmd)
+}
+
+func listNames(frame string) []string {
+	var out []string
+	for _, line := range strings.Split(frame, "\n") {
+		part := line
+		if idx := strings.Index(line, "│"); idx >= 0 {
+			part = line[:idx]
+		}
+		if strings.Contains(part, "▸") || strings.Contains(part, "·") {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 func TestStatusWordsKeepStatusColor(t *testing.T) {

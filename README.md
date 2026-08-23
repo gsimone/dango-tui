@@ -34,7 +34,7 @@ make build
 
 `make build` is `CGO_ENABLED=0 go build -ldflags="-s -w" -o dango ./cmd/dango`.
 
-Provider comes from `dango.json` / `dango.yml` / `dango.yaml`. `--provider` overrides. Missing config file = no generated title. `dango.json` is not a stack dump.
+Provider comes from `dango.json` / `dango.yml` / `dango.yaml`. `--provider` overrides. Missing config file = no generated title. A set provider writes a short stack title (list name, in place) and a description (inspector only) after first paint. First paint is always the gh name. `dango.json` is not a stack dump.
 
 The header mark is `●-●-● DANGO` over the repo slug and counts. Type is paper
 `#f2ebe0` or meta `#9a8f82`. Two-col list: name + ball chain. Inspector is the

@@ -98,19 +98,77 @@ func TestChooseThreadsProviderAndStaysLocal(t *testing.T) {
 	if untitled[0].Name == "" {
 		t.Fatal("provider should write the stack title")
 	}
+	if untitled[0].Description == "" {
+		t.Fatal("provider should write inspector description")
+	}
 }
 
-func TestRunStubReturnsEmpty(t *testing.T) {
+func TestRunWritesTitleAndDescription(t *testing.T) {
+	stack := domain.Stack{
+		ID: "stack-1",
+		PRs: []domain.PullRequest{
+			{Title: "Alpha layer"},
+			{Title: "Beta layer"},
+		},
+	}
+	empty := summary.Run(summary.Job{ID: "stack-1", Stack: stack})
+	if empty.ID != "stack-1" {
+		t.Fatalf("id %q", empty.ID)
+	}
+	if empty.Title != "" || empty.Description != "" {
+		t.Fatalf("missing provider must not invent a title: %+v", empty)
+	}
+
 	res := summary.Run(summary.Job{
 		Provider: summary.ParseProvider("codex@luna.medium"),
 		ID:       "stack-1",
-		Stack:    domain.Stack{ID: "stack-1", PRs: []domain.PullRequest{{Title: "alpha"}}},
+		Stack:    stack,
 	})
 	if res.ID != "stack-1" {
 		t.Fatalf("id %q", res.ID)
 	}
-	if res.Title != "" || res.Description != "" {
-		t.Fatalf("stub must not invent a title: %+v", res)
+	if res.Title == "" || res.Title == "Alpha layer" {
+		t.Fatalf("provider must write a generated title, got %q", res.Title)
+	}
+	if !strings.Contains(strings.ToLower(res.Title), "alpha layer") || !strings.Contains(strings.ToLower(res.Title), "beta layer") {
+		t.Fatalf("title should come from the layers: %q", res.Title)
+	}
+	if strings.Contains(res.Title, "\n") {
+		t.Fatalf("title must be one line: %q", res.Title)
+	}
+	if res.Description == "" {
+		t.Fatalf("provider must write a description")
+	}
+	if strings.Contains(res.Description, "\n") {
+		t.Fatalf("description must be one line: %q", res.Description)
+	}
+	if !strings.Contains(strings.ToLower(res.Description), "alpha") || !strings.Contains(strings.ToLower(res.Description), "beta") {
+		t.Fatalf("description should cover the layers: %q", res.Description)
+	}
+
+	named := stack
+	named.Description = "Already summarized by a model."
+	kept := summary.Run(summary.Job{
+		Provider: summary.ParseProvider("local"),
+		ID:       "stack-1",
+		Stack:    named,
+	})
+	if kept.Description != "Already summarized by a model." {
+		t.Fatalf("real description should win: %q", kept.Description)
+	}
+}
+
+func TestDescribeSkipsStub(t *testing.T) {
+	stack := domain.Stack{
+		Description: "A deterministic fixture stack",
+		PRs:         []domain.PullRequest{{Title: "Split auth scope"}},
+	}
+	got := summary.Describe(stack)
+	if got == "" || got == "A deterministic fixture stack" {
+		t.Fatalf("stub should fall through: %q", got)
+	}
+	if !strings.Contains(strings.ToLower(got), "split auth scope") {
+		t.Fatalf("layer clause: %q", got)
 	}
 }
 

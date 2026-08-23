@@ -318,6 +318,29 @@ func TestProviderWritesStackTitleOnly(t *testing.T) {
 	}
 }
 
+func TestFileRepoKeepsAuthoredNamesWithProvider(t *testing.T) {
+	m := tui.New(tui.Options{
+		Repo:     testdataJSON(t),
+		Provider: summary.ParseProvider("codex@luna.medium"),
+		Width:    120,
+		Height:   30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			t.Fatal("JSON --repo must not call gh")
+			return nil, nil
+		},
+	})
+	if m.Init() != nil {
+		t.Fatal("authored dump must not start live summaries")
+	}
+	frame := frameOf(m)
+	if !strings.Contains(strings.Join(listRows(frame), "\n"), "auth cleanup") {
+		t.Fatalf("file names stay authored:\n%s", frame)
+	}
+	if strings.Contains(frame, "split auth scope from session checks, keep") {
+		t.Fatalf("provider must not rewrite a dump title:\n%s", frame)
+	}
+}
+
 func listRows(frame string) []string {
 	var out []string
 	for _, line := range strings.Split(frame, "\n") {
