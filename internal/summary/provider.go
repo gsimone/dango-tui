@@ -30,9 +30,14 @@ func (p Provider) Empty() bool {
 	return p.Raw == "" && p.Name == ""
 }
 
-// Local is the current summarizer: PreferDescription, then FromLayers.
+type titleWriter struct{}
+
+func (titleWriter) Summarize(stack domain.Stack) string { return Title(stack) }
+
+// Local is the current summarizer: PreferDescription, then a short
+// generated title that does not echo the gh name.
 func Local() Summarizer {
-	return PreferDescription{Fallback: FromLayers{}}
+	return PreferDescription{Fallback: titleWriter{}}
 }
 
 // none writes no stack title. Missing --provider must not invent one.

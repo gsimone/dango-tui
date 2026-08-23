@@ -42,6 +42,7 @@ type PullRequest struct {
 	Deletions        int
 	ChangedFiles     int
 	HeadSHA          string
+	Body             string
 }
 
 type Stack struct {

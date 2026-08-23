@@ -146,6 +146,66 @@ func TestSummariesAreAsyncAndLandInPlace(t *testing.T) {
 	}
 }
 
+func TestSummaryDonePaneDescriptionIsNotGhTitle(t *testing.T) {
+	gh := "LEV-182: Bound hosts to the session"
+	fetch := func(string) ([]domain.Stack, error) {
+		return []domain.Stack{{
+			ID:   "s",
+			Name: gh,
+			PRs:  []domain.PullRequest{{Number: 182, Title: gh, Body: "Pin each bound host to the worker that opened the session."}},
+		}}, nil
+	}
+	m := New(Options{
+		Repo:     "gsimone/leva-2",
+		Provider: summary.ParseProvider("local"),
+		Width:    120,
+		Height:   30,
+		Fetch:    fetch,
+	})
+	before := stripANSI(m.View())
+	if !strings.Contains(strings.Join(listNames(before), "\n"), "LEV-182") {
+		t.Fatalf("first paint is the gh name:\n%s", before)
+	}
+	if strings.Contains(before, "Pin each bound host") || strings.Contains(before, "Covers ") {
+		t.Fatalf("first paint must not wait on generated copy:\n%s", before)
+	}
+	statusAt := factRow(before, "status")
+
+	res := summary.Run(summary.Job{
+		Provider: summary.ParseProvider("local"),
+		ID:       "s",
+		Stack:    m.stacks[0],
+	})
+	if res.Description == "" || res.Description == gh {
+		t.Fatalf("Run must write a distinct description, got %q", res.Description)
+	}
+
+	next, cmd := m.Update(summaryDoneMsg{token: m.fetchSeq, id: "s", title: res.Title, description: res.Description})
+	if cmd != nil {
+		t.Fatal("land is not a fetch")
+	}
+	m = next.(Model)
+	after := stripANSI(m.View())
+	if m.stacks[0].Description == gh || strings.EqualFold(m.stacks[0].Description, gh) {
+		t.Fatalf("landed description echoed gh title: %q", m.stacks[0].Description)
+	}
+	if !strings.Contains(after, m.stacks[0].Description) && !strings.Contains(after, "Pin each bound host") {
+		t.Fatalf("pane must show the generated sentence:\n%s", after)
+	}
+	if after == before {
+		t.Fatal("pane text must change after summaryDoneMsg")
+	}
+	if strings.Contains(after, "⠋") {
+		t.Fatalf("no list spinner:\n%s", after)
+	}
+	if factRow(after, "status") != statusAt {
+		t.Fatalf("fact rows moved: before %d after %d", statusAt, factRow(after, "status"))
+	}
+	if m.stacks[0].Name == gh && m.stacks[0].Description == gh {
+		t.Fatal("land was a no-op")
+	}
+}
+
 func TestDescriptionFillsInspectorInPlace(t *testing.T) {
 	fetch := func(string) ([]domain.Stack, error) {
 		return []domain.Stack{{

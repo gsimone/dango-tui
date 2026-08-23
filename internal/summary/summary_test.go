@@ -101,6 +101,9 @@ func TestChooseThreadsProviderAndStaysLocal(t *testing.T) {
 	if untitled[0].Description == "" {
 		t.Fatal("provider should write inspector description")
 	}
+	if untitled[0].Name == "base" || untitled[0].Description == "base" {
+		t.Fatalf("apply must not echo the gh title: %+v", untitled[0])
+	}
 }
 
 func TestRunWritesTitleAndDescription(t *testing.T) {
@@ -155,6 +158,43 @@ func TestRunWritesTitleAndDescription(t *testing.T) {
 	})
 	if kept.Description != "Already summarized by a model." {
 		t.Fatalf("real description should win: %q", kept.Description)
+	}
+}
+
+func TestRunDoesNotEchoGhTitle(t *testing.T) {
+	stack := domain.Stack{
+		ID:   "stack-1",
+		Name: "LEV-182: Bound hosts to the session",
+		PRs:  []domain.PullRequest{{Number: 182, Title: "LEV-182: Bound hosts to the session"}},
+	}
+	gh := "LEV-182: Bound hosts to the session"
+	res := summary.Run(summary.Job{
+		Provider: summary.ParseProvider("local"),
+		ID:       "stack-1",
+		Stack:    stack,
+	})
+	if res.Title == gh || strings.EqualFold(res.Title, gh) {
+		t.Fatalf("title echoed gh name: %q", res.Title)
+	}
+	if res.Description == "" || res.Description == gh || strings.EqualFold(res.Description, gh) {
+		t.Fatalf("description must be a generated sentence, got %q", res.Description)
+	}
+	if res.Title != "" && res.Title == res.Description {
+		t.Fatalf("description must not copy the title: %q", res.Title)
+	}
+
+	withBody := stack
+	withBody.PRs[0].Body = "Pin each bound host to the worker that opened the session.\n\nManaged by Graphite.\n- #182\n"
+	bodied := summary.Run(summary.Job{
+		Provider: summary.ParseProvider("demo"),
+		ID:       "stack-1",
+		Stack:    withBody,
+	})
+	if !strings.Contains(bodied.Description, "Pin each bound host") {
+		t.Fatalf("body should win: %q", bodied.Description)
+	}
+	if strings.EqualFold(bodied.Description, gh) {
+		t.Fatalf("body path echoed gh title: %q", bodied.Description)
 	}
 }
 
