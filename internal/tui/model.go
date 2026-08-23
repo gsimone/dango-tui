@@ -75,7 +75,6 @@ func New(opts Options) Model {
 		return m
 	}
 	if repo == "" {
-		m.loadFixture("")
 		return m
 	}
 

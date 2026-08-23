@@ -69,13 +69,13 @@ func TestParseRepoJSONFile(t *testing.T) {
 	}
 }
 
-func TestParseNeitherIsExamples(t *testing.T) {
+func TestParseNeitherLeavesRepoEmpty(t *testing.T) {
 	args, err := Parse(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if args.Repo != "" || args.Story != "" {
-		t.Fatalf("no --repo is examples, got %+v", args)
+		t.Fatalf("flags-only parse must not invent a repo, got %+v", args)
 	}
 }
 
@@ -133,7 +133,10 @@ func TestUsageDoesNotAdvertiseStory(t *testing.T) {
 		t.Fatalf("usage must not sell -story:\n%s", got)
 	}
 	if !strings.Contains(got, "detect owner/name from the cwd git remote") {
-		t.Fatalf("no --repo detects, then examples:\n%s", got)
+		t.Fatalf("no --repo is live detect:\n%s", got)
+	}
+	if !strings.Contains(got, "--repo testdata/test.json") {
+		t.Fatalf("must name the file way out:\n%s", got)
 	}
 	if strings.Contains(got, ",") && strings.Contains(got, "copy") {
 		t.Fatalf("usage must not sell comma copy:\n%s", got)

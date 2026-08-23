@@ -14,9 +14,10 @@ From this branch:
 go run ./cmd/dango
 ```
 
-- `go run ./cmd/dango`: detect owner/name from the cwd git remote. If detect fails, authored example stacks (same chrome as live).
-- `--repo owner/name`: live `gh`.
-- `--repo testdata/test.json`: JSON dump of authored stacks. Never sent to `gh`.
+- `go run ./cmd/dango`: always the cwd git remote (origin, else first remote). Live `gh`. No silent examples.
+- No GitHub owner/name remote: the process dies. Pass `--repo owner/name` or `--repo testdata/test.json`.
+- `--repo owner/name`: live `gh`. `--repo` wins over detect.
+- `--repo testdata/test.json`: JSON dump of authored stacks. Never sent to `gh`. Examples exist only this way.
 
 ```bash
 go run ./cmd/dango --repo owner/name

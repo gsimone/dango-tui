@@ -17,8 +17,8 @@ func IsStackFile(raw string) bool {
 }
 
 // Args is the flag-driven launch config. No --repo detects the cwd git
-// remote; detect failure is authored examples. --repo owner/name is live
-// gh. --repo path.json is a stack dump.
+// remote and fetches live gh. Detect failure is an error, not examples.
+// --repo owner/name is live gh. --repo path.json is a stack dump.
 type Args struct {
 	Frame    string
 	Story    string // test/dev hook only; not advertised
@@ -40,7 +40,8 @@ func Usage() string {
 		"       dango --repo owner/name [--provider name@model]\n" +
 		"       dango --repo testdata/test.json\n" +
 		"\n" +
-		"No --repo: detect owner/name from the cwd git remote. If detect fails, authored example stacks.\n" +
+		"No --repo: detect owner/name from the cwd git remote and fetch via gh.\n" +
+		"No GitHub remote: pass --repo owner/name or --repo testdata/test.json.\n" +
 		"--repo owner/name fetches via gh. --repo path.json is a stack dump, not live gh.\n" +
 		"dango.json / dango.yml / dango.yaml sets the title provider.\n" +
 		"Missing config file = no generated title. --provider overrides. No picker.\n"

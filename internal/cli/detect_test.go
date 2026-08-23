@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -54,6 +55,15 @@ func TestDetectRepoFirstRemoteWhenNoOrigin(t *testing.T) {
 	if got != "other/repo" {
 		t.Fatalf("first remote: %q", got)
 	}
+}
+
+func mustResolve(t *testing.T, args Args, dir string) Args {
+	t.Helper()
+	got, err := Resolve(args, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return got
 }
 
 func TestDetectRepoFromOrigin(t *testing.T) {
@@ -155,7 +165,7 @@ func TestResolveDetectsRepoAndJSON(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "dango.json"), []byte(`{"provider":"codex@luna.medium"}`), 0644); err != nil {
 		t.Fatal(err)
 	}
-	got := Resolve(Args{}, dir)
+	got := mustResolve(t, Args{}, dir)
 	if got.Repo != "gsimone/leva-2" {
 		t.Fatalf("repo %q", got.Repo)
 	}
@@ -170,7 +180,7 @@ func TestResolveFlagsOverrideDetectAndYAML(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "dango.yml"), []byte("provider: codex@luna.medium\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	got := Resolve(Args{Repo: "other/repo", Provider: ParseProvider("flag@model")}, dir)
+	got := mustResolve(t, Args{Repo: "other/repo", Provider: ParseProvider("flag@model")}, dir)
 	if got.Repo != "other/repo" {
 		t.Fatalf("repo %q", got.Repo)
 	}
@@ -185,7 +195,7 @@ func TestResolveYAMLProviderWithoutRepo(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "dango.yaml"), []byte("# title hook\nprovider: \"codex@luna.medium\"\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	got := Resolve(Args{}, dir)
+	got := mustResolve(t, Args{}, dir)
 	if got.Repo != "gsimone/leva-2" {
 		t.Fatalf("repo %q", got.Repo)
 	}
@@ -197,7 +207,7 @@ func TestResolveYAMLProviderWithoutRepo(t *testing.T) {
 func TestResolveMissingJSONHasNoProvider(t *testing.T) {
 	dir := t.TempDir()
 	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")
-	got := Resolve(Args{}, dir)
+	got := mustResolve(t, Args{}, dir)
 	if got.Repo != "gsimone/leva-2" {
 		t.Fatalf("repo %q", got.Repo)
 	}
@@ -206,18 +216,34 @@ func TestResolveMissingJSONHasNoProvider(t *testing.T) {
 	}
 }
 
-func TestResolveDetectFailureLeavesExamples(t *testing.T) {
+func TestResolveDetectFailureIsLoudError(t *testing.T) {
 	dir := t.TempDir()
-	got := Resolve(Args{}, dir)
+	cmd := exec.Command("git", "init", "-q")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
+
+	got, err := Resolve(Args{}, dir)
+	if err == nil {
+		t.Fatal("detect miss must die, not fall back to examples")
+	}
 	if got.Repo != "" {
-		t.Fatalf("detect miss must leave repo empty for examples, got %q", got.Repo)
+		t.Fatalf("failed resolve must not invent a repo, got %q", got.Repo)
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "--repo owner/name") || !strings.Contains(msg, "--repo testdata/test.json") {
+		t.Fatalf("error must name both --repo forms: %v", err)
+	}
+	if strings.Contains(msg, "example") || strings.Contains(msg, "fixture") {
+		t.Fatalf("must not offer silent examples: %v", err)
 	}
 }
 
 func TestResolveStoryHookStaysFixtures(t *testing.T) {
 	dir := t.TempDir()
 	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")
-	got := Resolve(Args{Story: "mixed"}, dir)
+	got := mustResolve(t, Args{Story: "mixed"}, dir)
 	if got.Repo != "" || got.Story != "mixed" {
 		t.Fatalf("story must ignore detect: %+v", got)
 	}
@@ -229,7 +255,7 @@ func TestResolveRepoFileWinsOverDetect(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "dango.yml"), []byte("provider: from-yml\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	got := Resolve(Args{Repo: "testdata/test.json"}, dir)
+	got := mustResolve(t, Args{Repo: "testdata/test.json"}, dir)
 	if got.Repo != "testdata/test.json" {
 		t.Fatalf("--repo file must win, got %q", got.Repo)
 	}

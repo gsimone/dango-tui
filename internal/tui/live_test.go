@@ -2,11 +2,13 @@ package tui_test
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/gsimone/dango-tui/internal/cli"
 	"github.com/gsimone/dango-tui/internal/domain"
 	"github.com/gsimone/dango-tui/internal/live"
 	"github.com/gsimone/dango-tui/internal/summary"
@@ -32,47 +34,89 @@ func testdataJSON(t *testing.T) string {
 	}
 }
 
-func TestNoRepoUsesFixture(t *testing.T) {
+func gitIn(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v %s", args, err, out)
+	}
+}
+
+func TestNoFlagDetectsOriginAndFetches(t *testing.T) {
+	dir := t.TempDir()
+	gitIn(t, dir, "init", "-q")
+	gitIn(t, dir, "remote", "add", "origin", "https://github.com/owner/from-detect.git")
+
+	parsed, err := cli.Parse(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	args, err := cli.Resolve(parsed, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if args.Repo != "owner/from-detect" {
+		t.Fatalf("detect %q", args.Repo)
+	}
+
+	fetches := 0
 	m := tui.New(tui.Options{
+		Repo:   args.Repo,
+		Width:  80,
+		Height: 24,
+		Fetch: func(repo string) ([]domain.Stack, error) {
+			fetches++
+			if repo != "owner/from-detect" {
+				t.Fatalf("fetched %q", repo)
+			}
+			return []domain.Stack{{
+				ID:  "s",
+				PRs: []domain.PullRequest{{Number: 1, Title: "detected layer", Branch: "gm/detected"}},
+			}}, nil
+		},
+	})
+	if fetches != 1 || !m.Live || m.File {
+		t.Fatalf("no-flag detect is live gh, fetches=%d live=%v file=%v", fetches, m.Live, m.File)
+	}
+	if !strings.Contains(frameOf(m), "detected layer") || !strings.Contains(frameOf(m), "owner/from-detect") {
+		t.Fatalf("live frame:\n%s", frameOf(m))
+	}
+	if strings.Contains(frameOf(m), "auth cleanup") || strings.Contains(frameOf(m), "300 stacks") {
+		t.Fatalf("must not load examples:\n%s", frameOf(m))
+	}
+}
+
+func TestNoFlagNoRemoteErrorsLoud(t *testing.T) {
+	dir := t.TempDir()
+	gitIn(t, dir, "init", "-q")
+
+	parsed, err := cli.Parse(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := cli.Resolve(parsed, dir)
+	if err == nil {
+		t.Fatal("no remote must die, not load examples")
+	}
+	if got.Repo != "" {
+		t.Fatalf("failed resolve invented %q", got.Repo)
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "--repo owner/name") || !strings.Contains(msg, "--repo testdata/test.json") {
+		t.Fatalf("must name both --repo forms: %v", err)
+	}
+	m := tui.New(tui.Options{
+		Repo:   got.Repo,
 		Width:  80,
 		Height: 24,
 		Fetch: func(string) ([]domain.Stack, error) {
-			t.Fatal("fixture path must not fetch")
+			t.Fatal("detect miss must not fetch or fall back")
 			return nil, nil
 		},
 	})
-	if m.Live {
-		t.Fatal("no --repo is fixtures")
-	}
-	frame := frameOf(m)
-	if !strings.Contains(frame, "●-●-● DANGO") || strings.Contains(frame, "🍡") {
-		t.Fatalf("same chrome as live:\n%s", frame)
-	}
-	if !strings.Contains(frame, "org/reponame") {
-		t.Fatalf("fixture header slug:\n%s", frame)
-	}
-	if !strings.Contains(frame, "last fetched 2 mins ago") {
-		t.Fatalf("same fetch chrome as live:\n%s", frame)
-	}
-	if strings.Contains(frame, "DEMO") || strings.Contains(frame, "demo") {
-		t.Fatalf("no demo theme:\n%s", frame)
-	}
-	for _, name := range []string{"auth cleanup", "pair", "freight train"} {
-		if !strings.Contains(frame, name) {
-			t.Fatalf("default examples include %q:\n%s", name, frame)
-		}
-	}
-	if !strings.Contains(frame, "5 stacks / 30 layers") {
-		t.Fatalf("mixed+pair+freight counts:\n%s", frame)
-	}
-	if strings.Contains(frame, "300 stacks") {
-		t.Fatalf("default examples must not be chaos:\n%s", frame)
-	}
-	if strings.Contains(frame, "pass --repo") {
-		t.Fatalf("no empty/help when examples load:\n%s", frame)
-	}
-	if strings.Contains(frame, "[ p ]") {
-		t.Fatalf("no picker:\n%s", frame)
+	if m.Live || m.File || len(m.Stacks()) != 0 {
+		t.Fatalf("empty repo is not examples, live=%v file=%v stacks=%d", m.Live, m.File, len(m.Stacks()))
 	}
 }
 
@@ -289,9 +333,25 @@ func listRows(frame string) []string {
 }
 
 func TestRepoJSONFilePaintsAuthoredStacks(t *testing.T) {
+	path := testdataJSON(t)
+	parsed, err := cli.Parse([]string{"--repo", path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	gitIn(t, dir, "init", "-q")
+	gitIn(t, dir, "remote", "add", "origin", "https://github.com/owner/from-detect.git")
+	args, err := cli.Resolve(parsed, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if args.Repo != path {
+		t.Fatalf("--repo file must win over detect, got %q", args.Repo)
+	}
+
 	fetches := 0
 	m := tui.New(tui.Options{
-		Repo:   testdataJSON(t),
+		Repo:   args.Repo,
 		Width:  120,
 		Height: 30,
 		Fetch: func(string) ([]domain.Stack, error) {

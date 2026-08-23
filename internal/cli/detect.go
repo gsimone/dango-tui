@@ -168,24 +168,30 @@ func ReadDangoJSON(dir string) (Config, error) {
 	return ReadDangoConfig(dir)
 }
 
+// ErrNoRemote is the loud failure when no --repo is set and cwd has no
+// GitHub owner/name remote. It names the two ways out.
+var ErrNoRemote = fmt.Errorf("no GitHub owner/name remote in this directory. Pass --repo owner/name or --repo testdata/test.json")
+
 // Resolve fills repo from the cwd git remote when --repo is omitted, and
 // provider from dango.json / dango.yml / dango.yaml when --provider is
 // omitted. --repo (owner/name or a stack file) and --provider win.
-// Story is a test/dev hook and skips detect. Detect failure leaves Repo
-// empty so the TUI loads authored examples.
-func Resolve(args Args, dir string) Args {
+// Story is a test/dev hook and skips detect. Detect failure is ErrNoRemote
+// — never a silent examples fallback.
+func Resolve(args Args, dir string) (Args, error) {
 	if args.Story != "" {
-		return args
+		return args, nil
 	}
 	if args.Repo == "" {
-		if repo, err := DetectRepo(dir); err == nil {
-			args.Repo = repo
+		repo, err := DetectRepo(dir)
+		if err != nil || repo == "" {
+			return args, ErrNoRemote
 		}
+		args.Repo = repo
 	}
 	if args.Provider.Empty() {
 		if cfg, err := ReadDangoConfig(dir); err == nil && cfg.Provider != "" {
 			args.Provider = ParseProvider(cfg.Provider)
 		}
 	}
-	return args
+	return args, nil
 }
