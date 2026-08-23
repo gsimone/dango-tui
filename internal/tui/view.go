@@ -504,7 +504,7 @@ func (m Model) inspectorDescRows(innerW int) int {
 	if desc == "" {
 		return 0
 	}
-	return len(wrapWords(desc, max(1, innerW))) + 1
+	return len(wrapDesc(desc, max(1, innerW))) + 1
 }
 
 func (m Model) paintStackDescription(c *canvas, x, y, row, h, maxLine int, meta, bg string) int {
@@ -515,7 +515,7 @@ func (m Model) paintStackDescription(c *canvas, x, y, row, h, maxLine int, meta,
 		}
 		painted := 0
 		if desc != "" {
-			for _, line := range wrapWords(desc, maxLine) {
+			for _, line := range wrapDesc(desc, maxLine) {
 				if painted >= inspectorDescLines || row >= h {
 					break
 				}
@@ -541,7 +541,7 @@ func (m Model) paintStackDescription(c *canvas, x, y, row, h, maxLine int, meta,
 	if desc == "" {
 		return row
 	}
-	for _, line := range wrapWords(desc, maxLine) {
+	for _, line := range wrapDesc(desc, maxLine) {
 		if row >= h {
 			return row
 		}
@@ -552,6 +552,14 @@ func (m Model) paintStackDescription(c *canvas, x, y, row, h, maxLine int, meta,
 		row++
 	}
 	return row
+}
+
+func wrapDesc(desc string, width int) []string {
+	lines := wrapWords(desc, width)
+	if len(lines) > inspectorDescLines {
+		return lines[:inspectorDescLines]
+	}
+	return lines
 }
 
 func paintFactValue(c *canvas, x, y int, fact inspectorFact, pr domain.PullRequest, maxW int, bg string) {

@@ -13,6 +13,7 @@ Agent titles/descriptions.
 - Provider from `dango.json` / `dango.yml` / `dango.yaml`, or `--provider` which wins. No new flags.
 - Missing provider = no generated title. Keep the gh name.
 - Pablo chrome (this PR only): pane fills in place, same rows, no card morph, no list spinner.
+- Descriptions are two lines max. `inspectorDescLines` is 2. `Covers …` may wrap but wrap is clipped to 2 — never a third line, never grow the card.
 
 ## Later
 
