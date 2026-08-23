@@ -170,56 +170,76 @@ func TestInspectorStatusInkIsValueOnly(t *testing.T) {
 	}
 }
 
-func TestDotAndCommaCopyBranchToast(t *testing.T) {
-	for _, key := range []string{".", ","} {
-		t.Run(key, func(t *testing.T) {
-			var copied string
-			old := copyText
-			copyText = func(s string) { copied = s }
-			t.Cleanup(func() { copyText = old })
+func TestDotCopiesBranchToast(t *testing.T) {
+	var copied string
+	old := copyText
+	copyText = func(s string) { copied = s }
+	t.Cleanup(func() { copyText = old })
 
-			before := gitHEAD(t)
-			m := New(Options{StoryID: "mixed", Width: 80, Height: 24})
-			next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
-			m = next.(Model)
-			frame := stripANSI(m.View())
-			if !strings.Contains(frame, "copied gm/stacks-184") {
-				t.Fatalf("toast:\n%s", frame)
-			}
-			if strings.Contains(frame, "Copied ") {
-				t.Fatalf("toast is lowercase copied, not Copied:\n%s", frame)
-			}
-			if strings.Contains(frame, "Checked out") {
-				t.Fatalf("copy must not checkout:\n%s", frame)
-			}
-			if strings.Contains(frame, "[ ? ] close") {
-				t.Fatalf("copy must not open help:\n%s", frame)
-			}
-			if strings.Contains(frame, "[ p ]") {
-				t.Fatalf("no picker:\n%s", frame)
-			}
-			if copied != "gm/stacks-184" {
-				t.Fatalf("copied %q", copied)
-			}
-			if after := gitHEAD(t); after != before {
-				t.Fatalf("changed git HEAD: %s -> %s", before, after)
-			}
-			if cmd == nil {
-				t.Fatal("toast should clear")
-			}
-			next, _ = m.Update(clearFeedbackMsg{token: m.feedbackSeq})
-			m = next.(Model)
-			cleared := stripANSI(m.View())
-			if strings.Contains(cleared, "copied gm/stacks-184") {
-				t.Fatalf("toast should clear:\n%s", cleared)
-			}
-			if !strings.Contains(cleared, "[ ↑↓ ] stack") || !strings.Contains(cleared, "[ o ] open") || !strings.Contains(cleared, "[ . ] copy") {
-				t.Fatalf("footer should return to the key legend:\n%s", cleared)
-			}
-			if strings.Contains(cleared, "[ enter ]") {
-				t.Fatalf("enter must leave the footer:\n%s", cleared)
-			}
-		})
+	before := gitHEAD(t)
+	m := New(Options{StoryID: "mixed", Width: 80, Height: 24})
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(".")})
+	m = next.(Model)
+	frame := stripANSI(m.View())
+	if !strings.Contains(frame, "copied gm/stacks-184") {
+		t.Fatalf("toast:\n%s", frame)
+	}
+	if strings.Contains(frame, "Copied ") {
+		t.Fatalf("toast is lowercase copied, not Copied:\n%s", frame)
+	}
+	if strings.Contains(frame, "Checked out") {
+		t.Fatalf("copy must not checkout:\n%s", frame)
+	}
+	if strings.Contains(frame, "[ ? ] close") {
+		t.Fatalf("copy must not open help:\n%s", frame)
+	}
+	if strings.Contains(frame, "[ p ]") {
+		t.Fatalf("no picker:\n%s", frame)
+	}
+	if copied != "gm/stacks-184" {
+		t.Fatalf("copied %q", copied)
+	}
+	if after := gitHEAD(t); after != before {
+		t.Fatalf("changed git HEAD: %s -> %s", before, after)
+	}
+	if cmd == nil {
+		t.Fatal("toast should clear")
+	}
+	next, _ = m.Update(clearFeedbackMsg{token: m.feedbackSeq})
+	m = next.(Model)
+	cleared := stripANSI(m.View())
+	if strings.Contains(cleared, "copied gm/stacks-184") {
+		t.Fatalf("toast should clear:\n%s", cleared)
+	}
+	if !strings.Contains(cleared, "[ ↑↓ ] stack") || !strings.Contains(cleared, "[ o ] open") || !strings.Contains(cleared, "[ . ] copy") {
+		t.Fatalf("footer should return to the key legend:\n%s", cleared)
+	}
+	if strings.Contains(cleared, "[ enter ]") {
+		t.Fatalf("enter must leave the footer:\n%s", cleared)
+	}
+}
+
+func TestCommaDoesNotCopy(t *testing.T) {
+	var copied string
+	old := copyText
+	copyText = func(s string) { copied = s }
+	t.Cleanup(func() { copyText = old })
+
+	m := New(Options{StoryID: "mixed", Width: 80, Height: 24})
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(",")})
+	m = next.(Model)
+	frame := stripANSI(m.View())
+	if copied != "" {
+		t.Fatalf(", is unbound, copied %q", copied)
+	}
+	if cmd != nil {
+		t.Fatal(", must not start a toast clear")
+	}
+	if strings.Contains(frame, "copied ") {
+		t.Fatalf(", must not toast:\n%s", frame)
+	}
+	if !strings.Contains(frame, "[ . ] copy") {
+		t.Fatalf("footer stays [ . ] copy:\n%s", frame)
 	}
 }
 

@@ -143,7 +143,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if pr, ok := m.SelectedPR(); ok {
 			return m, m.open(pr)
 		}
-	case ".", ",":
+	case ".":
 		if pr, ok := m.SelectedPR(); ok {
 			return m, m.copyBranch(pr)
 		}

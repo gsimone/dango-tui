@@ -4,7 +4,7 @@ Shipping order (Cassandra / Gianmarco). Do not skip ahead.
 
 ## Now (this PR)
 
-- Advertised path: no `--repo` → authored example stacks. `--repo owner/name` → live `gh`. Same chrome. No demo theme.
+- Advertised path: no `--repo` → detect cwd git remote, else authored examples. `--repo owner/name` → live `gh`. Same chrome. No demo theme.
 - `--repo` is also a JSON file of authored stacks. One flag. `dango.json` is provider config, not a stack dump.
 - `-story` is not a user-facing mode. Hidden test/dev hook only. Do not advertise it.
 - Default examples are mixed + pair + freight. Authored, not random, not the 300-row chaos load.
@@ -26,10 +26,10 @@ Shipping order (Cassandra / Gianmarco). Do not skip ahead.
 - Header line 2 is the repo slug + counts. Examples use `org/reponame` and the same fetch chrome as live.
 - `--provider` is optional and never blocks fetch or first paint.
 - Missing `gh` fails loudly (`LookPath` / `runGH`). No fixture fallback.
-- No cwd git-remote auto-fetch. Empty `--repo` is examples.
+- cwd git-remote detect when `--repo` is omitted. `--repo` wins (owner/name or JSON). Detect failure is authored examples.
 - No status column. Status lives on balls + inspector.
 - Packed `●-●-●` logo (U+25CF). Three Pablo inks. No dumpling.
 - List balls use meaning colors, not logo hues.
 - Footer: bracketed keys. No enter / checkout. `?` help overlay.
-- `.` and `,` copy the current PR branch. Footer toast `copied <branch>`. No modal. `[ . ] copy` stays.
+- `.` copies the selected layer branch. Footer toast `copied {branch}`, then it dies. No `,`. `[ . ] copy` only.
 - Inspector `labels` + `author` rows. Live labels/avatarUrl come from `gh pr list --json`. No Go GitHub API client.

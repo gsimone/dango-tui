@@ -695,6 +695,9 @@ func TestHelpOverlayToggles(t *testing.T) {
 	if strings.Contains(frame, "[ enter ]") || strings.Contains(frame, "[ p ] provider") {
 		t.Fatalf("help must not invent enter or a provider picker:\n%s", frame)
 	}
+	if strings.Contains(frame, "[ , ]") || strings.Contains(frame, "[ . , ]") {
+		t.Fatalf("help must not advertise comma copy:\n%s", frame)
+	}
 	m = applyKey(m, key("?"))
 	closed := frameOf(m)
 	if strings.Contains(closed, "[ ? ] close") {

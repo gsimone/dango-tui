@@ -393,7 +393,7 @@ func TestRepoOwnerNameStillFetches(t *testing.T) {
 	}
 }
 
-func TestCommaCopiesTestdataBranchToast(t *testing.T) {
+func TestDotCopiesTestdataBranchToast(t *testing.T) {
 	m := tui.New(tui.Options{
 		Repo:   testdataJSON(t),
 		Width:  120,
@@ -403,11 +403,11 @@ func TestCommaCopiesTestdataBranchToast(t *testing.T) {
 			return nil, nil
 		},
 	})
-	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(",")})
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(".")})
 	m = next.(tui.Model)
 	frame := frameOf(m)
 	if !strings.Contains(frame, "copied gm/auth-scope") {
-		t.Fatalf("comma toast:\n%s", frame)
+		t.Fatalf("dot toast:\n%s", frame)
 	}
 	if strings.Contains(frame, "Checked out") || strings.Contains(frame, "[ p ]") {
 		t.Fatalf("toast only, no checkout/picker:\n%s", frame)

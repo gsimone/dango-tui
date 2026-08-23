@@ -35,6 +35,27 @@ func TestParseRemote(t *testing.T) {
 	}
 }
 
+func TestDetectRepoFirstRemoteWhenNoOrigin(t *testing.T) {
+	dir := t.TempDir()
+	cmd := exec.Command("git", "init", "-q")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
+	cmd = exec.Command("git", "remote", "add", "upstream", "https://github.com/other/repo.git")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git remote: %v %s", err, out)
+	}
+	got, err := DetectRepo(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "other/repo" {
+		t.Fatalf("first remote: %q", got)
+	}
+}
+
 func TestDetectRepoFromOrigin(t *testing.T) {
 	dir := t.TempDir()
 	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")
@@ -128,15 +149,15 @@ func TestReadDangoConfigPrefersRepoOverCwd(t *testing.T) {
 	}
 }
 
-func TestResolveEmptyRepoStaysExamples(t *testing.T) {
+func TestResolveDetectsRepoAndJSON(t *testing.T) {
 	dir := t.TempDir()
 	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")
 	if err := os.WriteFile(filepath.Join(dir, "dango.json"), []byte(`{"provider":"codex@luna.medium"}`), 0644); err != nil {
 		t.Fatal(err)
 	}
 	got := Resolve(Args{}, dir)
-	if got.Repo != "" {
-		t.Fatalf("no --repo stays examples, got repo %q", got.Repo)
+	if got.Repo != "gsimone/leva-2" {
+		t.Fatalf("repo %q", got.Repo)
 	}
 	if got.Provider.Raw != "codex@luna.medium" {
 		t.Fatalf("provider %+v", got.Provider)
@@ -165,8 +186,8 @@ func TestResolveYAMLProviderWithoutRepo(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := Resolve(Args{}, dir)
-	if got.Repo != "" {
-		t.Fatalf("no --repo stays examples, got repo %q", got.Repo)
+	if got.Repo != "gsimone/leva-2" {
+		t.Fatalf("repo %q", got.Repo)
 	}
 	if got.Provider.Raw != "codex@luna.medium" {
 		t.Fatalf("provider %+v", got.Provider)
@@ -177,11 +198,19 @@ func TestResolveMissingJSONHasNoProvider(t *testing.T) {
 	dir := t.TempDir()
 	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")
 	got := Resolve(Args{}, dir)
-	if got.Repo != "" {
-		t.Fatalf("no --repo stays examples, got repo %q", got.Repo)
+	if got.Repo != "gsimone/leva-2" {
+		t.Fatalf("repo %q", got.Repo)
 	}
 	if got.Provider.Raw != "" {
 		t.Fatalf("missing dango.json must not invent a provider: %+v", got.Provider)
+	}
+}
+
+func TestResolveDetectFailureLeavesExamples(t *testing.T) {
+	dir := t.TempDir()
+	got := Resolve(Args{}, dir)
+	if got.Repo != "" {
+		t.Fatalf("detect miss must leave repo empty for examples, got %q", got.Repo)
 	}
 }
 

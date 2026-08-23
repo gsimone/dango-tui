@@ -2,23 +2,29 @@
 
 A small native terminal UI for reading a GitHub pull-request stack at a glance.
 
-This milestone uses deterministic local fixtures only. It does not call GitHub,
-run `git`, open a browser, or check out a branch. Checkout, open, and refresh
-are clearly labelled as simulations. Every status line says fixture or
-simulated.
-
-The previous Bun / OpenTUI / Solid tree is gone. The product path is a small
-Go binary (Go 1.24+) built with
+The product path is a Go binary (Go 1.24+) built with
 [Bubble Tea](https://github.com/charmbracelet/bubbletea) and
-[Lipgloss](https://github.com/charmbracelet/lipgloss).
+[Lipgloss](https://charmbracelet/lipgloss). No Bubbles restyle. No picker.
 
 ## Run
+
+From this branch:
 
 ```bash
 go run ./cmd/dango
 ```
 
-Or build a static-ish binary:
+- `go run ./cmd/dango`: detect owner/name from the cwd git remote. If detect fails, authored example stacks (same chrome as live).
+- `--repo owner/name`: live `gh`.
+- `--repo testdata/test.json`: JSON dump of authored stacks. Never sent to `gh`.
+
+```bash
+go run ./cmd/dango --repo owner/name
+go run ./cmd/dango --repo testdata/test.json
+go run ./cmd/dango --frame 80x24      # print one frame and exit
+```
+
+Or build:
 
 ```bash
 make build
@@ -27,17 +33,11 @@ make build
 
 `make build` is `CGO_ENABLED=0 go build -ldflags="-s -w" -o dango ./cmd/dango`.
 
-The app is a native terminal UI, not a dev server. The header mark is
-`●-●-● DANGO` over `org/reponame  •  N stacks / M layers`. Type is paper
-`#f2ebe0` or meta `#9a8f82`. The inspector is a full-height right pane on the
-same field, divided by one dim vertical rule.
+Provider comes from `dango.json` / `dango.yml` / `dango.yaml`. `--provider` overrides. Missing config file = no generated title. `dango.json` is not a stack dump.
 
-`go run ./cmd/dango` is the app: local fixture / test data. There is no live GitHub fetch yet. `o` opens the PR URL in your browser. There is no GitHub
-client yet — checkout / open / refresh are labelled simulations.
-
-```bash
-go run ./cmd/dango --frame 80x24      # print one frame and exit
-```
+The header mark is `●-●-● DANGO` over the repo slug and counts. Type is paper
+`#f2ebe0` or meta `#9a8f82`. Two-col list: name + ball chain. Inspector is the
+right pane on the same field.
 
 ## Controls
 
@@ -46,10 +46,14 @@ go run ./cmd/dango --frame 80x24      # print one frame and exit
 | `↑` / `↓` | Select a stack |
 | `←` / `→`, `Home` / `End` | Select a layer from base to head |
 | hover / click a ball | Inspect / select that layer |
-| `o`, `.`, `r` | Open the PR URL, copy the branch, simulate refresh |
-| `/` | Filter local fixtures |
+| `o` | Open the PR URL |
+| `.` | Copy the selected layer branch. Footer toast `copied {branch}`, then it dies |
+| `r` | Refresh (live `gh` or reload the JSON dump) |
+| `/` | Filter |
 | `?` | Open or close the help overlay |
 | `Esc`, `q` | Close, quit safely |
+
+Footer shows `[ . ] copy`. There is no `,` binding.
 
 ## Test
 
@@ -59,14 +63,11 @@ go test ./...
 
 or `make test`.
 
-Domain tests cover display-state precedence and the OKLCH palette. App tests
-cover selection, filtering, fixture frames at 40/80/120/160, keyboard, and
-mouse hits on the two-cell PR balls.
-
 ## Layout
 
-- Header: `●-●-● DANGO`, then `org/reponame  •  N stacks / M layers`
+- Header: `●-●-● DANGO`, then `owner/name  •  N stacks / M layers` (examples use `org/reponame`)
 - 2-column side pad, 1 blank row at the top
 - Stack list on the left; one `│` rule; inspector pane on the right
+- Inspector facts include status (status ink on the value only), labels in their GitHub hex, and author (`●` + login)
 - Selected row `#242018` with paper ink; everything else meta
 - **40×20 / 80×24 / 120×30 / 160×40** — column stays on-screen

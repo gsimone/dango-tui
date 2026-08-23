@@ -116,11 +116,14 @@ func TestParseHelp(t *testing.T) {
 	if strings.Contains(got, "-story") || strings.Contains(got, "dango -story") {
 		t.Fatalf("must not advertise -story:\n%s", got)
 	}
-	if !strings.Contains(got, "No --repo: authored example stacks") {
+	if !strings.Contains(got, "detect owner/name from the cwd git remote") {
 		t.Fatalf("advertised path:\n%s", got)
 	}
 	if !strings.Contains(got, "--repo owner/name") {
 		t.Fatalf("live path:\n%s", got)
+	}
+	if !strings.Contains(got, "stack dump") {
+		t.Fatalf("json dump path:\n%s", got)
 	}
 }
 
@@ -129,7 +132,10 @@ func TestUsageDoesNotAdvertiseStory(t *testing.T) {
 	if strings.Contains(got, "-story") || strings.Contains(got, "story") {
 		t.Fatalf("usage must not sell -story:\n%s", got)
 	}
-	if strings.Contains(got, "detect") {
-		t.Fatalf("no --repo is examples, not git detect:\n%s", got)
+	if !strings.Contains(got, "detect owner/name from the cwd git remote") {
+		t.Fatalf("no --repo detects, then examples:\n%s", got)
+	}
+	if strings.Contains(got, ",") && strings.Contains(got, "copy") {
+		t.Fatalf("usage must not sell comma copy:\n%s", got)
 	}
 }
