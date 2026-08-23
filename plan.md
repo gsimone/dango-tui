@@ -4,38 +4,21 @@ Shipping order (Cassandra / Gianmarco). Do not skip ahead.
 
 ## Now (this PR)
 
-- Titles and descriptions for live stacks. Nothing else.
+Agent titles/descriptions.
+
 - Fetch paints first with the real gh names. Never block first paint on a summarizer.
-- Provider comes from `dango.json` / `dango.yml` / `dango.yaml`, or `--provider` which wins. No new flags.
+- When a description lands it fills the inspector pane in place — same rows, no card morph, no spinner on the list.
+- Title swaps the list name in place.
+- Provider from `dango.json` / `dango.yml` / `dango.yaml`, or `--provider` which wins. No new flags.
 - Missing provider = no generated title. Keep the gh name.
-- When a provider is set, generate a short stack title and a description after first paint (`tea.Cmd`).
-- Title replaces the list name in place. No table flash. No row spinner.
-- Description fills the inspector pane only, in place.
-- Picker stays dead. No `[ p ] provider`. No settings screen. No `,` copy key.
+- Pablo chrome (this PR only): pane fills in place, same rows, no card morph, no list spinner.
 
-## Later (keep here; do not ship until asked)
+## Later
 
-- Nothing else is queued. Do not invent a settings screen. Do not ship a picker. Do not bring `-story` back as a user mode.
+Build / publish / install the Go binary. The old #2 release PR stays parked. Do not start a release cut until a description has actually landed in the TUI.
 
-## Locked (already shipped)
+## Dead
 
-- #5: no-flag = cwd origin (else first remote) → live `gh`. `--repo owner/name` live. `--repo *.json` dump. `.` copy. Inspector labels + author.
-- Detect failure dies loud (exit 2). Error names `--repo owner/name` and `--repo testdata/test.json`.
-- Authored examples exist only as `--repo testdata/test.json` (or another `.json` dump). Never the no-flag path.
-- `--repo` wins over detect. `dango.json` is provider config, not a stack dump.
-- `-story` is not a user-facing mode. Hidden test/dev hook only. Do not advertise it.
-- Header is packed `●-●-● DANGO` only. No dumpling. No emoji.
-- Inspector: status color on the status value only. Title and other facts stay paper/meta. Diff keeps +/− colors.
-- Same inspector card also has `labels` (each name in its GitHub hex; empty is `none` in meta) and `author` (`●` + login; ● is avatar-dominant or a stable login color). No new chrome.
-- `.` copies the selected layer branch. Toast `copied {branch}`, then it dies. No `,`.
-- Live `gh` via `--repo owner/name` (also `-repo`).
-- Two-col list: name + ball chain. Fixed gutter. No status column.
-- Header line 2 is the repo slug + counts.
-- `--provider` is optional and never blocks fetch or first paint.
-- Missing `gh` fails loudly (`LookPath` / `runGH`). No fixture fallback.
-- cwd git-remote detect when `--repo` is omitted. `--repo` wins (owner/name or JSON). Detect failure is a process error, not examples.
-- No status column. Status lives on balls + inspector.
-- Packed `●-●-●` logo (U+25CF). Three Pablo inks. No dumpling.
-- List balls use meaning colors, not logo hues.
-- Footer: bracketed keys. No enter / checkout. `?` help overlay. `[ . ] copy` only.
-- Inspector `labels` + `author` rows. Live labels/avatarUrl come from `gh pr list --json`. No Go GitHub API client.
+- Picker. No `[ p ] provider`. No settings screen.
+- `,` copy. `[ . ] copy` only.
+- Stacking on #5. #5 is already on main (no-flag = cwd origin, `--repo owner/name` live, `--repo *.json` dump, `.` copy, labels/author). This PR is off main, not #5.

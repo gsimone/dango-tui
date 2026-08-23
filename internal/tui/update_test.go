@@ -146,6 +146,85 @@ func TestSummariesAreAsyncAndLandInPlace(t *testing.T) {
 	}
 }
 
+func TestDescriptionFillsInspectorInPlace(t *testing.T) {
+	fetch := func(string) ([]domain.Stack, error) {
+		return []domain.Stack{{
+			ID:  "s",
+			PRs: []domain.PullRequest{{Number: 1, Title: "alpha layer"}, {Number: 2, Title: "beta layer"}},
+		}}, nil
+	}
+	for _, size := range []struct{ w, h int }{{80, 24}, {120, 30}} {
+		m := New(Options{
+			Repo:     "owner/name",
+			Provider: summary.ParseProvider("codex@luna.medium"),
+			Width:    size.w,
+			Height:   size.h,
+			Fetch:    fetch,
+		})
+		before := stripANSI(m.View())
+		if strings.Contains(before, "alpha layer and beta layer") {
+			t.Fatalf("%dx%d first paint waited on a description:\n%s", size.w, size.h, before)
+		}
+		if strings.Contains(before, "⠋") {
+			t.Fatalf("%dx%d first paint must not spin the list:\n%s", size.w, size.h, before)
+		}
+		statusAt := factRow(before, "status")
+		ciAt := factRow(before, "ci")
+		if statusAt < 0 || ciAt < 0 {
+			t.Fatalf("%dx%d reserved pane missing facts:\n%s", size.w, size.h, before)
+		}
+		box := boxBounds(before)
+
+		m = applyCmd(m, m.Init())
+		after := stripANSI(m.View())
+		if m.stacks[0].Description == "" {
+			t.Fatal("description must land")
+		}
+		if !strings.Contains(after, m.stacks[0].Description) && !strings.Contains(after, strings.Fields(m.stacks[0].Description)[0]) {
+			t.Fatalf("%dx%d description must fill the reserved slot:\n%s", size.w, size.h, after)
+		}
+		if strings.Contains(after, "⠋") {
+			t.Fatalf("%dx%d land must not spin the list:\n%s", size.w, size.h, after)
+		}
+		if factRow(after, "status") != statusAt || factRow(after, "ci") != ciAt {
+			t.Fatalf("%dx%d fact rows moved (card morph): before status=%d ci=%d after status=%d ci=%d\n%s",
+				size.w, size.h, statusAt, ciAt, factRow(after, "status"), factRow(after, "ci"), after)
+		}
+		if boxBounds(after) != box {
+			t.Fatalf("%dx%d stacked card morphed: before %v after %v", size.w, size.h, box, boxBounds(after))
+		}
+		if len(listNames(after)) != len(listNames(before)) {
+			t.Fatalf("%dx%d list rows changed: before %v after %v", size.w, size.h, listNames(before), listNames(after))
+		}
+	}
+}
+
+func factRow(frame, label string) int {
+	for i, line := range strings.Split(frame, "\n") {
+		part := line
+		if idx := strings.Index(line, "│"); idx >= 0 {
+			part = line[idx:]
+		}
+		if strings.Contains(part, label) && (strings.Contains(part, label+"    ") || strings.Contains(part, label+"   ")) {
+			return i
+		}
+	}
+	return -1
+}
+
+func boxBounds(frame string) [2]int {
+	top, bot := -1, -1
+	for i, line := range strings.Split(frame, "\n") {
+		if strings.Contains(line, "┌") {
+			top = i
+		}
+		if strings.Contains(line, "└") {
+			bot = i
+		}
+	}
+	return [2]int{top, bot}
+}
+
 func applyCmd(m Model, cmd tea.Cmd) Model {
 	if cmd == nil {
 		return m
