@@ -104,19 +104,17 @@ func Title(stack domain.Stack) string {
 	return ""
 }
 
-// Describe writes one invented inspector sentence. It never pastes
-// pr.Body, HTML comments, CURSOR_AGENT markers, or markdown links.
+// Describe writes a two-line meta clause from the layers when that
+// clause is not the raw gh title. It never pastes pr.Body, never wraps
+// with an invented "Covers …" prefix, and leaves the slot empty when
+// it cannot write a distinct sentence.
 func Describe(stack domain.Stack) string {
 	gh := ghName(stack)
-	title := Title(stack)
-	if clause := clauseFromLayers(stack); clause != "" {
-		desc := "Covers " + clause + "."
-		if distinct(desc, gh, title) {
-			return desc
-		}
+	if clause := clauseFromLayers(stack); clause != "" && !sameFold(clause, gh) {
+		return clause
 	}
-	if gh != "" {
-		return "Covers this stack."
+	if stripped := stripTicket(gh); stripped != "" && !sameFold(stripped, gh) {
+		return stripped
 	}
 	return ""
 }

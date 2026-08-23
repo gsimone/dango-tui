@@ -176,8 +176,8 @@ func TestSummaryDonePaneDescriptionIsNotGhTitle(t *testing.T) {
 		ID:       "s",
 		Stack:    m.stacks[0],
 	})
-	if res.Description == "" || res.Description == gh || strings.Contains(res.Description, "CURSOR_AGENT") || strings.Contains(res.Description, "Pin each") {
-		t.Fatalf("Run must invent a sentence, not paste body: %q", res.Description)
+	if res.Description == gh || strings.Contains(res.Description, "CURSOR_AGENT") || strings.Contains(res.Description, "Pin each") || strings.HasPrefix(res.Description, "Covers ") {
+		t.Fatalf("Run must not paste body or wrap Covers: %q", res.Description)
 	}
 
 	next, cmd := m.Update(summaryDoneMsg{token: m.fetchSeq, id: "s", title: res.Title, description: res.Description})
@@ -192,8 +192,11 @@ func TestSummaryDonePaneDescriptionIsNotGhTitle(t *testing.T) {
 	if strings.Contains(after, "CURSOR_AGENT") || strings.Contains(after, "<!--") || strings.Contains(after, "Pin each bound host") {
 		t.Fatalf("raw body leaked into the pane:\n%s", after)
 	}
-	if !strings.Contains(after, m.stacks[0].Description) {
-		t.Fatalf("pane must show the generated sentence:\n%s", after)
+	if m.stacks[0].Description != "" && !strings.Contains(after, m.stacks[0].Description) {
+		t.Fatalf("pane must show the distinct clause:\n%s", after)
+	}
+	if strings.Contains(after, "Covers ") {
+		t.Fatalf("do not invent a Covers wrapper:\n%s", after)
 	}
 	if after == before {
 		t.Fatal("pane text must change after summaryDoneMsg")

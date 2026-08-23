@@ -99,7 +99,7 @@ func TestChooseThreadsProviderAndStaysLocal(t *testing.T) {
 		t.Fatal("provider should write the stack title")
 	}
 	if untitled[0].Description == "" {
-		t.Fatal("provider should write inspector description")
+		t.Fatal("two-layer stacks get a distinct clause in the pane")
 	}
 	if untitled[0].Name == "base" || untitled[0].Description == "base" {
 		t.Fatalf("apply must not echo the gh title: %+v", untitled[0])
@@ -158,10 +158,10 @@ func TestRunWritesTitleAndDescription(t *testing.T) {
 		Stack:    named,
 	})
 	if kept.Description == "Already summarized by a model." || strings.Contains(kept.Description, "CURSOR_AGENT") || strings.Contains(kept.Description, "raw body") {
-		t.Fatalf("local invents a sentence, it does not paste body or stored dump: %q", kept.Description)
+		t.Fatalf("local does not paste body or stored dump: %q", kept.Description)
 	}
-	if !strings.HasPrefix(kept.Description, "Covers ") {
-		t.Fatalf("invented sentence: %q", kept.Description)
+	if strings.HasPrefix(kept.Description, "Covers ") {
+		t.Fatalf("do not invent a Covers wrapper: %q", kept.Description)
 	}
 }
 
@@ -180,11 +180,11 @@ func TestRunDoesNotEchoGhTitle(t *testing.T) {
 	if res.Title == gh || strings.EqualFold(res.Title, gh) {
 		t.Fatalf("title echoed gh name: %q", res.Title)
 	}
-	if res.Description == "" || res.Description == gh || strings.EqualFold(res.Description, gh) {
-		t.Fatalf("description must be a generated sentence, got %q", res.Description)
+	if res.Description == gh || strings.EqualFold(res.Description, gh) {
+		t.Fatalf("description must not paste the gh title, got %q", res.Description)
 	}
-	if res.Title != "" && res.Title == res.Description {
-		t.Fatalf("description must not copy the title: %q", res.Title)
+	if strings.HasPrefix(res.Description, "Covers ") {
+		t.Fatalf("do not invent a Covers wrapper: %q", res.Description)
 	}
 
 	withBody := stack
@@ -197,8 +197,8 @@ func TestRunDoesNotEchoGhTitle(t *testing.T) {
 	if strings.Contains(bodied.Description, "Pin each bound host") {
 		t.Fatalf("must not paste pr.Body: %q", bodied.Description)
 	}
-	if !strings.HasPrefix(bodied.Description, "Covers ") {
-		t.Fatalf("demo invents a sentence: %q", bodied.Description)
+	if strings.HasPrefix(bodied.Description, "Covers ") {
+		t.Fatalf("do not invent a Covers wrapper: %q", bodied.Description)
 	}
 }
 
@@ -212,23 +212,17 @@ func TestDescribeIgnoresAgentPRBody(t *testing.T) {
 		}},
 	}
 	got := summary.Describe(stack)
-	if got == "" {
-		t.Fatal("Describe must invent a sentence")
-	}
 	if strings.Contains(got, "CURSOR_AGENT") || strings.Contains(got, "<!--") || strings.Contains(got, "-->") {
 		t.Fatalf("agent comment leaked: %q", got)
 	}
 	if strings.Contains(got, raw) || strings.Contains(got, "linear.app") || strings.Contains(got, "Pin each bound host") {
 		t.Fatalf("raw body leaked: %q", got)
 	}
-	if strings.Contains(got, "\n") {
-		t.Fatalf("must be one sentence: %q", got)
+	if strings.HasPrefix(got, "Covers ") {
+		t.Fatalf("do not invent a Covers wrapper: %q", got)
 	}
-	if got == stack.PRs[0].Title || strings.EqualFold(got, stack.PRs[0].Title) {
+	if got != "" && (got == stack.PRs[0].Title || strings.EqualFold(got, stack.PRs[0].Title)) {
 		t.Fatalf("must not be GhTitle: %q", got)
-	}
-	if !strings.HasPrefix(got, "Covers ") || !strings.HasSuffix(got, ".") {
-		t.Fatalf("want a covers-clause sentence, got %q", got)
 	}
 }
 
@@ -238,11 +232,14 @@ func TestDescribeSkipsStub(t *testing.T) {
 		PRs:         []domain.PullRequest{{Title: "Split auth scope"}},
 	}
 	got := summary.Describe(stack)
-	if got == "" || got == "A deterministic fixture stack" {
-		t.Fatalf("stub should fall through: %q", got)
+	if got == "A deterministic fixture stack" {
+		t.Fatalf("stub must not be shown: %q", got)
 	}
-	if !strings.Contains(strings.ToLower(got), "split auth scope") {
-		t.Fatalf("layer clause: %q", got)
+	if got != "" && strings.EqualFold(got, "Split auth scope") {
+		t.Fatalf("single-layer gh title is not a description: %q", got)
+	}
+	if strings.HasPrefix(got, "Covers ") {
+		t.Fatalf("do not invent a Covers wrapper: %q", got)
 	}
 }
 

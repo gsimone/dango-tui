@@ -9,11 +9,11 @@ Agent titles/descriptions.
 - Fetch paints first with the real gh names. Never block first paint on a summarizer.
 - When a description lands it fills the inspector pane in place — same rows, no card morph, no spinner on the list.
 - Title swaps the list name in place when the generated clause is not the gh title.
-- `--provider local` / `demo` invent one `Covers {clause}.` sentence. Never paste `pr.Body`, HTML comments, or `CURSOR_AGENT` markers. Never echo GhTitle. No Codex network call.
+- `--provider local` / `demo` write a two-line meta clause only if it is not the gh title pasted back. No invented `Covers …` prefix. If there is no distinct sentence, leave the reserved slot empty (dim). Never paste `pr.Body`, HTML comments, or agent markers. No Codex network call.
 - Provider from `dango.json` / `dango.yml` / `dango.yaml`, or `--provider` which wins. No new flags.
 - Missing provider = no generated title. Keep the gh name.
 - Pablo chrome (this PR only): pane fills in place, same rows, no card morph, no list spinner.
-- Descriptions are two lines max. `inspectorDescLines` is 2. `Covers …` may wrap but wrap is clipped to 2 — never a third line, never grow the card.
+- Inspector description is two lines under the title, meta ink, then stop. Same reserved slot every time. Card height does not jump. Wrap is clipped to `inspectorDescLines` (2) — never a third line.
 
 ## Later
 
