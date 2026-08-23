@@ -1,0 +1,182 @@
+{
+  "repo": "example/stacks",
+  "stacks": [
+    {
+      "id": "auth",
+      "name": "auth cleanup",
+      "description": "Split session checks from identity so a failed fallback cannot mint a wider scope.",
+      "prs": [
+        {
+          "number": 184,
+          "title": "Split auth scope from session checks",
+          "branch": "gm/auth-scope",
+          "author": "gianni",
+          "labels": [
+            {"name": "bug", "color": "d73a4a"},
+            {"name": "auth", "color": "0e8a16"}
+          ],
+          "state": "merged",
+          "additions": 43,
+          "deletions": 12
+        },
+        {
+          "number": 185,
+          "title": "Keep service identity explicit",
+          "branch": "gm/auth-identity",
+          "state": "ready",
+          "additions": 28,
+          "deletions": 9
+        },
+        {
+          "number": 186,
+          "title": "Remove implicit session fallback",
+          "branch": "gm/auth-fallback",
+          "state": "ci-failure",
+          "additions": 17,
+          "deletions": 41
+        }
+      ]
+    },
+    {
+      "id": "composer",
+      "name": "composer tokens",
+      "description": "Put ontology tokens in the composer so mail fields stop inventing their own catalogue.",
+      "prs": [
+        {
+          "number": 211,
+          "title": "Add token catalogue",
+          "branch": "gm/token-catalogue",
+          "state": "ready",
+          "additions": 64,
+          "deletions": 4
+        },
+        {
+          "number": 212,
+          "title": "Map entity fields into composer",
+          "branch": "gm/token-map",
+          "state": "review-blocked",
+          "additions": 51,
+          "deletions": 18
+        },
+        {
+          "number": 213,
+          "title": "Prepare token migration",
+          "branch": "gm/token-migrate",
+          "state": "queued",
+          "additions": 22,
+          "deletions": 6
+        }
+      ]
+    },
+    {
+      "id": "sync",
+      "name": "sync rewrite",
+      "description": "Make optimistic sync a single lifecycle so invalidation cannot double-fire.",
+      "prs": [
+        {
+          "number": 241,
+          "title": "Mark syncing work clearly",
+          "branch": "gm/sync-mark",
+          "state": "draft",
+          "additions": 19,
+          "deletions": 3
+        },
+        {
+          "number": 242,
+          "title": "Avoid duplicate invalidation",
+          "branch": "gm/sync-once",
+          "state": "open",
+          "additions": 37,
+          "deletions": 21
+        }
+      ]
+    },
+    {
+      "id": "freight",
+      "name": "schema cutover",
+      "description": "A long authored train: mixed CI and review, named layers, no random filler.",
+      "prs": [
+        {
+          "number": 801,
+          "title": "Land the schema cutover",
+          "branch": "gm/cutover-schema",
+          "state": "merged",
+          "additions": 120,
+          "deletions": 14
+        },
+        {
+          "number": 802,
+          "title": "Backfill tenant rows",
+          "branch": "gm/cutover-backfill",
+          "state": "merged",
+          "additions": 88,
+          "deletions": 2
+        },
+        {
+          "number": 803,
+          "title": "Dual-write the reader",
+          "branch": "gm/cutover-dual-write",
+          "state": "ready",
+          "additions": 56,
+          "deletions": 11
+        },
+        {
+          "number": 804,
+          "title": "Flip the default flag",
+          "branch": "gm/cutover-flag",
+          "state": "ready",
+          "additions": 9,
+          "deletions": 3
+        },
+        {
+          "number": 805,
+          "title": "Drain the old path",
+          "branch": "gm/cutover-drain",
+          "state": "queued",
+          "additions": 31,
+          "deletions": 47
+        },
+        {
+          "number": 806,
+          "title": "Drop the shadow table",
+          "branch": "gm/cutover-drop",
+          "state": "open",
+          "additions": 6,
+          "deletions": 90
+        },
+        {
+          "number": 807,
+          "title": "Document the cutover",
+          "branch": "gm/cutover-docs",
+          "state": "draft",
+          "additions": 44,
+          "deletions": 0
+        },
+        {
+          "number": 808,
+          "title": "Remove the fallback client",
+          "branch": "gm/cutover-fallback",
+          "state": "ci-failure",
+          "additions": 15,
+          "deletions": 62
+        },
+        {
+          "number": 809,
+          "title": "Restore the pager window",
+          "branch": "gm/cutover-pager",
+          "state": "review-blocked",
+          "additions": 27,
+          "deletions": 8
+        },
+        {
+          "number": 810,
+          "title": "Ship the cleanup note",
+          "branch": "gm/cutover-note",
+          "state": "open",
+          "additions": 12,
+          "deletions": 1
+        }
+      ]
+    }
+  ]
+}

@@ -1,3 +1,4 @@
-node_modules/
+/dango
+/dango-tui
 dist/
 .DS_Store
