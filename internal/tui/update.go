@@ -28,8 +28,6 @@ type summaryDoneMsg struct {
 	id          string
 	title       string
 	description string
-	err         string
-	note        string
 }
 
 type ciDoneMsg struct {
@@ -170,7 +168,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.showError() {
 			return m, m.copyError()
 		}
-		return m, m.copyDescribe()
+		if pr, ok := m.SelectedPR(); ok {
+			return m, m.copyBranch(pr)
+		}
 	case "a":
 		m.State.Feedback = "add · not wired"
 	case "r":
@@ -210,15 +210,6 @@ func (m *Model) applySummary(msg summaryDoneMsg) tea.Cmd {
 		m.summaryDone = map[string]bool{}
 	}
 	m.summaryDone[msg.id] = true
-	if note := strings.TrimSpace(msg.note); note != "" {
-		m.lastDescribeNote = note
-	} else if errText := strings.TrimSpace(msg.err); errText != "" {
-		m.lastDescribeNote = errText
-	} else if desc := strings.TrimSpace(msg.description); desc != "" {
-		m.lastDescribeNote = desc
-	} else if strings.TrimSpace(m.Describe) != "" {
-		m.lastDescribeNote = "empty"
-	}
 	title := strings.TrimSpace(msg.title)
 	desc := strings.TrimSpace(msg.description)
 	if title != "" || desc != "" || strings.TrimSpace(m.Describe) != "" {

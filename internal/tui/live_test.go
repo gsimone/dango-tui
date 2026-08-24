@@ -1141,7 +1141,7 @@ func TestDotCopiesTestdataBranchToast(t *testing.T) {
 		t.Fatalf("dot toast:\n%s", frame)
 	}
 	if strings.Contains(frame, "copied gm/auth-scope") {
-		t.Fatalf("dot copies describe argv, not the branch:\n%s", frame)
+		t.Fatalf("toast is copied, not the branch:\n%s", frame)
 	}
 	if strings.Contains(frame, "Checked out") || strings.Contains(frame, "[ p ]") {
 		t.Fatalf("toast only, no checkout/picker:\n%s", frame)

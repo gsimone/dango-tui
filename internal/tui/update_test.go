@@ -626,7 +626,7 @@ func TestDotCopiesFetchError(t *testing.T) {
 	}
 }
 
-func TestDotCopiesDescribeArgv(t *testing.T) {
+func TestDotCopiesBranchToast(t *testing.T) {
 	var copied string
 	old := copyText
 	copyText = func(s string) error { copied = s; return nil }
@@ -652,8 +652,8 @@ func TestDotCopiesDescribeArgv(t *testing.T) {
 	if strings.Contains(frame, "[ p ]") {
 		t.Fatalf("no picker:\n%s", frame)
 	}
-	if copied != "none" {
-		t.Fatalf("unset describe copies none, got %q", copied)
+	if copied != "gm/stacks-184" {
+		t.Fatalf("dot copies the selected layer branch, got %q", copied)
 	}
 	if after := gitHEAD(t); after != before {
 		t.Fatalf("changed git HEAD: %s -> %s", before, after)
@@ -675,7 +675,7 @@ func TestDotCopiesDescribeArgv(t *testing.T) {
 	}
 }
 
-func TestDotCopiesDescribeArgvAndLastRun(t *testing.T) {
+func TestDotCopiesBranchAfterDescribeRuns(t *testing.T) {
 	var copied string
 	old := copyText
 	copyText = func(s string) error { copied = s; return nil }
@@ -709,21 +709,24 @@ func TestDotCopiesDescribeArgvAndLastRun(t *testing.T) {
 	}
 	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(".")})
 	m = next.(Model)
-	if copied != "echo pane-hook-ok\npane-hook-ok" {
-		t.Fatalf("dot copies argv plus last run, got %q", copied)
+	if copied != "gm/alpha" {
+		t.Fatalf("dot copies the selected layer branch, got %q", copied)
 	}
 	if !strings.Contains(stripANSI(m.View()), "copied") {
 		t.Fatalf("toast copied:\n%s", stripANSI(m.View()))
 	}
-	if strings.Contains(copied, "gm/alpha") {
-		t.Fatalf("dot must not copy the branch: %q", copied)
+	if strings.Contains(stripANSI(m.View()), "copied gm/") {
+		t.Fatalf("toast is copied, not the branch:\n%s", stripANSI(m.View()))
+	}
+	if strings.Contains(copied, "echo") || strings.Contains(copied, "pane-hook-ok") {
+		t.Fatalf("dot must not dump describe: %q", copied)
 	}
 	if cmd == nil {
 		t.Fatal("toast should clear")
 	}
 }
 
-func TestDotCopiesDescribeError(t *testing.T) {
+func TestDotCopiesBranchWhenDescribeDies(t *testing.T) {
 	var copied string
 	old := copyText
 	copyText = func(s string) error { copied = s; return nil }
@@ -736,8 +739,11 @@ func TestDotCopiesDescribeError(t *testing.T) {
 		Height:   24,
 		Fetch: func(string) ([]domain.Stack, error) {
 			return []domain.Stack{{
-				ID:  "s",
-				PRs: []domain.PullRequest{{Number: 1, Title: "alpha"}, {Number: 2, Title: "beta"}},
+				ID: "s",
+				PRs: []domain.PullRequest{
+					{Number: 1, Title: "alpha", Branch: "gm/alpha"},
+					{Number: 2, Title: "beta"},
+				},
 			}}, nil
 		},
 		Summarize: func(job summary.Job) summary.Result {
@@ -751,11 +757,11 @@ func TestDotCopiesDescribeError(t *testing.T) {
 	}
 	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(".")})
 	m = next.(Model)
-	if copied != "echo pane-hook-ok\nexit 1" {
-		t.Fatalf("dot copies argv plus error, got %q", copied)
+	if copied != "gm/alpha" {
+		t.Fatalf("dot still copies the branch, got %q", copied)
 	}
-	if strings.Contains(stripANSI(m.View()), "exit 1") && !strings.Contains(stripANSI(m.View()), "copied") {
-		t.Fatalf("error must not replace the toast:\n%s", stripANSI(m.View()))
+	if strings.Contains(copied, "exit 1") || strings.Contains(copied, "echo") {
+		t.Fatalf("dot must not dump describe: %q", copied)
 	}
 }
 
