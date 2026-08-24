@@ -65,10 +65,12 @@ jobs:
         run: |
           set -euo pipefail
           make build
+          wc -c dango
           bytes="$(wc -c < dango)"
-          echo "dango stripped binary: ${bytes} bytes"
-          echo >> "${GITHUB_STEP_SUMMARY}"
-          echo "Stripped \`dango\` binary: **${bytes}** bytes (\`make build\` / \`wc -c\`)." >> "${GITHUB_STEP_SUMMARY}"
+          {
+            echo
+            echo "Stripped \`dango\` executable: **${bytes}** bytes (\`make build && wc -c dango\`, not a JS bundle)."
+          } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Install gremlins
         env:
@@ -86,7 +88,7 @@ jobs:
         # Real mutator. Thresholds stay 0 so a low score does not fail the job.
         run: make mutation
 
-      - name: Publish mutation numbers
+      - name: Print mutation score
         if: always()
         run: |
           python3 <<'PY'
@@ -113,7 +115,12 @@ jobs:
           score = float(data.get("test_efficacy", 0))
           mcover = float(data.get("mutations_coverage", 0))
 
+          banner = (
+              f"MUTATION_SCORE killed={killed} survived={survived} "
+              f"timed_out={timed_out} score={score:.2f}%"
+          )
           lines = [
+              banner,
               f"Killed: {killed}",
               f"Survived (lived): {survived}",
               f"Timed out: {timed_out}",
@@ -126,15 +133,16 @@ jobs:
           summary = os.environ.get("GITHUB_STEP_SUMMARY")
           if summary:
               with open(summary, "a", encoding="utf-8") as fh:
-                  fh.write("## Mutation (gremlins)\n\n")
+                  fh.write("## Mutation score\n\n")
+                  fh.write(f"**`{banner}`**\n\n")
                   fh.write("| Metric | Value |\n| --- | --- |\n")
                   fh.write(f"| Killed | {killed} |\n")
-                  fh.write(f"| Survived (lived) | {survived} |\n")
+                  fh.write(f"| Survived | {survived} |\n")
                   fh.write(f"| Timed out | {timed_out} |\n")
                   fh.write(f"| Not covered | {not_covered} |\n")
-                  fh.write(f"| Score (test efficacy) | {score:.2f}% |\n")
+                  fh.write(f"| Score | {score:.2f}% |\n")
                   fh.write(f"| Mutator coverage | {mcover:.2f}% |\n\n")
-                  fh.write("Real mutator: gremlins v0.6.0 on `./internal`. ")
+                  fh.write("Real mutator: gremlins v0.6.0 on `./internal` (not Stryker, not `Mutant_*`). ")
                   fh.write("Report-only. No mutation-score threshold is enforced yet (gate tomorrow).\n")
           PY
 
