@@ -39,6 +39,9 @@ func (m Model) splashStatusLines(maxW int) []string {
 	if m.fetchErr != nil && !m.Fetching {
 		return wrapWords(m.errorCopyText(), maxW)
 	}
+	if m.splashKeep != "" {
+		return wrapWords(m.splashKeep, maxW)
+	}
 	return []string{"fetching " + m.repoLabel()}
 }
 

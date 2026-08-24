@@ -47,7 +47,7 @@ func (m Model) renderFrame(width, height int) string {
 		footerY := height - 1
 		if m.State.Feedback != "" {
 			c.text(footX, footerY, m.State.Feedback, meta, surface, footW)
-		} else if m.fetchErr != nil {
+		} else {
 			paintKeyLegend(c, footX, footerY, footW, errorFooter(), paper, meta, surface)
 		}
 		return c.render()

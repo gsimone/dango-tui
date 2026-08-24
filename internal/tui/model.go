@@ -46,6 +46,7 @@ type Model struct {
 	fetchedAt   time.Time
 	fetch       live.FetchFunc
 	summarize   summary.Func
+	splashKeep  string
 }
 
 func New(opts Options) Model {
@@ -157,6 +158,20 @@ func (m Model) errorCopyText() string {
 		return ""
 	}
 	return strings.TrimSpace(m.fetchErr.Error())
+}
+
+func (m Model) splashCopyText() string {
+	if text := m.errorCopyText(); text != "" {
+		return text
+	}
+	if len(live.LastGHArgv) > 0 {
+		return live.FormatGHArgv(live.LastGHArgv)
+	}
+	repo := m.Repo
+	if repo == "" {
+		repo = "archetype-labs/app"
+	}
+	return live.FormatGHArgv(live.PRListArgs(repo))
 }
 
 func (m Model) startSummaries() tea.Cmd {
@@ -277,12 +292,16 @@ func (m *Model) copyBranch(pr domain.PullRequest) tea.Cmd {
 }
 
 func (m *Model) copyError() tea.Cmd {
-	text := m.errorCopyText()
-	if text == "" {
-		return nil
-	}
-	copyText(text)
+	return m.copySplash()
+}
+
+func (m *Model) copySplash() tea.Cmd {
+	text := m.splashCopyText()
+	err := copyText(text)
 	m.State.Feedback = "copied"
+	if err != nil {
+		m.splashKeep = text
+	}
 	return m.clearFeedback()
 }
 

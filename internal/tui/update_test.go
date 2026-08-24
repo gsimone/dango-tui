@@ -430,7 +430,7 @@ func TestDotCopiesFetchError(t *testing.T) {
 	err502 := errors.New("gh pr list --repo archetype-labs/app --state open --limit 100 --json number,title,url,headRefName,baseRefName,author,labels,isDraft,state: HTTP 502: Bad Gateway")
 	var copied string
 	old := copyText
-	copyText = func(s string) { copied = s }
+	copyText = func(s string) error { copied = s; return nil }
 	t.Cleanup(func() { copyText = old })
 
 	m := New(Options{
@@ -464,6 +464,9 @@ func TestDotCopiesFetchError(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("copy toast should clear")
 	}
+	if !strings.Contains(stripANSI(m.View()), "copied") {
+		t.Fatalf("footer must flash copied:\n%s", stripANSI(m.View()))
+	}
 	if m.View() == "" {
 		t.Fatal("error must not quit the process")
 	}
@@ -472,7 +475,7 @@ func TestDotCopiesFetchError(t *testing.T) {
 func TestDotCopiesBranchToast(t *testing.T) {
 	var copied string
 	old := copyText
-	copyText = func(s string) { copied = s }
+	copyText = func(s string) error { copied = s; return nil }
 	t.Cleanup(func() { copyText = old })
 
 	before := gitHEAD(t)
@@ -521,7 +524,7 @@ func TestDotCopiesBranchToast(t *testing.T) {
 func TestCommaDoesNotCopy(t *testing.T) {
 	var copied string
 	old := copyText
-	copyText = func(s string) { copied = s }
+	copyText = func(s string) error { copied = s; return nil }
 	t.Cleanup(func() { copyText = old })
 
 	m := New(Options{StoryID: "mixed", Width: 80, Height: 24})

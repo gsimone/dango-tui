@@ -190,6 +190,14 @@ func runGH(args ...string) ([]byte, error) {
 }
 
 func prListArgs(repo string) []string {
+	return PRListArgs(repo)
+}
+
+// PRListArgs is the exact gh argv Fetch runs for a repo.
+func PRListArgs(repo string) []string {
+	if strings.TrimSpace(repo) == "" {
+		repo = "archetype-labs/app"
+	}
 	return []string{"pr", "list", "--repo", repo, "--state", "open", "--limit", "100",
 		"--json", strings.Join(prListFields, ",")}
 }

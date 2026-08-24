@@ -93,7 +93,7 @@ func TestFailedFetchStaysOnSplashWithArgv(t *testing.T) {
 	err502 := errors.New(argv + ": HTTP 502: Bad Gateway")
 	var copied string
 	old := copyText
-	copyText = func(s string) { copied = s }
+	copyText = func(s string) error { copied = s; return nil }
 	t.Cleanup(func() { copyText = old })
 
 	m := New(Options{
@@ -143,8 +143,87 @@ func TestFailedFetchStaysOnSplashWithArgv(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("copy toast should clear")
 	}
+	if !strings.Contains(stripANSI(m.View()), "copied") {
+		t.Fatalf("footer must flash copied:\n%s", stripANSI(m.View()))
+	}
 	if !m.splash() {
 		t.Fatal("copy must not leave the splash")
+	}
+}
+
+func TestSplashDotCopiesArgvWhileFetching(t *testing.T) {
+	want := live.FormatGHArgv(live.PRListArgs("archetype-labs/app"))
+	live.LastGHArgv = nil
+	var copied string
+	old := copyText
+	copyText = func(s string) error { copied = s; return nil }
+	t.Cleanup(func() { copyText = old })
+
+	blocked := make(chan struct{})
+	m := New(Options{
+		Repo:   "archetype-labs/app",
+		Width:  80,
+		Height: 24,
+		Fetch: func(string) ([]domain.Stack, error) {
+			<-blocked
+			return nil, errors.New("should not finish")
+		},
+	})
+	if !m.splash() || m.showError() {
+		t.Fatal("still fetching: splash, not showError")
+	}
+	assertSplashFrame(t, stripANSI(m.View()), "fetching archetype-labs/app")
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(".")})
+	m = next.(Model)
+	if copied != want {
+		t.Fatalf("while fetching, copy exact argv\ngot  %q\nwant %q", copied, want)
+	}
+	if !strings.Contains(copied, "archetype-labs/app") || !strings.Contains(copied, "--json") {
+		t.Fatalf("argv %q", copied)
+	}
+	if cmd == nil {
+		t.Fatal("copy toast should clear")
+	}
+	frame := stripANSI(m.View())
+	if !strings.Contains(frame, "copied") {
+		t.Fatalf("footer must flash copied while fetching:\n%s", frame)
+	}
+	if !m.splash() {
+		t.Fatal("dot must not leave the splash")
+	}
+	if strings.Contains(frame, "No open stacks") {
+		t.Fatalf("no empty list:\n%s", frame)
+	}
+	close(blocked)
+}
+
+func TestSplashDotKeepsArgvOnLineWhenCopyFails(t *testing.T) {
+	want := live.FormatGHArgv(live.PRListArgs("archetype-labs/app"))
+	live.LastGHArgv = nil
+	old := copyText
+	copyText = func(string) error { return errors.New("osc52 and pbcopy failed") }
+	t.Cleanup(func() { copyText = old })
+
+	m := New(Options{
+		Repo:   "archetype-labs/app",
+		Width:  80,
+		Height: 24,
+		Fetch:  func(string) ([]domain.Stack, error) { return nil, errors.New("unused") },
+	})
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(".")})
+	m = next.(Model)
+	frame := stripANSI(m.View())
+	if !strings.Contains(frame, "copied") {
+		t.Fatalf("toast still flashes:\n%s", frame)
+	}
+	if !strings.Contains(frame, "pr list") || !strings.Contains(frame, "archetype-labs/app") {
+		t.Fatalf("failed copy keeps argv on the splash line:\n%s", frame)
+	}
+	if !strings.Contains(frame, want) && !strings.Contains(frame, "--json") {
+		t.Fatalf("argv visible:\n%s", frame)
+	}
+	if !m.splash() {
+		t.Fatal("stay on splash")
 	}
 }
 
