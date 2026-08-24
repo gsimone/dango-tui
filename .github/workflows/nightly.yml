@@ -9,7 +9,8 @@
 # semver. Always replaces the single `nightly` prerelease and its assets.
 #
 # Binaries are `make build` flags (CGO_ENABLED=0 -ldflags="-s -w"), named
-# as the executable: dango-linux-amd64, dango-darwin-arm64, dango-darwin-amd64.
+# as the executable: dango-linux-amd64, dango-darwin-arm64.
+# No darwin/amd64. No semver / 0.1.0.
 
 name: Nightly
 
@@ -48,13 +49,13 @@ jobs:
         run: |
           set -euo pipefail
           echo "===== wc -c (executable bytes, not a bundle) ====="
-          wc -c dist/dango-linux-amd64 dist/dango-darwin-arm64 dist/dango-darwin-amd64
+          wc -c dist/dango-linux-amd64 dist/dango-darwin-arm64
           {
             echo "## Nightly assets"
             echo
             echo "| Asset | Bytes |"
             echo "| --- | ---: |"
-            for f in dist/dango-linux-amd64 dist/dango-darwin-arm64 dist/dango-darwin-amd64; do
+            for f in dist/dango-linux-amd64 dist/dango-darwin-arm64; do
               printf '| `%s` | %s |\n' "${f#dist/}" "$(wc -c < "$f")"
             done
             echo
@@ -79,9 +80,7 @@ jobs:
           Assets:
           - dango-linux-amd64
           - dango-darwin-arm64
-          - dango-darwin-amd64
 
           Commit: ${sha}" \
             dist/dango-linux-amd64 \
-            dist/dango-darwin-arm64 \
-            dist/dango-darwin-amd64
+            dist/dango-darwin-arm64

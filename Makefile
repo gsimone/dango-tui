@@ -9,12 +9,11 @@ build:
 	CGO_ENABLED=0 go build -ldflags="-s -w" -o $(BIN) ./cmd/dango
 
 # Cross-compiled stripped executables for the nightly prerelease.
-# Same flags as `build`. Files are the binaries (not archives).
+# linux/amd64 and darwin/arm64 only. Same flags as `build`. Files are the binaries.
 dist:
 	mkdir -p dist
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/dango-linux-amd64 ./cmd/dango
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/dango-darwin-arm64 ./cmd/dango
-	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o dist/dango-darwin-amd64 ./cmd/dango
 
 test:
 	go test ./...

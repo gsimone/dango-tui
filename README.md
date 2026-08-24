@@ -35,7 +35,7 @@ make build
 
 `make build` is `CGO_ENABLED=0 go build -ldflags="-s -w" -o dango ./cmd/dango`.
 
-Nightly (not 0.1.0): after CI on `main`, plus 02:00 UTC and `workflow_dispatch`, the `Nightly` workflow replaces a single prerelease tag `nightly` with stripped `dango-linux-amd64`, `dango-darwin-arm64`, and `dango-darwin-amd64`. PRs do not publish. `make dist` builds those locally.
+Nightly (not 0.1.0, no semver): after CI on `main`, plus 02:00 UTC and `workflow_dispatch`, the `Nightly` workflow replaces a single prerelease tag `nightly` with stripped `dango-linux-amd64` and `dango-darwin-arm64`. No darwin/amd64. PRs do not publish. `make dist` builds those locally.
 
 Provider comes from `dango.json` / `dango.yml` / `dango.yaml`. `--provider` overrides. Missing config file = no generated title. A set provider writes a short stack title (list name, in place) and a description (inspector only) after first paint. First paint is always the gh name. `dango.json` is not a stack dump.
 
