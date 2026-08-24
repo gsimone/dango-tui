@@ -58,6 +58,27 @@ func TestMutantRunNeedsProvider(t *testing.T) {
 	}
 }
 
+func TestMutantRunKeepsDescribeAsFallback(t *testing.T) {
+	stack := domain.Stack{ID: "s", PRs: []domain.PullRequest{{Title: "Alpha"}, {Title: "Beta"}}}
+	res := summary.Run(summary.Job{Stack: stack, ID: "s"})
+	if res.Title != "" {
+		t.Fatalf("no provider must not retitle: %+v", res)
+	}
+	if res.Description != summary.Describe(stack) {
+		t.Fatalf("no key uses Describe(), not a model sentence: got %q want %q", res.Description, summary.Describe(stack))
+	}
+	alwaysLocal := func(job summary.Job) summary.Result {
+		return summary.Result{ID: job.ID, Description: summary.Describe(job.Stack)}
+	}
+	luna := "luna wrote the pane"
+	if alwaysLocal(summary.Job{Stack: stack, ID: "s"}).Description == luna {
+		t.Fatal("always-local mutant would ignore luna")
+	}
+	if res.Description == luna {
+		t.Fatal("failed/missing luna must not invent a model sentence")
+	}
+}
+
 func TestMutantParseProvider(t *testing.T) {
 	p := summary.ParseProvider("codex@luna.medium")
 	if p.Name != "codex" || p.Model != "luna.medium" {

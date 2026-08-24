@@ -24,17 +24,22 @@ type Result struct {
 // Func is one provider hook. Tests inject a fake; production uses Run.
 type Func func(Job) Result
 
-// Run fills the inspector description from local Describe() even when
-// --provider / dango.json is missing. A title is written only when a
-// provider is set, so first paint keeps the gh / short list name.
-// Fetch and first paint do not call this. Describe never echoes the
-// raw gh title, never pastes pr.Body, and never wraps Covers.
+// Run fills the inspector description after first paint. The product
+// sentence is gpt-5.6 luna. Local Describe() is the fallback when the
+// model is missing, errors, or has no key. A title is written only
+// when a provider is set, so the list keeps the gh / short name.
+// Fetch and first paint do not call this.
 func Run(job Job) Result {
 	id := job.ID
 	if id == "" {
 		id = job.Stack.ID
 	}
-	res := Result{ID: id, Description: Describe(job.Stack)}
+	res := Result{ID: id}
+	if desc, err := describeRemote(job.Stack); err == nil && strings.TrimSpace(desc) != "" {
+		res.Description = strings.TrimSpace(desc)
+	} else {
+		res.Description = Describe(job.Stack)
+	}
 	if !job.Provider.Empty() {
 		res.Title = Title(job.Stack)
 	}

@@ -45,7 +45,7 @@ make build
 
 Nightly (not 0.1.0, no semver): after CI on `main`, plus 02:00 UTC and `workflow_dispatch`, the `Nightly` workflow replaces a single prerelease tag `nightly` with stripped `dango-linux-amd64` and `dango-darwin-arm64`. No darwin/amd64. PRs do not publish. `make dist` builds those locally.
 
-Provider comes from `dango.json` / `dango.yml` / `dango.yaml`. `--provider` overrides. Missing config file = no generated list title; the list keeps a short stack title (ticket id, or the gh title when it is already short). After first paint, local `Describe()` fills the inspector (two clipped meta lines) with no provider and no `dango.json`. A set provider may still swap a short stack title in place. `dango.json` is not a stack dump.
+Provider comes from `dango.json` / `dango.yml` / `dango.yaml`. `--provider` overrides. Missing config file = no generated list title; the list keeps a short stack title (ticket id, or the gh title when it is already short). After first paint, inspector descriptions come from gpt-5.6 (`OPENAI_API_KEY` or `DANGO_OPENAI_API_KEY`); local `Describe()` is the fallback. A set `--provider` may still swap a short stack title in place. `dango.json` is not a stack dump.
 
 A stack is two or more open PRs. A single open PR is not a stack and does not appear as a one-ball row. List names stay short (paper, leftover width, one line).
 

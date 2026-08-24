@@ -62,7 +62,15 @@ func applyFetch(m Model) (Model, tea.Cmd) {
 	return next.(Model), extra
 }
 
+func silenceLuna(t *testing.T) {
+	t.Helper()
+	t.Setenv("DANGO_OPENAI_API_KEY", "")
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("DANGO_API_KEY", "")
+}
+
 func TestSummariesAreAsyncAndLandInPlace(t *testing.T) {
+	silenceLuna(t)
 	fetch := func(string) ([]domain.Stack, error) {
 		return []domain.Stack{{
 			ID:  "s",
@@ -200,6 +208,7 @@ func TestSummariesAreAsyncAndLandInPlace(t *testing.T) {
 }
 
 func TestSummaryDonePaneDescriptionIsNotGhTitle(t *testing.T) {
+	silenceLuna(t)
 	gh := "LEV-182: Bound hosts to the session"
 	fetch := func(string) ([]domain.Stack, error) {
 		return []domain.Stack{{
@@ -270,6 +279,7 @@ func TestSummaryDonePaneDescriptionIsNotGhTitle(t *testing.T) {
 }
 
 func TestDescriptionFillsInspectorInPlace(t *testing.T) {
+	silenceLuna(t)
 	fetch := func(string) ([]domain.Stack, error) {
 		return []domain.Stack{{
 			ID:  "s",

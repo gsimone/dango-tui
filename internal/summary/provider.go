@@ -47,8 +47,8 @@ func (none) Summarize(domain.Stack) string { return "" }
 
 // Chosen is the Summarizer picked for a provider. --provider writes the
 // stack title. No provider → none (list keeps the gh / short name).
-// Run still fills the inspector description via Describe() with no
-// provider. A provider with no network summarizer yet uses Local().
+// Run fills the inspector via luna (gpt-5.6), then Describe() on
+// failure. A provider with no network title client yet uses Local().
 // Fetch does not wait on this.
 type Chosen struct {
 	Provider Provider

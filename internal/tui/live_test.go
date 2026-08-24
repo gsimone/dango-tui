@@ -564,7 +564,64 @@ func TestLiveCIEnrichPaintsFailAfterList(t *testing.T) {
 	}
 }
 
+func TestLiveLunaDescriptionWithoutProvider(t *testing.T) {
+	title := "LEV-182: Bound hosts to the session so undo does not wedge"
+	luna := "luna pinned hosts to the worker so undo cannot widen scope"
+	m := tui.New(tui.Options{
+		Repo:   "archetype-labs/app",
+		Width:  120,
+		Height: 30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{{
+				ID: "s",
+				PRs: []domain.PullRequest{
+					{Number: 182, Title: title},
+					{Number: 183, Title: "Pin each host to the worker"},
+				},
+			}}, nil
+		},
+		Summarize: func(job summary.Job) summary.Result {
+			if job.Provider.Raw != "" {
+				t.Fatalf("no provider: %+v", job.Provider)
+			}
+			return summary.Result{ID: job.ID, Description: luna}
+		},
+	})
+	m, extra := applyLiveFetch(m)
+	if extra == nil {
+		t.Fatal("luna must start after first paint, not block fetch")
+	}
+	first := frameOf(m)
+	list := strings.Join(listRows(first), "\n")
+	if !strings.Contains(list, "LEV-182") {
+		t.Fatalf("first paint keeps the short list title:\n%s", first)
+	}
+	if strings.Contains(first, luna) {
+		t.Fatalf("luna must not block first paint:\n%s", first)
+	}
+	local := summary.Describe(m.Stacks()[0])
+	m = applyLiveCmds(m, extra)
+	if m.Stacks()[0].Name != "LEV-182" {
+		t.Fatalf("list title unchanged, got %q", m.Stacks()[0].Name)
+	}
+	if m.Stacks()[0].Description != luna {
+		t.Fatalf("luna description: %q", m.Stacks()[0].Description)
+	}
+	if m.Stacks()[0].Description == local {
+		t.Fatal("Describe() is fallback only")
+	}
+	frame := frameOf(m)
+	if strings.Contains(strings.Join(listRows(frame), "\n"), luna) {
+		t.Fatalf("description belongs in the pane:\n%s", frame)
+	}
+	if !strings.Contains(frame, "luna pinned hosts") {
+		t.Fatalf("pane must show luna:\n%s", frame)
+	}
+}
+
 func TestLiveFillsDescriptionWithoutProvider(t *testing.T) {
+	// No key → production Run() must land Describe(), not invent a
+	// model sentence. Luna success is TestLiveLunaDescriptionWithoutProvider.
 	title := "LEV-182: Bound hosts to the session so undo does not wedge"
 	m := tui.New(tui.Options{
 		Repo:   "archetype-labs/app",
