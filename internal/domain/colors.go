@@ -103,8 +103,18 @@ var LogoTokens = []string{
 	"logoRed", "logoOrange", "logoYellow", "logoGreen", "logoBlue", "logoPurple", "logoPink",
 }
 
+// StatusHex is the ball stylesheet. Ink sits on ○/◎/◌; ● is active only.
+var StatusHex = map[string]string{
+	"paper":     "#f2ebe0",
+	"draft":     "#8b8e93",
+	"ciFailure": "#e24b4a",
+	"warning":   "#e6b84d",
+	"ready":     "#3daf6c",
+	"merged":    "#9b7bb8",
+}
+
 // ChromeHex locks the field, type, and connectors to the mark.
-// Type is paper or meta. Status words keep their OKLCH hues.
+// Type is paper or meta. Ball ink is StatusHex.
 var ChromeHex = map[string]string{
 	"surface":       "#14120f",
 	"surfaceRaised": "#242018",
@@ -118,9 +128,12 @@ var ChromeHex = map[string]string{
 }
 
 var TerminalColors = func() map[string]string {
-	out := make(map[string]string, len(OKLCHTokens)+len(ChromeHex))
+	out := make(map[string]string, len(OKLCHTokens)+len(StatusHex)+len(ChromeHex))
 	for name, token := range OKLCHTokens {
 		out[name] = OKLCHToHex(token)
+	}
+	for name, hex := range StatusHex {
+		out[name] = hex
 	}
 	for name, hex := range ChromeHex {
 		out[name] = hex

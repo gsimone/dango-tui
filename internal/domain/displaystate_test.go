@@ -54,10 +54,17 @@ func TestGetDisplayStatePrecedence(t *testing.T) {
 		t.Fatalf("unmergeable beats queue: got %s", got)
 	}
 
-	queued := data.PRFixture(data.PullRequestFixtureInput{
+	queuedApproved := data.PRFixture(data.PullRequestFixtureInput{
 		MergeQueueState: strPtr("QUEUED"),
 		ReviewDecision:  strPtr("APPROVED"),
 		CI:              &domain.CISummary{State: domain.CISuccess, Failed: 0, Pending: 0, Total: 3},
+	})
+	if got := domain.GetDisplayState(queuedApproved); got != domain.StateReady {
+		t.Fatalf("approved beats queued: got %s", got)
+	}
+
+	queued := data.PRFixture(data.PullRequestFixtureInput{
+		MergeQueueState: strPtr("QUEUED"),
 	})
 	if got := domain.GetDisplayState(queued); got != domain.StateQueued {
 		t.Fatalf("queued: got %s", got)
@@ -82,13 +89,14 @@ func TestStateColorTokenFromPRFields(t *testing.T) {
 		pr    domain.PullRequest
 		token string
 	}{
-		{name: "draft", pr: domain.PullRequest{Draft: true}, token: "meta"},
-		{name: "merged", pr: domain.PullRequest{Merged: true, Draft: true}, token: "merged"},
+		{name: "draft", pr: domain.PullRequest{Draft: true}, token: "draft"},
+		{name: "merged", pr: domain.PullRequest{Merged: true}, token: "merged"},
+		{name: "draft-beats-merged", pr: domain.PullRequest{Merged: true, Draft: true}, token: "draft"},
 		{name: "blocked-review", pr: domain.PullRequest{ReviewDecision: "CHANGES_REQUESTED"}, token: "warning"},
 		{name: "blocked-conflict", pr: domain.PullRequest{Mergeable: domain.MergeableFalse()}, token: "warning"},
 		{name: "open-slim", pr: domain.PullRequest{}, token: "paper"},
 		{name: "open-isDraft-state-only", pr: domain.PullRequest{Draft: false, Merged: false}, token: "paper"},
-		{name: "queued", pr: domain.PullRequest{MergeQueueState: "QUEUED"}, token: "queued"},
+		{name: "queued", pr: domain.PullRequest{MergeQueueState: "QUEUED"}, token: "paper"},
 		{name: "approved-no-ci", pr: domain.PullRequest{ReviewDecision: "APPROVED"}, token: "ready"},
 		{name: "fail-wins", pr: domain.PullRequest{Draft: true, CI: domain.CISummary{State: domain.CIFailure, Failed: 1}}, token: "ciFailure"},
 	}
@@ -107,20 +115,41 @@ func TestBallGlyphsAreOneMeaning(t *testing.T) {
 		state domain.PrDisplayState
 		glyph rune
 	}{
-		{domain.StateOpen, '●'},
+		{domain.StateOpen, '○'},
 		{domain.StateDraft, '○'},
-		{domain.StateCIFailure, '●'},
+		{domain.StateCIFailure, '○'},
 		{domain.StateReviewBlocked, '◎'},
-		{domain.StateReady, '●'},
-		{domain.StateMerged, '●'},
+		{domain.StateReady, '○'},
+		{domain.StateMerged, '○'},
 		{domain.StateQueued, '◌'},
 	}
 	for _, tc := range cases {
 		if got := domain.BallGlyph(tc.state); got != tc.glyph {
 			t.Fatalf("%s glyph %q, want %q", tc.state, string(got), string(tc.glyph))
 		}
+		if got := domain.BallGlyph(tc.state); got == '●' {
+			t.Fatalf("%s must not use filled as a status", tc.state)
+		}
 		if domain.IsLogoToken(domain.StateColorToken(tc.state)) {
 			t.Fatalf("%s used a logo token", tc.state)
+		}
+	}
+}
+
+func TestStylesheetInkLocks(t *testing.T) {
+	want := map[domain.PrDisplayState]string{
+		domain.StateOpen:          "#f2ebe0",
+		domain.StateDraft:         "#8b8e93",
+		domain.StateCIFailure:     "#e24b4a",
+		domain.StateReviewBlocked: "#e6b84d",
+		domain.StateReady:         "#3daf6c",
+		domain.StateMerged:        "#9b7bb8",
+		domain.StateQueued:        "#f2ebe0",
+	}
+	for state, hex := range want {
+		token := domain.StateColorToken(state)
+		if got := domain.Color(token); got != hex {
+			t.Fatalf("%s ink %s, want %s (token %s)", state, got, hex, token)
 		}
 	}
 }

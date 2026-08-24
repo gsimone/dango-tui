@@ -172,8 +172,8 @@ func TestKeyboardAndHoverRevealTheSameInspector(t *testing.T) {
 	if !strings.Contains(keyboard, "#185 Keep service identity") {
 		t.Fatalf("keyboard inspector:\n%s", keyboard)
 	}
-	if !strings.Contains(keyboard, "●-◉-●") {
-		t.Fatalf("active layer is ◉, status glyphs stay:\n%s", keyboard)
+	if !strings.Contains(keyboard, "○-●-○") {
+		t.Fatalf("active layer is ●, others stay hollow:\n%s", keyboard)
 	}
 
 	first := data.Stories()[0].Stacks[0]
@@ -629,8 +629,8 @@ func TestHoverFillsBallAndShowsInspector(t *testing.T) {
 	if !strings.Contains(frame, "#185 Keep service identity") {
 		t.Fatalf("hover inspector:\n%s", frame)
 	}
-	if !strings.Contains(frame, "●-◉-●") {
-		t.Fatalf("hover marks the active layer with ◉:\n%s", frame)
+	if !strings.Contains(frame, "○-●-○") {
+		t.Fatalf("hover marks the active layer with ●:\n%s", frame)
 	}
 }
 

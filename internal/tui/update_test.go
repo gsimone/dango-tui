@@ -387,28 +387,38 @@ func TestStatusWordsKeepStatusColor(t *testing.T) {
 		t.Fatalf("auth head should be ciFailure, got %s", got)
 	}
 	composer := New(Options{StoryID: "mixed", Width: 120, Height: 30}).Stacks()[1]
-	if got := stackHealthColor(composer); got != domain.Color("queued") {
-		t.Fatalf("composer head should be queued, got %s", got)
+	if got := stackHealthColor(composer); got != domain.Color("paper") {
+		t.Fatalf("composer head queued ink is paper, got %s", got)
 	}
 }
 
-func TestActiveLayerIsFisheyeNotNewInk(t *testing.T) {
+func TestActiveLayerKeepsInkAndFills(t *testing.T) {
 	review := domain.PullRequest{ReviewDecision: "CHANGES_REQUESTED"}
 	if got := layerBallGlyph(review, false); got != '◎' {
 		t.Fatalf("review resting glyph %q", string(got))
 	}
-	if got := layerBallGlyph(review, true); got != '◉' {
-		t.Fatalf("active review is ◉, not %q", string(got))
+	if got := layerBallGlyph(review, true); got != '●' {
+		t.Fatalf("active review is ●, not %q", string(got))
 	}
-	if layerBallInk(review) != domain.Color("warning") {
+	if layerBallInk(review) != domain.Color("warning") || layerBallInk(review) != "#e6b84d" {
 		t.Fatalf("active keeps review ink, got %s", layerBallInk(review))
 	}
+	fail := domain.PullRequest{CI: domain.CISummary{State: domain.CIFailure, Failed: 1}}
+	if got := layerBallGlyph(fail, true); got != '●' {
+		t.Fatalf("active fail is ●, not %q", string(got))
+	}
+	if layerBallInk(fail) != "#e24b4a" {
+		t.Fatalf("active fail keeps red, got %s", layerBallInk(fail))
+	}
 	open := domain.PullRequest{}
-	if got := layerBallGlyph(open, true); got != '◉' {
-		t.Fatalf("active open is ◉, not %q", string(got))
+	if got := layerBallGlyph(open, true); got != '●' {
+		t.Fatalf("active open is ●, not %q", string(got))
 	}
 	if layerBallInk(open) != domain.Color("paper") {
 		t.Fatalf("active open keeps paper ink, got %s", layerBallInk(open))
+	}
+	if layerBallGlyph(fail, false) == '●' || layerBallGlyph(open, false) == '●' {
+		t.Fatal("resting status must not be filled")
 	}
 }
 
@@ -434,11 +444,11 @@ func TestInspectorStatusInkMatchesBall(t *testing.T) {
 		pr    domain.PullRequest
 		token string
 	}{
-		{name: "draft", pr: domain.PullRequest{Draft: true}, token: "meta"},
+		{name: "draft", pr: domain.PullRequest{Draft: true}, token: "draft"},
 		{name: "merged", pr: domain.PullRequest{Merged: true}, token: "merged"},
 		{name: "blocked", pr: domain.PullRequest{ReviewDecision: "CHANGES_REQUESTED"}, token: "warning"},
 		{name: "open", pr: domain.PullRequest{}, token: "paper"},
-		{name: "queued", pr: domain.PullRequest{MergeQueueState: "QUEUED"}, token: "queued"},
+		{name: "queued", pr: domain.PullRequest{MergeQueueState: "QUEUED"}, token: "paper"},
 		{name: "approved", pr: domain.PullRequest{ReviewDecision: "APPROVED"}, token: "ready"},
 		{name: "fail", pr: domain.PullRequest{CI: domain.CISummary{State: domain.CIFailure, Failed: 1}}, token: "ciFailure"},
 	}

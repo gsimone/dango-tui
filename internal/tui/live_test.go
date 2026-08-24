@@ -422,20 +422,23 @@ func TestLivePabloBallsOn120(t *testing.T) {
 	if !strings.Contains(list, "▶") {
 		t.Fatalf("selected stack is ▶:\n%s", frame)
 	}
-	if !strings.Contains(list, "◉-●") {
-		t.Fatalf("active layer is ◉ on the chain:\n%s", frame)
+	if !strings.Contains(list, "●-○") {
+		t.Fatalf("active is ● on a hollow chain:\n%s", frame)
 	}
-	if !strings.Contains(list, "◎-●") {
+	if !strings.Contains(list, "◎-○") {
 		t.Fatalf("needs-review stays ◎:\n%s", frame)
 	}
-	if !strings.Contains(list, "◌-●") {
+	if !strings.Contains(list, "◌-○") {
 		t.Fatalf("queued is ◌:\n%s", frame)
 	}
-	if !strings.Contains(list, "○-●") {
-		t.Fatalf("draft is ○:\n%s", frame)
+	if !strings.Contains(list, "○-○") {
+		t.Fatalf("idle layers are ○:\n%s", frame)
 	}
-	if strings.Count(list, "◎") < 1 || strings.Count(list, "◉") < 1 {
-		t.Fatalf("review and active must both show:\n%s", frame)
+	if strings.Contains(list, "◉") {
+		t.Fatalf("fisheye is retired:\n%s", frame)
+	}
+	if strings.Count(list, "●") != 1 {
+		t.Fatalf("filled never appears twice: %d in\n%s", strings.Count(list, "●"), frame)
 	}
 	if strings.Contains(list, "▸") {
 		t.Fatalf("selected marker is ▶, not ▸:\n%s", frame)
@@ -443,6 +446,29 @@ func TestLivePabloBallsOn120(t *testing.T) {
 	rr, rg, rb, _ := domain.ParseRGB(domain.Color("surfaceRaised"))
 	if strings.Contains(m.View(), fmt.Sprintf("48;2;%d;%d;%d", rr, rg, rb)) {
 		t.Fatalf("selected row must not wash:\n%s", frame)
+	}
+
+	fail := applyKey(applyKey(m, key("down")), key("down"))
+	failList := strings.Join(listRows(frameOf(fail)), "\n")
+	if !strings.Contains(failList, "●-○") || strings.Count(failList, "●") != 1 {
+		t.Fatalf("fail you are on is one filled:\n%s", frameOf(fail))
+	}
+	fr, fg, fb, _ := domain.ParseRGB("#e24b4a")
+	if !strings.Contains(fail.View(), fmt.Sprintf("38;2;%d;%d;%d", fr, fg, fb)) {
+		t.Fatal("failing layer you are on keeps red ink")
+	}
+
+	review := applyKey(fail, key("down"))
+	reviewList := strings.Join(listRows(frameOf(review)), "\n")
+	if strings.Contains(reviewList, "◎-○") {
+		t.Fatalf("active review is ●, not ◎:\n%s", frameOf(review))
+	}
+	if !strings.Contains(reviewList, "●-○") || strings.Count(reviewList, "●") != 1 {
+		t.Fatalf("review you are on is one filled:\n%s", frameOf(review))
+	}
+	ar, ag, ab, _ := domain.ParseRGB("#e6b84d")
+	if !strings.Contains(review.View(), fmt.Sprintf("38;2;%d;%d;%d", ar, ag, ab)) {
+		t.Fatal("review layer you are on keeps amber ink")
 	}
 }
 

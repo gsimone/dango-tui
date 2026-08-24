@@ -6,7 +6,7 @@ import (
 )
 
 // GetDisplayState resolves the single status that earns a PR's ball.
-// Worst state wins: CI fail > needs review > the rest.
+// Worst state wins: fail > review > approved > open > draft > queued > merged.
 func GetDisplayState(pr PullRequest) PrDisplayState {
 	if pr.CI.State == CIFailure || pr.CI.Failed > 0 {
 		return StateCIFailure
@@ -19,8 +19,8 @@ func GetDisplayState(pr PullRequest) PrDisplayState {
 		return StateReviewBlocked
 	}
 
-	if pr.Merged {
-		return StateMerged
+	if pr.ReviewDecision == "APPROVED" {
+		return StateReady
 	}
 	if pr.Draft {
 		return StateDraft
@@ -28,8 +28,8 @@ func GetDisplayState(pr PullRequest) PrDisplayState {
 	if pr.MergeQueueState != "" && pr.MergeQueueState != "NONE" {
 		return StateQueued
 	}
-	if pr.ReviewDecision == "APPROVED" {
-		return StateReady
+	if pr.Merged {
+		return StateMerged
 	}
 	return StateOpen
 }
@@ -104,26 +104,28 @@ func StateColorToken(state PrDisplayState) string {
 	case StateReviewBlocked:
 		return "warning"
 	case StateDraft:
-		return "meta"
-	case StateOpen:
+		return "draft"
+	case StateReady:
+		return "ready"
+	case StateMerged:
+		return "merged"
+	case StateQueued, StateOpen:
 		return "paper"
 	default:
-		return string(state)
+		return "paper"
 	}
 }
 
-// BallGlyph is the one mark for that state. The active layer is a
-// fisheye (◉) painted by the list — same ink, different shape. Review
-// stays ◎. No logo rainbow.
+// BallGlyph is the resting mark. Filled is never a status — the list
+// paints filled only on the active layer. Review is double, queued is dotted,
+// everything else is hollow. No logo rainbow.
 func BallGlyph(state PrDisplayState) rune {
 	switch state {
-	case StateDraft:
-		return '○'
 	case StateReviewBlocked:
 		return '◎'
 	case StateQueued:
 		return '◌'
 	default:
-		return '●'
+		return '○'
 	}
 }

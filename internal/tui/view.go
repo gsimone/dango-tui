@@ -174,9 +174,9 @@ func layerBallInk(pr domain.PullRequest) string {
 	return domain.Color(domain.StateColorToken(domain.GetDisplayState(pr)))
 }
 
-// Active layer is a shape, not new ink. Review stays ◎; the layer
-// you are on is ◉. Status color does not change.
-const activeBallGlyph = '◉'
+// Active layer keeps status ink and swaps the glyph to ●.
+// ● is never a status. ◉ is not used.
+const activeBallGlyph = '●'
 
 func layerBallGlyph(pr domain.PullRequest, active bool) rune {
 	if active {

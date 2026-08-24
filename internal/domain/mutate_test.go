@@ -64,6 +64,41 @@ func TestMutantDisplayStateOrder(t *testing.T) {
 	if queueFirst(conflict) == domain.StateReviewBlocked {
 		t.Fatal("queue-before-conflict mutant must not survive")
 	}
+
+	approvedQueued := domain.PullRequest{
+		MergeQueueState: "QUEUED",
+		ReviewDecision:  "APPROVED",
+	}
+	if got := domain.GetDisplayState(approvedQueued); got != domain.StateReady {
+		t.Fatalf("real approved-over-queue: %s", got)
+	}
+	queueOverApproved := func(pr domain.PullRequest) domain.PrDisplayState {
+		if pr.MergeQueueState != "" {
+			return domain.StateQueued
+		}
+		return domain.GetDisplayState(pr)
+	}
+	if queueOverApproved(approvedQueued) == domain.StateReady {
+		t.Fatal("queue-before-approved mutant must not survive")
+	}
+}
+
+func TestMutantBallGlyphNeverFilledStatus(t *testing.T) {
+	if domain.BallGlyph(domain.StateCIFailure) == '●' || domain.BallGlyph(domain.StateOpen) == '●' {
+		t.Fatal("filled is not a status")
+	}
+	filledStatus := func(state domain.PrDisplayState) rune {
+		if state == domain.StateReviewBlocked {
+			return '◎'
+		}
+		if state == domain.StateQueued {
+			return '◌'
+		}
+		return '●'
+	}
+	if filledStatus(domain.StateCIFailure) == domain.BallGlyph(domain.StateCIFailure) {
+		t.Fatal("filled-as-status mutant must not survive")
+	}
 }
 
 func TestMutantNormalizeHexAndLoginColor(t *testing.T) {

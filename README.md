@@ -108,7 +108,7 @@ CI on pull requests and pushes to `main` publishes coverage (total %) and real g
 - 2-column side pad, 1 blank row at the top
 - Stack list on the left; one `│` rule; inspector pane on the right (left/right pad)
 - List names are short stack titles in paper, leftover measure, one line. Full GitHub title lives in the right pane.
-- Balls: one mark, one meaning (no logo rainbow). Fail wins, then review, then the rest. Open paper `●`, draft meta `○`, CI broken red `●`, needs review amber `◎`, approved green `●`, merged dusk `●`, queued `◌`. The layer you are on is `◉` (same status ink). Selected stack is `▶` plus paper name — the row is not washed.
+- Balls: `●` is the active layer only, never a status. Resting marks are `○` (open/idle), `◎` (needs review), `◌` (queued). Ink sits on the hollow glyph: paper open, meta draft, fail red, review amber, ok green, dusk merged. Fail > review > approved > open > draft > queued > merged. Active keeps that ink and becomes `●`. Selected stack is `▶` plus paper name — the row is not washed. Chain is packed (`○-○-○`). No logo rainbow, no filled necklace.
 - Inspector facts include status (status ink on the value only), labels in their GitHub hex, and author (`●` + login). `●` is the dominant color from that user's GitHub avatar, never a picture. Fetch failure uses a stable login ink.
 - Splash shows a short SHA (module pseudo-version / `vcs.revision` / `-ldflags`). `go install @commit` must still print it.
 - Selected stack is `▶` plus paper name; the row is not washed. List titles stay paper; chrome is meta
