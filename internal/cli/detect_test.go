@@ -91,28 +91,28 @@ func TestReadDangoConfigMissingIsEmpty(t *testing.T) {
 
 func TestReadDangoJSONDescribe(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "dango.json"), []byte(`{"describe":"scripts/dango-describe"}`), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "dango.json"), []byte(`{"describe":"bin/describe-stack"}`), 0644); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := ReadDangoConfig(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Describe != "scripts/dango-describe" || cfg.Provider != "" {
+	if cfg.Describe != "bin/describe-stack" || cfg.Provider != "" {
 		t.Fatalf("got %+v", cfg)
 	}
 }
 
 func TestReadDangoYAMLDescribe(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "dango.yml"), []byte("describe: scripts/dango-describe\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "dango.yml"), []byte("describe: bin/describe-stack\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := ReadDangoConfig(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Describe != "scripts/dango-describe" {
+	if cfg.Describe != "bin/describe-stack" {
 		t.Fatalf("got %+v", cfg)
 	}
 }

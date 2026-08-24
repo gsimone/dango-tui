@@ -44,8 +44,8 @@ func TestMutantRunNeedsProvider(t *testing.T) {
 	if empty.Title != "" {
 		t.Fatalf("missing provider must not invent a title: %+v", empty)
 	}
-	if empty.Description == "" {
-		t.Fatal("missing provider still writes Describe()")
+	if empty.Description != "" {
+		t.Fatalf("unset describe leaves the pane empty: %q", empty.Description)
 	}
 	alwaysTitle := func(job summary.Job) summary.Result {
 		return summary.Result{ID: job.ID, Title: summary.Title(job.Stack), Description: summary.Describe(job.Stack)}
@@ -64,18 +64,17 @@ func TestMutantRunKeepsDescribeAsFallback(t *testing.T) {
 	if res.Title != "" {
 		t.Fatalf("no provider must not retitle: %+v", res)
 	}
-	if res.Description != summary.Describe(stack) {
-		t.Fatalf("missing describe script uses Describe(), not a model sentence: got %q want %q", res.Description, summary.Describe(stack))
+	if res.Description != "" {
+		t.Fatalf("unset describe leaves the pane empty, not Describe(): %q", res.Description)
 	}
 	alwaysLocal := func(job summary.Job) summary.Result {
 		return summary.Result{ID: job.ID, Description: summary.Describe(job.Stack)}
 	}
-	scripted := "describe script wrote the pane"
-	if alwaysLocal(summary.Job{Stack: stack, ID: "s"}).Description == scripted {
-		t.Fatal("always-local mutant would ignore the script")
+	if alwaysLocal(summary.Job{Stack: stack, ID: "s"}).Description == "" && summary.Describe(stack) != "" {
+		t.Fatal("Describe() helper still exists for tests")
 	}
-	if res.Description == scripted {
-		t.Fatal("failed/missing script must not invent a model sentence")
+	if res.Description == alwaysLocal(summary.Job{Stack: stack, ID: "s"}).Description && summary.Describe(stack) != "" {
+		t.Fatal("Describe() must not be the product sentence")
 	}
 }
 

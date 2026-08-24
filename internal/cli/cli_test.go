@@ -96,11 +96,11 @@ func TestParseRepoDoesNotRequireProvider(t *testing.T) {
 }
 
 func TestParseDescribeFlag(t *testing.T) {
-	args, err := Parse([]string{"--repo", "archetype-labs/app", "--describe", "scripts/dango-describe"})
+	args, err := Parse([]string{"--repo", "archetype-labs/app", "--describe", "bin/describe-stack"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if args.Describe != "scripts/dango-describe" {
+	if args.Describe != "bin/describe-stack" {
 		t.Fatalf("describe %q", args.Describe)
 	}
 	if args.Provider.Raw != "" {

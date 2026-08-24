@@ -60,7 +60,7 @@ func parse(args []string, usage io.Writer) (Args, error) {
 	frame := fs.String("frame", "", "print one frame (WxH, e.g. 80x24) and exit")
 	story := fs.String("story", "", "")
 	repo := fs.String("repo", "", "archetype-labs/app (live gh) or a JSON file of authored stacks")
-	provider := fs.String("provider", "", "stack title summarizer (e.g. codex@luna.medium); optional, does not block fetch")
+	provider := fs.String("provider", "", "stack title summarizer (e.g. name@model); optional, does not block fetch")
 	describe := fs.String("describe", "", "script that writes inspector description lines after first paint")
 	fs.Usage = func() {
 		fmt.Fprint(usage, Usage())

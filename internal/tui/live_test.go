@@ -370,9 +370,6 @@ func TestProviderWritesStackTitleOnly(t *testing.T) {
 		Fetch:  fetch,
 	})
 	plain, extra := applyLiveFetch(plain)
-	if extra == nil {
-		t.Fatal("live still starts Describe() after first paint")
-	}
 	bare := strings.Join(listRows(frameOf(plain)), "\n")
 	if !strings.Contains(bare, "alpha layer") {
 		t.Fatalf("missing provider keeps the gh name:\n%s", bare)
@@ -388,8 +385,8 @@ func TestProviderWritesStackTitleOnly(t *testing.T) {
 	if plain.Stacks()[0].Name != "alpha layer" {
 		t.Fatalf("list name must stay the gh title: %+v", plain.Stacks()[0])
 	}
-	if plain.Stacks()[0].Description == "" {
-		t.Fatal("Describe() must land in the inspector with no provider")
+	if plain.Stacks()[0].Description != "" {
+		t.Fatalf("unset describe leaves the pane empty: %q", plain.Stacks()[0].Description)
 	}
 }
 
@@ -570,7 +567,7 @@ func TestLiveDescribeScriptWithoutProvider(t *testing.T) {
 	var jobs []summary.Job
 	m := tui.New(tui.Options{
 		Repo:     "archetype-labs/app",
-		Describe: "scripts/dango-describe",
+		Describe: "bin/describe-stack",
 		Width:    120,
 		Height:   30,
 		Fetch: func(string) ([]domain.Stack, error) {
@@ -587,7 +584,7 @@ func TestLiveDescribeScriptWithoutProvider(t *testing.T) {
 			if job.Provider.Raw != "" {
 				t.Fatalf("no provider: %+v", job.Provider)
 			}
-			if job.Describe != "scripts/dango-describe" {
+			if job.Describe != "bin/describe-stack" {
 				t.Fatalf("describe command: %q", job.Describe)
 			}
 			return summary.Result{ID: job.ID, Description: scripted}
@@ -616,8 +613,8 @@ func TestLiveDescribeScriptWithoutProvider(t *testing.T) {
 	if m.Stacks()[0].Description != scripted {
 		t.Fatalf("script description: %q", m.Stacks()[0].Description)
 	}
-	if m.Stacks()[0].Description == local {
-		t.Fatal("Describe() is fallback only")
+	if m.Stacks()[0].Description == local && local != "" {
+		t.Fatal("Describe() is not the product sentence")
 	}
 	frame := frameOf(m)
 	if strings.Contains(strings.Join(listRows(frame), "\n"), scripted) {
@@ -632,7 +629,7 @@ func TestLiveDescribeSelectedStackFirst(t *testing.T) {
 	var ids []string
 	m := tui.New(tui.Options{
 		Repo:     "archetype-labs/app",
-		Describe: "scripts/dango-describe",
+		Describe: "bin/describe-stack",
 		Width:    120,
 		Height:   30,
 		Fetch: func(string) ([]domain.Stack, error) {
@@ -675,9 +672,7 @@ func TestLiveDescribeSelectedStackFirst(t *testing.T) {
 	}
 }
 
-func TestLiveFillsDescriptionWithoutProvider(t *testing.T) {
-	// No describe script → production Run() must land Describe(), not
-	// invent a model sentence. Script success is TestLiveDescribeScriptWithoutProvider.
+func TestLiveEmptyPaneWithoutDescribe(t *testing.T) {
 	title := "LEV-182: Bound hosts to the session so undo does not wedge"
 	m := tui.New(tui.Options{
 		Repo:   "archetype-labs/app",
@@ -697,16 +692,13 @@ func TestLiveFillsDescriptionWithoutProvider(t *testing.T) {
 		t.Fatalf("splash first:\n%s", frameOf(m))
 	}
 	m, sumCmd := applyLiveFetch(m)
-	if sumCmd == nil {
-		t.Fatal("live must start Describe() after first paint")
-	}
-	if m.Provider.Raw != "" {
-		t.Fatal("no dango.json / --provider")
+	if m.Provider.Raw != "" || m.Describe != "" {
+		t.Fatal("no dango.json describe / --provider")
 	}
 	first := frameOf(m)
 	list := strings.Join(listRows(first), "\n")
 	if !strings.Contains(list, "LEV-182") {
-		t.Fatalf("first paint keeps the short list title:\n%s", first)
+		t.Fatalf("list still paints:\n%s", first)
 	}
 	if strings.Contains(list, "and pin each") {
 		t.Fatalf("first paint must not invent a list title:\n%s", list)
@@ -714,25 +706,14 @@ func TestLiveFillsDescriptionWithoutProvider(t *testing.T) {
 	if strings.Contains(first, "CURSOR_AGENT") || strings.Contains(first, "Covers ") || strings.Contains(first, "Pin each bound host to the worker") {
 		t.Fatalf("first paint leaked body:\n%s", first)
 	}
-	want := summary.Describe(m.Stacks()[0])
-	if want == "" || strings.EqualFold(want, title) || strings.HasPrefix(want, "Covers ") {
-		t.Fatalf("Describe() clause: %q", want)
-	}
 	m = applyLiveCmds(m, sumCmd)
 	if m.Stacks()[0].Name != "LEV-182" {
 		t.Fatalf("list title must stay short, got %q", m.Stacks()[0].Name)
 	}
-	if m.Stacks()[0].Description != want {
-		t.Fatalf("landed %q, want Describe() %q", m.Stacks()[0].Description, want)
+	if m.Stacks()[0].Description != "" {
+		t.Fatalf("unset describe leaves the pane empty, not Describe(): %q", m.Stacks()[0].Description)
 	}
 	frame := frameOf(m)
-	t.Logf("120x30 after Describe():\n%s", frame)
-	if strings.Contains(strings.Join(listRows(frame), "\n"), want) {
-		t.Fatalf("description belongs in the pane, not the list:\n%s", frame)
-	}
-	if !strings.Contains(frame, want) && !strings.Contains(frame, "bound hosts") {
-		t.Fatalf("pane must show the generated description:\n%s", frame)
-	}
 	if strings.Contains(frame, "CURSOR_AGENT") || strings.Contains(frame, "Covers ") || strings.Contains(frame, "Pin each bound host to the worker") {
 		t.Fatalf("body / Covers leaked:\n%s", frame)
 	}

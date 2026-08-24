@@ -101,15 +101,12 @@ func TestSummariesAreAsyncAndLandInPlace(t *testing.T) {
 		t.Fatal("title wait must not be a spinner")
 	}
 	bare, extra := applyFetch(New(Options{Repo: "archetype-labs/app", Width: 80, Height: 24, Fetch: fetch}))
-	if extra == nil {
-		t.Fatal("live still starts Describe() after first paint")
-	}
 	bare = applyCmd(bare, extra)
 	if bare.stacks[0].Name != "alpha layer" {
 		t.Fatalf("missing provider must keep the gh list name: %+v", bare.stacks[0])
 	}
-	if bare.stacks[0].Description == "" {
-		t.Fatal("missing provider must still land an inspector description")
+	if bare.stacks[0].Description != "" {
+		t.Fatalf("unset describe leaves the pane empty: %q", bare.stacks[0].Description)
 	}
 	if strings.Contains(strings.Join(listNames(stripANSI(bare.View())), "\n"), "alpha layer and beta layer") {
 		t.Fatalf("missing provider must not invent a list title:\n%s", stripANSI(bare.View()))
@@ -156,13 +153,10 @@ func TestSummariesAreAsyncAndLandInPlace(t *testing.T) {
 	if landed.stacks[0].Name != "alpha layer and beta layer" {
 		t.Fatalf("real Run must land the generated title: %+v", landed.stacks[0])
 	}
-	if landed.stacks[0].Description == "" {
-		t.Fatal("real Run must land an inspector description")
+	if landed.stacks[0].Description != "" {
+		t.Fatalf("provider without describe leaves the pane empty: %q", landed.stacks[0].Description)
 	}
 	after := stripANSI(landed.View())
-	if !strings.Contains(after, landed.stacks[0].Description) {
-		t.Fatalf("description fills the inspector:\n%s", after)
-	}
 	if strings.Contains(after, "⠋") {
 		t.Fatalf("in-place fill is not a spinner:\n%s", after)
 	}
@@ -279,10 +273,17 @@ func TestDescriptionFillsInspectorInPlace(t *testing.T) {
 	for _, size := range []struct{ w, h int }{{80, 24}, {120, 30}} {
 		m := New(Options{
 			Repo:     "owner/name",
-			Provider: summary.ParseProvider("codex@luna.medium"),
+			Provider: summary.ParseProvider("name@model"),
 			Width:    size.w,
 			Height:   size.h,
 			Fetch:    fetch,
+			Summarize: func(job summary.Job) summary.Result {
+				return summary.Result{
+					ID:          job.ID,
+					Title:       summary.Title(job.Stack),
+					Description: "hosts stay pinned so undo cannot widen scope",
+				}
+			},
 		})
 		var sumCmd tea.Cmd
 		m, sumCmd = applyFetch(m)

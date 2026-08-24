@@ -25,12 +25,11 @@ type Result struct {
 // Func is one provider hook. Tests inject a fake; production uses Run.
 type Func func(Job) Result
 
-// Run fills the inspector description after first paint. The product
-// sentence comes from the configured describe script (dango.json
-// `describe` / --describe). Local Describe() is the fallback when the
-// script is missing, non-zero, times out, or returns mush. A title is
-// written only when a provider is set, so the list keeps the gh /
-// short name. Fetch and first paint do not call this.
+// Run fills the inspector description after first paint from the
+// configured describe script only. Missing describe, a dead script,
+// timeout, or mush leaves the pane empty — local Describe() is a test
+// helper and is not the product sentence. A title is written only
+// when a provider is set. Fetch and first paint do not call this.
 func Run(job Job) Result {
 	id := job.ID
 	if id == "" {
@@ -39,8 +38,6 @@ func Run(job Job) Result {
 	res := Result{ID: id}
 	if desc, err := describeScript(job); err == nil && strings.TrimSpace(desc) != "" {
 		res.Description = strings.TrimSpace(desc)
-	} else {
-		res.Description = Describe(job.Stack)
 	}
 	if !job.Provider.Empty() {
 		res.Title = Title(job.Stack)

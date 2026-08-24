@@ -22,7 +22,7 @@ func sampleStack() domain.Stack {
 	}
 }
 
-func TestRunWithoutDescribeUsesLocal(t *testing.T) {
+func TestRunWithoutDescribeLeavesEmpty(t *testing.T) {
 	stack := sampleStack()
 	called := false
 	old := runDescribe
@@ -34,13 +34,16 @@ func TestRunWithoutDescribeUsesLocal(t *testing.T) {
 
 	res := Run(Job{ID: "s", Stack: stack})
 	if called {
-		t.Fatal("no describe config must not spawn a script")
+		t.Fatal("no describe key must not spawn a script")
 	}
 	if res.Title != "" {
 		t.Fatalf("no provider must not retitle: %+v", res)
 	}
-	if res.Description != Describe(stack) {
-		t.Fatalf("local Describe() fallback: %q", res.Description)
+	if res.Description != "" {
+		t.Fatalf("unset describe leaves the pane empty, got %q (Describe() is not the product)", res.Description)
+	}
+	if res.Description == Describe(stack) && Describe(stack) != "" {
+		t.Fatal("Describe() must not run as the product sentence")
 	}
 }
 
@@ -59,7 +62,7 @@ func TestRunPrefersDescribeScript(t *testing.T) {
 	}
 	t.Cleanup(func() { runDescribe = old })
 
-	res := Run(Job{ID: "s", Describe: "scripts/dango-describe", Stack: stack})
+	res := Run(Job{ID: "s", Describe: "bin/describe-stack", Stack: stack})
 	if res.Title != "" {
 		t.Fatalf("no provider must not retitle: %+v", res)
 	}
@@ -69,14 +72,8 @@ func TestRunPrefersDescribeScript(t *testing.T) {
 	if res.Description == Describe(stack) {
 		t.Fatal("product sentence is the script, not Describe()")
 	}
-	if len(sawArgv) != 1 || sawArgv[0] != "scripts/dango-describe" {
+	if len(sawArgv) != 1 || sawArgv[0] != "bin/describe-stack" {
 		t.Fatalf("configured script argv: %v", sawArgv)
-	}
-	joined := strings.Join(sawArgv, " ")
-	for _, bad := range []string{"OPENAI_API_KEY", "DANGO_OPENAI_API_KEY", "chat/completions", "codex"} {
-		if strings.Contains(joined, bad) {
-			t.Fatalf("binary must not assume codex/key: %s", joined)
-		}
 	}
 	var payload describeInput
 	if err := json.Unmarshal(sawStdin, &payload); err != nil {
@@ -107,7 +104,7 @@ func TestRunDescribeOmitsBody(t *testing.T) {
 	}
 }
 
-func TestRunFallsBackToDescribe(t *testing.T) {
+func TestRunScriptFailureLeavesEmpty(t *testing.T) {
 	stack := sampleStack()
 	old := runDescribe
 	t.Cleanup(func() { runDescribe = old })
@@ -115,27 +112,32 @@ func TestRunFallsBackToDescribe(t *testing.T) {
 	runDescribe = func(context.Context, []string, []byte) (string, error) {
 		return "", errors.New("exit 1")
 	}
-	res := Run(Job{ID: "s", Describe: "scripts/dango-describe", Stack: stack})
-	if res.Title != "" || res.Description != Describe(stack) {
-		t.Fatalf("non-zero uses Describe(): %+v", res)
+	res := Run(Job{ID: "s", Describe: "bin/describe-stack", Stack: stack})
+	if res.Title != "" || res.Description != "" {
+		t.Fatalf("non-zero leaves the pane empty: %+v", res)
+	}
+	if strings.Contains(res.Description, "exit 1") {
+		t.Fatal("never paint stderr / errors into the inspector")
 	}
 
 	runDescribe = func(context.Context, []string, []byte) (string, error) {
 		return "", context.DeadlineExceeded
 	}
-	timed := Run(Job{ID: "s", Describe: "scripts/dango-describe", Stack: stack})
-	if timed.Description != Describe(stack) {
-		t.Fatalf("timeout uses Describe(): %q", timed.Description)
+	timed := Run(Job{ID: "s", Describe: "bin/describe-stack", Stack: stack})
+	if timed.Description != "" {
+		t.Fatalf("timeout leaves empty: %q", timed.Description)
 	}
 
-	runDescribe = func(context.Context, []string, []byte) (string, error) { return "", nil }
-	empty := Run(Job{ID: "s", Describe: "scripts/dango-describe", Stack: stack})
-	if empty.Description != Describe(stack) {
-		t.Fatalf("empty stdout uses Describe(): %q", empty.Description)
+	runDescribe = func(context.Context, []string, []byte) (string, error) {
+		return "fatal: command failed\n", errors.New("exit 2")
+	}
+	errOut := Run(Job{ID: "s", Describe: "bin/describe-stack", Stack: stack})
+	if errOut.Description != "" {
+		t.Fatalf("error stdout must not land: %q", errOut.Description)
 	}
 }
 
-func TestRunMushUsesDescribe(t *testing.T) {
+func TestRunMushLeavesEmpty(t *testing.T) {
 	stack := sampleStack()
 	old := runDescribe
 	t.Cleanup(func() { runDescribe = old })
@@ -147,9 +149,9 @@ func TestRunMushUsesDescribe(t *testing.T) {
 		ghName(stack),
 	} {
 		runDescribe = func(context.Context, []string, []byte) (string, error) { return mush, nil }
-		res := Run(Job{ID: "s", Describe: "scripts/dango-describe", Stack: stack})
-		if res.Description != Describe(stack) {
-			t.Fatalf("mush %q must fall back, got %q", mush, res.Description)
+		res := Run(Job{ID: "s", Describe: "bin/describe-stack", Stack: stack})
+		if res.Description != "" {
+			t.Fatalf("mush %q must leave the pane empty, got %q", mush, res.Description)
 		}
 		if res.Title != "" {
 			t.Fatalf("mush must not retitle: %+v", res)
@@ -166,8 +168,8 @@ func TestRunProviderTitleKeepsScriptDescription(t *testing.T) {
 	t.Cleanup(func() { runDescribe = old })
 
 	res := Run(Job{
-		Provider: ParseProvider("codex@luna.medium"),
-		Describe: "scripts/dango-describe",
+		Provider: ParseProvider("name@model"),
+		Describe: "bin/describe-stack",
 		ID:       "s",
 		Stack:    stack,
 	})
@@ -200,8 +202,8 @@ func TestCleanDescribeRejectsMush(t *testing.T) {
 }
 
 func TestDescribeArgvSplitsCommand(t *testing.T) {
-	got := describeArgv("scripts/dango-describe --flag")
-	if len(got) != 2 || got[0] != "scripts/dango-describe" || got[1] != "--flag" {
+	got := describeArgv("bin/describe-stack --flag")
+	if len(got) != 2 || got[0] != "bin/describe-stack" || got[1] != "--flag" {
 		t.Fatalf("%v", got)
 	}
 	if len(describeArgv("")) != 0 {
@@ -210,25 +212,38 @@ func TestDescribeArgvSplitsCommand(t *testing.T) {
 }
 
 func TestExecDescribeNeverRunsLiveInUnitTests(t *testing.T) {
-	got, err := execDescribe(context.Background(), []string{"scripts/dango-describe"}, []byte(`{"titles":["a"]}`))
+	got, err := execDescribe(context.Background(), []string{"bin/describe-stack"}, []byte(`{"titles":["a"]}`))
 	if got != "" || !errors.Is(err, errNoDescribe) {
 		t.Fatalf("unit tests must not spawn a describe script: %q %v", got, err)
 	}
 }
 
-func TestExampleDescribeScriptPinsLuna(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("..", "..", "scripts", "dango-describe"))
+func TestProductGoHasNoCodexString(t *testing.T) {
+	root := filepath.Join("..", "..")
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			base := info.Name()
+			if base == ".git" || base == "testdata" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if strings.Contains(string(raw), "codex") || strings.Contains(string(raw), "CODEX") {
+			t.Errorf("product source must not contain that CLI name: %s", path)
+		}
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
-	}
-	s := string(raw)
-	if !strings.Contains(s, "codex exec") {
-		t.Fatal("example script calls the Codex CLI")
-	}
-	if !strings.Contains(s, "-m") || !strings.Contains(s, "gpt-5.6-luna") {
-		t.Fatal("example must pass gpt-5.6 luna, not the CLI default")
-	}
-	if strings.Contains(s, "OPENAI_API_KEY") || strings.Contains(s, "chat/completions") {
-		t.Fatal("example is the CLI, not an API key")
 	}
 }

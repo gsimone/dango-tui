@@ -203,6 +203,9 @@ func (m *Model) startSelectedSummary() tea.Cmd {
 	if !m.Live || m.summaryBusy {
 		return nil
 	}
+	if strings.TrimSpace(m.Describe) == "" && m.Provider.Empty() {
+		return nil
+	}
 	stack, ok := m.SelectedStack()
 	if !ok || stack.ID == "" {
 		return nil
