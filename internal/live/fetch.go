@@ -28,8 +28,9 @@ var lookPath = exec.LookPath
 // sleep is the backoff wait. Tests replace this.
 var sleep = time.Sleep
 
-// retryLimit is first try + one quick retry. Four GraphQL retries were the stall.
-const retryLimit = 2
+// retryLimit is three tries inside Fetch (502/503 flake). The splash
+// stays on fetching until Fetch returns.
+const retryLimit = 3
 
 func requireGH() error {
 	if _, err := lookPath("gh"); err != nil {

@@ -253,10 +253,32 @@ func TestFetchRetries502OnceThenSucceeds(t *testing.T) {
 		t.Fatalf("one 502 retry should succeed: %v", err)
 	}
 	if listCalls.Load() != 2 {
-		t.Fatalf("one quick retry, got %d calls", listCalls.Load())
+		t.Fatalf("second try should succeed, got %d calls", listCalls.Load())
 	}
 	if len(slept) != 1 {
-		t.Fatalf("one short backoff, got %v", slept)
+		t.Fatalf("backoff before retry, got %v", slept)
+	}
+}
+
+func TestFetchRetries502ThreeTimesThenSucceeds(t *testing.T) {
+	sleep = func(time.Duration) {}
+	t.Cleanup(func() { sleep = time.Sleep })
+
+	var listCalls atomic.Int32
+	run := func(args ...string) ([]byte, error) {
+		if args[0] != "pr" || args[1] != "list" {
+			t.Fatalf("unexpected gh %v", args)
+		}
+		if listCalls.Add(1) < 3 {
+			return nil, fmt.Errorf("gh pr list: HTTP 502: Bad Gateway")
+		}
+		return []byte(`[]`), nil
+	}
+	if _, err := fetchWith(run, "archetype-labs/app"); err != nil {
+		t.Fatalf("third try should succeed: %v", err)
+	}
+	if listCalls.Load() != 3 {
+		t.Fatalf("three tries, got %d", listCalls.Load())
 	}
 }
 
@@ -270,20 +292,20 @@ func TestFetch502ThenErrorScreen(t *testing.T) {
 		return nil, fmt.Errorf("HTTP 502: Bad Gateway (https://api.github.com/graphql)")
 	}, "archetype-labs/app")
 	if err == nil {
-		t.Fatal("two 502s must fail")
+		t.Fatal("three 502s must fail")
 	}
 	if !strings.Contains(err.Error(), "502") {
 		t.Fatalf("keep the 502: %v", err)
 	}
 	if calls.Load() != retryLimit {
-		t.Fatalf("at most one retry, got %d (limit %d)", calls.Load(), retryLimit)
+		t.Fatalf("three tries inside Fetch, got %d (limit %d)", calls.Load(), retryLimit)
 	}
-	if retryLimit != 2 {
-		t.Fatalf("first list is try + one retry, not %d", retryLimit)
+	if retryLimit != 3 {
+		t.Fatalf("502/503 flake is 3 tries, not %d", retryLimit)
 	}
 }
 
-func TestFetch503RetriesOnce(t *testing.T) {
+func TestFetch503RetriesInsideFetch(t *testing.T) {
 	sleep = func(time.Duration) {}
 	t.Cleanup(func() { sleep = time.Sleep })
 
@@ -293,13 +315,13 @@ func TestFetch503RetriesOnce(t *testing.T) {
 		return nil, fmt.Errorf("HTTP 503: Service Unavailable")
 	}, "archetype-labs/app")
 	if err == nil {
-		t.Fatal("two 503s must fail")
+		t.Fatal("three 503s must fail")
 	}
 	if !strings.Contains(err.Error(), "503") {
 		t.Fatalf("keep the 503: %v", err)
 	}
-	if calls.Load() != 2 {
-		t.Fatalf("503 is try + one retry, got %d", calls.Load())
+	if calls.Load() != 3 {
+		t.Fatalf("503 is three tries inside Fetch, got %d", calls.Load())
 	}
 }
 
