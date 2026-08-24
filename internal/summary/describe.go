@@ -58,7 +58,7 @@ func describeScript(job Job) (string, error) {
 		return "", errNoDescribe
 	}
 	stdin := describePayload(job.Stack)
-	if len(stdin) == 0 || len(layerTitleList(job.Stack)) == 0 {
+	if len(stdin) == 0 {
 		return "", errNoDescribe
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), describeTimeout)

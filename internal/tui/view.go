@@ -195,18 +195,17 @@ func (m Model) paintRule(c *canvas, top, bottom int, meta, surface string) {
 func (m Model) footer() string {
 	compact := IsCompact(m.Width)
 	if compact {
-		return "[ ↑↓ ] stack  [ ←→ ] layer  [ . ] copy  [ / ]  [ ? ]  [ q ]"
+		return "[ ↑↓←→ ] navigate  [ . ] copy  [ / ]  [ ? ]  [ q ]"
 	}
 	if m.Width <= 90 {
-		return "[ ↑↓ ] stack  [ ←→ ] layer  [ o ] open  [ . ] copy  [ / ]  [ ? ]  [ q ]"
+		return "[ ↑↓←→ ] navigate  [ o ] open  [ . ] copy  [ / ]  [ ? ]  [ q ]"
 	}
-	return "[ ↑↓ ] stack  [ ←→ ] layer  [ o ] open  [ . ] copy  [ a ] add  [ r ] refresh  [ / ] filter  [ esc ]  [ ? ]  [ q ]"
+	return "[ ↑↓←→ ] navigate  [ o ] open  [ . ] copy  [ r ] refresh  [ / ] filter  [ ? ]  [ q ]"
 }
 
 func helpItems() [][2]string {
 	return [][2]string{
-		{"↑↓", "stack"},
-		{"←→", "layer"},
+		{"↑↓←→", "navigate"},
 		{"o", "open"},
 		{".", "copy"},
 		{"/", "filter"},

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -199,6 +200,36 @@ func TestCleanDescribeRejectsMush(t *testing.T) {
 	if got != "Hosts stay pinned so undo cannot widen scope." {
 		t.Fatalf("real sentence: %q", got)
 	}
+	if got := cleanDescribe("pane-hook-ok", stack); got != "pane-hook-ok" {
+		t.Fatalf("echo pane-hook-ok must survive cleanDescribe: %q", got)
+	}
+}
+
+func TestRunEchoPaneHookOK(t *testing.T) {
+	stack := sampleStack()
+	old := runDescribe
+	runDescribe = func(_ context.Context, argv []string, _ []byte) (string, error) {
+		if len(argv) != 2 || argv[0] != "echo" || argv[1] != "pane-hook-ok" {
+			t.Fatalf("argv %v", argv)
+		}
+		out, err := execEcho(argv[1])
+		return out, err
+	}
+	t.Cleanup(func() { runDescribe = old })
+
+	res := Run(Job{ID: "s", Describe: "echo pane-hook-ok", Stack: stack})
+	if res.Err != nil {
+		t.Fatalf("echo must run: %v", res.Err)
+	}
+	if res.Description != "pane-hook-ok" {
+		t.Fatalf("echo result: %q", res.Description)
+	}
+}
+
+func execEcho(arg string) (string, error) {
+	cmd := exec.Command("echo", arg)
+	out, err := cmd.Output()
+	return strings.TrimSpace(string(out)), err
 }
 
 func TestDescribeArgvSplitsCommand(t *testing.T) {

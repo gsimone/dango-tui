@@ -672,6 +672,128 @@ func TestLiveDescribeSelectedStackFirst(t *testing.T) {
 	}
 }
 
+func TestLiveEchoDescribeRendersPaneHookOK(t *testing.T) {
+	var jobs int
+	m := tui.New(tui.Options{
+		Repo:     "archetype-labs/app",
+		Describe: "echo pane-hook-ok",
+		Width:    120,
+		Height:   30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{{
+				ID: "s",
+				PRs: []domain.PullRequest{
+					{Number: 1, Title: "alpha layer"},
+					{Number: 2, Title: "beta layer"},
+				},
+			}}, nil
+		},
+		Summarize: func(job summary.Job) summary.Result {
+			jobs++
+			if job.Describe != "echo pane-hook-ok" {
+				t.Fatalf("describe argv: %q", job.Describe)
+			}
+			out, err := exec.Command("echo", "pane-hook-ok").Output()
+			if err != nil {
+				t.Fatal(err)
+			}
+			return summary.Result{ID: job.ID, Description: strings.TrimSpace(string(out))}
+		},
+	})
+	m, extra := applyLiveFetch(m)
+	if extra == nil {
+		t.Fatal("afterFetch must start the selected describe")
+	}
+	first := frameOf(m)
+	if strings.Contains(first, "pane-hook-ok") {
+		t.Fatalf("describe must not block first paint:\n%s", first)
+	}
+	m = applyLiveCmds(m, extra)
+	if jobs != 1 {
+		t.Fatalf("selected stack, one process, got %d", jobs)
+	}
+	if m.Stacks()[0].Description != "pane-hook-ok" {
+		t.Fatalf("script result: %q", m.Stacks()[0].Description)
+	}
+	frame := frameOf(m)
+	if !strings.Contains(frame, "pane-hook-ok") {
+		t.Fatalf("pane must render echo stdout:\n%s", frame)
+	}
+	if strings.Contains(frame, "echo: ") || strings.Contains(strings.ToLower(frame), "not found") {
+		t.Fatalf("stderr must never land in the pane:\n%s", frame)
+	}
+}
+
+func TestLiveDeadDescribeStaysEmpty(t *testing.T) {
+	m := tui.New(tui.Options{
+		Repo:     "archetype-labs/app",
+		Describe: "echo pane-hook-ok",
+		Width:    120,
+		Height:   30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{{
+				ID: "s",
+				PRs: []domain.PullRequest{
+					{Number: 1, Title: "alpha layer"},
+					{Number: 2, Title: "beta layer"},
+				},
+			}}, nil
+		},
+		Summarize: func(job summary.Job) summary.Result {
+			return summary.Result{ID: job.ID, Err: fmt.Errorf("exit 1")}
+		},
+	})
+	m, extra := applyLiveFetch(m)
+	m = applyLiveCmds(m, extra)
+	if m.Stacks()[0].Description != "" {
+		t.Fatalf("dead script stays empty: %q", m.Stacks()[0].Description)
+	}
+	frame := frameOf(m)
+	if strings.Contains(frame, "exit 1") || strings.Contains(frame, "pane-hook-ok") {
+		t.Fatalf("stderr / result must not land in the pane:\n%s", frame)
+	}
+}
+
+func TestFileDescribeStartsSelected(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "stacks.json")
+	raw := `{"repo":"example/stacks","stacks":[{"id":"s","name":"auth cleanup","prs":[{"number":1,"title":"alpha layer"},{"number":2,"title":"beta layer"}]}]}`
+	if err := os.WriteFile(path, []byte(raw), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var jobs int
+	m := tui.New(tui.Options{
+		Repo:     path,
+		Describe: "echo pane-hook-ok",
+		Width:    120,
+		Height:   30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			t.Fatal("JSON --repo must not call gh")
+			return nil, nil
+		},
+		Summarize: func(job summary.Job) summary.Result {
+			jobs++
+			return summary.Result{ID: job.ID, Description: "pane-hook-ok"}
+		},
+	})
+	if m.Init() == nil {
+		t.Fatal("file dump with describe starts after first paint")
+	}
+	if strings.Contains(frameOf(m), "pane-hook-ok") {
+		t.Fatalf("first paint stays empty:\n%s", frameOf(m))
+	}
+	m = applyLiveCmds(m, m.Init())
+	if jobs != 1 {
+		t.Fatalf("one process, got %d", jobs)
+	}
+	if m.Stacks()[0].Description != "pane-hook-ok" {
+		t.Fatalf("file describe landed: %q", m.Stacks()[0].Description)
+	}
+	if !strings.Contains(frameOf(m), "pane-hook-ok") {
+		t.Fatalf("pane:\n%s", frameOf(m))
+	}
+}
+
 func TestLiveEmptyPaneWithoutDescribe(t *testing.T) {
 	title := "LEV-182: Bound hosts to the session so undo does not wedge"
 	m := tui.New(tui.Options{
@@ -1015,8 +1137,11 @@ func TestDotCopiesTestdataBranchToast(t *testing.T) {
 	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(".")})
 	m = next.(tui.Model)
 	frame := frameOf(m)
-	if !strings.Contains(frame, "copied gm/auth-scope") {
+	if !strings.Contains(frame, "copied") {
 		t.Fatalf("dot toast:\n%s", frame)
+	}
+	if strings.Contains(frame, "copied gm/auth-scope") {
+		t.Fatalf("dot copies describe argv, not the branch:\n%s", frame)
 	}
 	if strings.Contains(frame, "Checked out") || strings.Contains(frame, "[ p ]") {
 		t.Fatalf("toast only, no checkout/picker:\n%s", frame)

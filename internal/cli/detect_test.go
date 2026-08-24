@@ -165,6 +165,39 @@ func TestReadDangoJSONWinsOverYAML(t *testing.T) {
 	}
 }
 
+func TestReadDangoConfigCwdJSONDoesNotFallThrough(t *testing.T) {
+	dir := t.TempDir()
+	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")
+	if err := os.WriteFile(filepath.Join(dir, "dango.json"), []byte(`{"describe":"echo from-root"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	child := filepath.Join(dir, "pkg")
+	if err := os.Mkdir(child, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(child, "dango.json"), []byte(`{}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := ReadDangoConfig(child)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Describe != "" || cfg.Provider != "" {
+		t.Fatalf("cwd dango.json wins and must not read the parent, got %+v", cfg)
+	}
+
+	if err := os.WriteFile(filepath.Join(child, "dango.json"), []byte(`{"describe":"echo pane-hook-ok"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	got := mustResolve(t, Args{Repo: "archetype-labs/app"}, child)
+	if got.Describe != "echo pane-hook-ok" {
+		t.Fatalf("--repo must keep cwd describe, got %q", got.Describe)
+	}
+	if got.Repo != "archetype-labs/app" {
+		t.Fatalf("repo %q", got.Repo)
+	}
+}
+
 func TestReadDangoConfigPrefersCwdOverGitRoot(t *testing.T) {
 	dir := t.TempDir()
 	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")

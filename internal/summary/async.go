@@ -16,10 +16,12 @@ type Job struct {
 }
 
 // Result lands after first paint. Empty Title/Description means no fill.
+// Err is the last run failure (never painted into the pane).
 type Result struct {
 	ID          string
 	Title       string
 	Description string
+	Err         error
 }
 
 // Func is one provider hook. Tests inject a fake; production uses Run.
@@ -36,7 +38,10 @@ func Run(job Job) Result {
 		id = job.Stack.ID
 	}
 	res := Result{ID: id}
-	if desc, err := describeScript(job); err == nil && strings.TrimSpace(desc) != "" {
+	desc, err := describeScript(job)
+	if err != nil {
+		res.Err = err
+	} else if strings.TrimSpace(desc) != "" {
 		res.Description = strings.TrimSpace(desc)
 	}
 	if !job.Provider.Empty() {

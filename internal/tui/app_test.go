@@ -202,8 +202,11 @@ func TestCompactCardAndHomeEnd(t *testing.T) {
 	if !strings.Contains(frame, "status") || !strings.Contains(frame, "branch") {
 		t.Fatalf("compact inspector should be labeled rows:\n%s", frame)
 	}
-	if !strings.Contains(frame, "[ ↑↓ ] stack") || !strings.Contains(frame, "[ ←→ ] layer") {
+	if !strings.Contains(frame, "[ ↑↓←→ ] navigate") {
 		t.Fatalf("compact footer:\n%s", frame)
+	}
+	if strings.Contains(frame, "[ ↑↓ ] stack") || strings.Contains(frame, "[ ←→ ] layer") {
+		t.Fatalf("footer is one navigate bind, not stack/layer:\n%s", frame)
 	}
 	assertFits(t, frame, 40)
 }
@@ -297,11 +300,11 @@ func TestEightyColumnFooterAndFocus(t *testing.T) {
 	if !strings.Contains(frame, "●") {
 		t.Fatalf("focused layer:\n%s", frame)
 	}
-	if !strings.Contains(frame, "[ ↑↓ ] stack") || !strings.Contains(frame, "[ o ] open") || !strings.Contains(frame, "[ . ] copy") {
+	if !strings.Contains(frame, "[ ↑↓←→ ] navigate") || !strings.Contains(frame, "[ o ] open") || !strings.Contains(frame, "[ . ] copy") {
 		t.Fatalf("80-col footer should be a key strip:\n%s", frame)
 	}
-	if strings.Contains(frame, "[ enter ]") {
-		t.Fatalf("enter must leave the footer:\n%s", frame)
+	if strings.Contains(frame, "[ enter ]") || strings.Contains(frame, "[ a ] add") || strings.Contains(frame, "[ esc ]") {
+		t.Fatalf("enter/add/esc must leave the footer:\n%s", frame)
 	}
 	if strings.Contains(frame, "fixture cache ·") || strings.Contains(frame, " · ") && strings.Contains(frame, "q quit") {
 		t.Fatalf("footer must not be a middot sentence:\n%s", frame)
@@ -561,11 +564,11 @@ func TestFooterKeysAreBracketed(t *testing.T) {
 		frame := frameOf(makeUI(size, "mixed"))
 		lines := strings.Split(frame, "\n")
 		footer := lines[len(lines)-1]
-		if !strings.Contains(footer, "[ ↑↓ ]") || !strings.Contains(footer, "stack") {
+		if !strings.Contains(footer, "[ ↑↓←→ ]") || !strings.Contains(footer, "navigate") {
 			t.Fatalf("%dx%d footer missing bracketed keys:\n%s", size.Width, size.Height, footer)
 		}
-		if strings.Contains(footer, "↑↓ stack") && !strings.Contains(footer, "[ ↑↓ ] stack") {
-			t.Fatalf("%dx%d key is not bracketed:\n%s", size.Width, size.Height, footer)
+		if strings.Contains(footer, "[ ↑↓ ] stack") || strings.Contains(footer, "[ ←→ ] layer") || strings.Contains(footer, "[ a ] add") || strings.Contains(footer, "[ esc ]") {
+			t.Fatalf("%dx%d footer split stack/layer or leftover add/esc:\n%s", size.Width, size.Height, footer)
 		}
 	}
 }
@@ -659,7 +662,7 @@ func TestTypeIsThreeInks(t *testing.T) {
 		t.Fatal("failed / ready / blocked must keep their status colors")
 	}
 	frame := strip(raw)
-	if !strings.Contains(frame, "[ ↑↓ ]") || !strings.Contains(frame, "stack") {
+	if !strings.Contains(frame, "[ ↑↓←→ ]") || !strings.Contains(frame, "navigate") {
 		t.Fatalf("footer key legend missing:\n%s", frame)
 	}
 	if strings.Contains(frame, "fixture cache ·") {
@@ -679,8 +682,7 @@ func TestHelpOverlayToggles(t *testing.T) {
 	m = applyKey(m, key("?"))
 	frame := frameOf(m)
 	for _, needle := range []string{
-		"[ ↑↓ ] stack",
-		"[ ←→ ] layer",
+		"[ ↑↓←→ ] navigate",
 		"[ o ] open",
 		"[ . ] copy",
 		"[ / ] filter",
@@ -692,8 +694,8 @@ func TestHelpOverlayToggles(t *testing.T) {
 			t.Fatalf("help overlay missing %q:\n%s", needle, frame)
 		}
 	}
-	if strings.Contains(frame, "[ enter ]") || strings.Contains(frame, "[ p ] provider") {
-		t.Fatalf("help must not invent enter or a provider picker:\n%s", frame)
+	if strings.Contains(frame, "[ enter ]") || strings.Contains(frame, "[ p ] provider") || strings.Contains(frame, "[ a ] add") || strings.Contains(frame, "[ esc ]") {
+		t.Fatalf("help must not invent enter, add, esc, or a provider picker:\n%s", frame)
 	}
 	if strings.Contains(frame, "[ , ]") || strings.Contains(frame, "[ . , ]") {
 		t.Fatalf("help must not advertise comma copy:\n%s", frame)

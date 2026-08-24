@@ -28,33 +28,34 @@ type Options struct {
 }
 
 type Model struct {
-	Width       int
-	Height      int
-	StoryIndex  int
-	State       app.State
-	Help        bool
-	quitting    bool
-	Fetching    bool
-	Fetched     string
-	feedbackSeq int
-	fetchSeq    int
-	LogoDots    [3]string
-	Repo        string
-	Provider    summary.Provider
-	Describe    string
-	Live        bool
-	File        bool
-	file        string
-	stacks      []domain.Stack
-	cacheState  data.CacheState
-	fetchErr    error
-	fetchedAt   time.Time
-	fetch       live.FetchFunc
-	enrichCI    live.EnrichCIFunc
-	summarize   summary.Func
-	summaryBusy bool
-	summaryDone map[string]bool
-	splashKeep  string
+	Width            int
+	Height           int
+	StoryIndex       int
+	State            app.State
+	Help             bool
+	quitting         bool
+	Fetching         bool
+	Fetched          string
+	feedbackSeq      int
+	fetchSeq         int
+	LogoDots         [3]string
+	Repo             string
+	Provider         summary.Provider
+	Describe         string
+	Live             bool
+	File             bool
+	file             string
+	stacks           []domain.Stack
+	cacheState       data.CacheState
+	fetchErr         error
+	fetchedAt        time.Time
+	fetch            live.FetchFunc
+	enrichCI         live.EnrichCIFunc
+	summarize        summary.Func
+	summaryBusy      bool
+	summaryDone      map[string]bool
+	lastDescribeNote string
+	splashKeep       string
 }
 
 func New(opts Options) Model {
@@ -146,7 +147,10 @@ func (m Model) Init() tea.Cmd {
 	if m.Live {
 		return m.fetchCmd(m.fetchSeq)
 	}
-	return m.startSummaries()
+	if strings.TrimSpace(m.Describe) == "" {
+		return nil
+	}
+	return func() tea.Msg { return afterPaintMsg{} }
 }
 
 func (m Model) fetchCmd(token int) tea.Cmd {
@@ -200,33 +204,50 @@ func (m *Model) startSummaries() tea.Cmd {
 }
 
 func (m *Model) startSelectedSummary() tea.Cmd {
-	if !m.Live || m.summaryBusy {
+	if m.summaryBusy {
 		return nil
 	}
-	if strings.TrimSpace(m.Describe) == "" && m.Provider.Empty() {
+	describe := strings.TrimSpace(m.Describe)
+	if describe == "" && (!m.Live || m.Provider.Empty()) {
 		return nil
 	}
 	stack, ok := m.SelectedStack()
 	if !ok || stack.ID == "" {
 		return nil
 	}
-	if strings.TrimSpace(stack.Description) != "" || m.summaryDone[stack.ID] {
+	if m.summaryDone[stack.ID] {
+		return nil
+	}
+	if describe == "" && strings.TrimSpace(stack.Description) != "" {
 		return nil
 	}
 	if m.summaryDone == nil {
 		m.summaryDone = map[string]bool{}
 	}
 	m.summaryBusy = true
+	if describe != "" && m.lastDescribeNote == "" {
+		m.lastDescribeNote = "pending"
+	}
 	token := m.fetchSeq
 	job := summary.Job{Provider: m.Provider, Describe: m.Describe, Stack: stack, ID: stack.ID}
 	run := m.summarize
 	return func() tea.Msg {
 		res := run(job)
+		note := strings.TrimSpace(res.Description)
+		errText := ""
+		if res.Err != nil {
+			errText = strings.TrimSpace(res.Err.Error())
+		}
+		if note == "" && errText == "" {
+			note = "empty"
+		}
 		return summaryDoneMsg{
 			token:       token,
 			id:          res.ID,
 			title:       res.Title,
 			description: res.Description,
+			err:         errText,
+			note:        note,
 		}
 	}
 }
@@ -329,13 +350,21 @@ func (m *Model) checkout(pr domain.PullRequest) {
 
 type clearFeedbackMsg struct{ token int }
 
-func (m *Model) copyBranch(pr domain.PullRequest) tea.Cmd {
-	if pr.Branch == "" {
-		m.State.Feedback = "No branch on #" + itoa(pr.Number)
-		return m.clearFeedback()
+func (m Model) describeCopyText() string {
+	argv := strings.TrimSpace(m.Describe)
+	if argv == "" {
+		argv = "none"
 	}
-	copyText(pr.Branch)
-	m.State.Feedback = "copied " + pr.Branch
+	note := strings.TrimSpace(m.lastDescribeNote)
+	if note == "" {
+		return argv
+	}
+	return argv + "\n" + note
+}
+
+func (m *Model) copyDescribe() tea.Cmd {
+	copyText(m.describeCopyText())
+	m.State.Feedback = "copied"
 	return m.clearFeedback()
 }
 

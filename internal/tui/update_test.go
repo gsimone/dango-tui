@@ -626,7 +626,7 @@ func TestDotCopiesFetchError(t *testing.T) {
 	}
 }
 
-func TestDotCopiesBranchToast(t *testing.T) {
+func TestDotCopiesDescribeArgv(t *testing.T) {
 	var copied string
 	old := copyText
 	copyText = func(s string) error { copied = s; return nil }
@@ -637,11 +637,11 @@ func TestDotCopiesBranchToast(t *testing.T) {
 	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(".")})
 	m = next.(Model)
 	frame := stripANSI(m.View())
-	if !strings.Contains(frame, "copied gm/stacks-184") {
+	if !strings.Contains(frame, "copied") {
 		t.Fatalf("toast:\n%s", frame)
 	}
-	if strings.Contains(frame, "Copied ") {
-		t.Fatalf("toast is lowercase copied, not Copied:\n%s", frame)
+	if strings.Contains(frame, "Copied ") || strings.Contains(frame, "copied gm/") {
+		t.Fatalf("toast is copied, not the branch:\n%s", frame)
 	}
 	if strings.Contains(frame, "Checked out") {
 		t.Fatalf("copy must not checkout:\n%s", frame)
@@ -652,8 +652,8 @@ func TestDotCopiesBranchToast(t *testing.T) {
 	if strings.Contains(frame, "[ p ]") {
 		t.Fatalf("no picker:\n%s", frame)
 	}
-	if copied != "gm/stacks-184" {
-		t.Fatalf("copied %q", copied)
+	if copied != "none" {
+		t.Fatalf("unset describe copies none, got %q", copied)
 	}
 	if after := gitHEAD(t); after != before {
 		t.Fatalf("changed git HEAD: %s -> %s", before, after)
@@ -664,14 +664,98 @@ func TestDotCopiesBranchToast(t *testing.T) {
 	next, _ = m.Update(clearFeedbackMsg{token: m.feedbackSeq})
 	m = next.(Model)
 	cleared := stripANSI(m.View())
-	if strings.Contains(cleared, "copied gm/stacks-184") {
+	if strings.Contains(cleared, "copied") && !strings.Contains(cleared, "[ . ] copy") {
 		t.Fatalf("toast should clear:\n%s", cleared)
 	}
-	if !strings.Contains(cleared, "[ ↑↓ ] stack") || !strings.Contains(cleared, "[ o ] open") || !strings.Contains(cleared, "[ . ] copy") {
+	if !strings.Contains(cleared, "[ ↑↓←→ ] navigate") || !strings.Contains(cleared, "[ o ] open") || !strings.Contains(cleared, "[ . ] copy") {
 		t.Fatalf("footer should return to the key legend:\n%s", cleared)
 	}
-	if strings.Contains(cleared, "[ enter ]") {
-		t.Fatalf("enter must leave the footer:\n%s", cleared)
+	if strings.Contains(cleared, "[ enter ]") || strings.Contains(cleared, "[ a ] add") || strings.Contains(cleared, "[ esc ]") {
+		t.Fatalf("enter/add/esc must leave the footer:\n%s", cleared)
+	}
+}
+
+func TestDotCopiesDescribeArgvAndLastRun(t *testing.T) {
+	var copied string
+	old := copyText
+	copyText = func(s string) error { copied = s; return nil }
+	t.Cleanup(func() { copyText = old })
+
+	m := New(Options{
+		Repo:     "archetype-labs/app",
+		Describe: "echo pane-hook-ok",
+		Width:    80,
+		Height:   24,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{{
+				ID: "s",
+				PRs: []domain.PullRequest{
+					{Number: 1, Title: "alpha layer", Branch: "gm/alpha"},
+					{Number: 2, Title: "beta layer"},
+				},
+			}}, nil
+		},
+		Summarize: func(job summary.Job) summary.Result {
+			if job.Describe != "echo pane-hook-ok" {
+				t.Fatalf("describe argv: %q", job.Describe)
+			}
+			return summary.Result{ID: job.ID, Description: "pane-hook-ok"}
+		},
+	})
+	m, extra := applyFetch(m)
+	m = applyCmd(m, extra)
+	if m.Stacks()[0].Description != "pane-hook-ok" {
+		t.Fatalf("script result: %q", m.Stacks()[0].Description)
+	}
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(".")})
+	m = next.(Model)
+	if copied != "echo pane-hook-ok\npane-hook-ok" {
+		t.Fatalf("dot copies argv plus last run, got %q", copied)
+	}
+	if !strings.Contains(stripANSI(m.View()), "copied") {
+		t.Fatalf("toast copied:\n%s", stripANSI(m.View()))
+	}
+	if strings.Contains(copied, "gm/alpha") {
+		t.Fatalf("dot must not copy the branch: %q", copied)
+	}
+	if cmd == nil {
+		t.Fatal("toast should clear")
+	}
+}
+
+func TestDotCopiesDescribeError(t *testing.T) {
+	var copied string
+	old := copyText
+	copyText = func(s string) error { copied = s; return nil }
+	t.Cleanup(func() { copyText = old })
+
+	m := New(Options{
+		Repo:     "archetype-labs/app",
+		Describe: "echo pane-hook-ok",
+		Width:    80,
+		Height:   24,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{{
+				ID:  "s",
+				PRs: []domain.PullRequest{{Number: 1, Title: "alpha"}, {Number: 2, Title: "beta"}},
+			}}, nil
+		},
+		Summarize: func(job summary.Job) summary.Result {
+			return summary.Result{ID: job.ID, Err: errors.New("exit 1")}
+		},
+	})
+	m, extra := applyFetch(m)
+	m = applyCmd(m, extra)
+	if m.Stacks()[0].Description != "" {
+		t.Fatalf("dead script stays empty: %q", m.Stacks()[0].Description)
+	}
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(".")})
+	m = next.(Model)
+	if copied != "echo pane-hook-ok\nexit 1" {
+		t.Fatalf("dot copies argv plus error, got %q", copied)
+	}
+	if strings.Contains(stripANSI(m.View()), "exit 1") && !strings.Contains(stripANSI(m.View()), "copied") {
+		t.Fatalf("error must not replace the toast:\n%s", stripANSI(m.View()))
 	}
 }
 
@@ -717,7 +801,7 @@ func TestOpenRestoresFooterAfterResult(t *testing.T) {
 	if strings.Contains(okFrame, "Opening ") {
 		t.Fatalf("success must not leave Opening stuck:\n%s", okFrame)
 	}
-	if !strings.Contains(okFrame, "[ ↑↓ ] stack") || !strings.Contains(okFrame, "[ o ] open") || !strings.Contains(okFrame, "[ . ] copy") {
+	if !strings.Contains(okFrame, "[ ↑↓←→ ] navigate") || !strings.Contains(okFrame, "[ o ] open") || !strings.Contains(okFrame, "[ . ] copy") {
 		t.Fatalf("success should restore the key legend:\n%s", okFrame)
 	}
 	if strings.Contains(okFrame, "[ enter ]") {
@@ -735,7 +819,7 @@ func TestOpenRestoresFooterAfterResult(t *testing.T) {
 	if strings.Contains(failFrame, "Opening ") || strings.Contains(failFrame, "Could not open") {
 		t.Fatalf("failure must not lock the footer:\n%s", failFrame)
 	}
-	if !strings.Contains(failFrame, "[ ↑↓ ] stack") || !strings.Contains(failFrame, "[ o ] open") || !strings.Contains(failFrame, "[ . ] copy") {
+	if !strings.Contains(failFrame, "[ ↑↓←→ ] navigate") || !strings.Contains(failFrame, "[ o ] open") || !strings.Contains(failFrame, "[ . ] copy") {
 		t.Fatalf("failure should restore the key legend:\n%s", failFrame)
 	}
 	if strings.Contains(failFrame, "[ enter ]") {
