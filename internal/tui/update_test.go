@@ -427,7 +427,7 @@ func TestInspectorStatusInkIsValueOnly(t *testing.T) {
 }
 
 func TestDotCopiesFetchError(t *testing.T) {
-	err502 := errors.New("gh pr list: HTTP 502: Bad Gateway (https://api.github.com/graphql)")
+	err502 := errors.New("gh api repos/owner/private/pulls?state=open&per_page=100: HTTP 502: Bad Gateway (https://api.github.com/repos/owner/private/pulls)")
 	var copied string
 	old := copyText
 	copyText = func(s string) { copied = s }
@@ -447,8 +447,11 @@ func TestDotCopiesFetchError(t *testing.T) {
 	if !strings.Contains(frame, "Could not fetch pull requests.") {
 		t.Fatalf("paper sentence:\n%s", frame)
 	}
-	if !strings.Contains(frame, "https://api.github.com/graphql") {
-		t.Fatalf("error block:\n%s", frame)
+	if !strings.Contains(frame, "502") {
+		t.Fatalf("error block missing 502:\n%s", frame)
+	}
+	if !strings.Contains(frame, "owner/private/pulls") {
+		t.Fatalf("error block missing REST url:\n%s", frame)
 	}
 	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(".")})
 	m = next.(Model)

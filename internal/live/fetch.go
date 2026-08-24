@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -28,7 +29,10 @@ var lookPath = exec.LookPath
 // sleep is the backoff wait. Tests replace this.
 var sleep = time.Sleep
 
-const retryLimit = 4
+// retryLimit is first try + one quick retry. Four GraphQL retries were the stall.
+const retryLimit = 2
+
+var pullsPerPage = 100
 
 func requireGH() error {
 	if _, err := lookPath("gh"); err != nil {
@@ -129,7 +133,8 @@ func isTransientMessage(msg string) bool {
 }
 
 func retryBackoff(attempt int) time.Duration {
-	return 150 * time.Millisecond * time.Duration(1<<attempt)
+	_ = attempt
+	return 50 * time.Millisecond
 }
 
 func withRetry(run runner) runner {
@@ -185,53 +190,89 @@ func fetchWith(run runner, repo string) ([]domain.Stack, error) {
 	}
 	run = withRetry(run)
 
-	viewRaw, viewErr := run("repo", "view", repo, "--json", "nameWithOwner,defaultBranchRef")
-	if isGHNotFound(viewErr) {
-		return nil, ErrGHMissing
+	listed, err := listOpenPulls(run, repo)
+	if err != nil {
+		return nil, err
 	}
-	if isAuthGH(viewErr) {
-		return nil, classifyGHError(viewErr, []string{"repo", "view"})
-	}
-
-	listRaw, listErr := run("pr", "list", "--repo", repo, "--state", "open", "--limit", "200",
-		"--json", strings.Join(prListFields, ","))
-	if isGHNotFound(listErr) {
-		return nil, ErrGHMissing
-	}
-	if listErr != nil {
-		return nil, classifyGHError(listErr, []string{"pr", "list"})
-	}
-
-	defaultBranch := "main"
-	if viewErr == nil {
-		var viewed ghRepo
-		if json.Unmarshal(viewRaw, &viewed) == nil {
-			if viewed.DefaultBranchRef.Name != "" {
-				defaultBranch = viewed.DefaultBranchRef.Name
-			}
-			if viewed.NameWithOwner != "" {
-				repo = viewed.NameWithOwner
-			}
-		}
-	}
-	var listed []ghPR
-	if err := json.Unmarshal(listRaw, &listed); err != nil {
-		return nil, fmt.Errorf("decode gh pr list: %w", err)
-	}
-
 	prs := make([]RemotePR, 0, len(listed))
 	for _, item := range listed {
 		prs = append(prs, item.toRemote())
 	}
 	applyAuthorColors(prs)
-	return GroupStacks(prs, defaultBranch), nil
+	return GroupStacks(prs, "main"), nil
 }
 
-// prListFields is the first-paint grouping set. No body, no check rollup,
-// no review history — those 502 GraphQL on a normal private repo.
-var prListFields = []string{
-	"number", "title", "url", "headRefName", "baseRefName",
-	"author", "labels", "isDraft", "state",
+func pullsAPIPath(repo string, page int) string {
+	path := "repos/" + repo + "/pulls?state=open&per_page=" + strconv.Itoa(pullsPerPage)
+	if page > 1 {
+		path += "&page=" + strconv.Itoa(page)
+	}
+	return path
+}
+
+func listOpenPulls(run runner, repo string) ([]restPR, error) {
+	var all []restPR
+	for page := 1; ; page++ {
+		path := pullsAPIPath(repo, page)
+		raw, err := run("api", path)
+		if isGHNotFound(err) {
+			return nil, ErrGHMissing
+		}
+		if err != nil {
+			return nil, classifyGHError(err, []string{"api", path})
+		}
+		var listed []restPR
+		if decErr := json.Unmarshal(raw, &listed); decErr != nil {
+			return nil, fmt.Errorf("decode gh api %s: %w", path, decErr)
+		}
+		all = append(all, listed...)
+		if len(listed) < pullsPerPage {
+			return all, nil
+		}
+		if page > 50 {
+			return all, fmt.Errorf("too many pull pages")
+		}
+	}
+}
+
+type restPR struct {
+	Number  int    `json:"number"`
+	Title   string `json:"title"`
+	HTMLURL string `json:"html_url"`
+	Head    struct {
+		Ref string `json:"ref"`
+	} `json:"head"`
+	Base struct {
+		Ref string `json:"ref"`
+	} `json:"base"`
+	User struct {
+		Login string `json:"login"`
+	} `json:"user"`
+	Labels []ghLabel `json:"labels"`
+	Draft  bool      `json:"draft"`
+	State  string    `json:"state"`
+}
+
+func (p restPR) toRemote() RemotePR {
+	labels := make([]domain.Label, 0, len(p.Labels))
+	for _, lab := range p.Labels {
+		name := strings.TrimSpace(lab.Name)
+		if name == "" {
+			continue
+		}
+		labels = append(labels, domain.Label{Name: name, Color: domain.NormalizeHex(lab.Color)})
+	}
+	return RemotePR{
+		Number:      p.Number,
+		Title:       p.Title,
+		URL:         p.HTMLURL,
+		HeadRefName: p.Head.Ref,
+		BaseRefName: p.Base.Ref,
+		Author:      p.User.Login,
+		Labels:      labels,
+		Draft:       p.Draft,
+		Merged:      false,
+	}
 }
 
 type ghRepo struct {

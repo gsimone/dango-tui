@@ -5,13 +5,16 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/gsimone/dango-tui/internal/domain"
 )
+
+func restPulls(body string) []byte {
+	return []byte(body)
+}
 
 func ghOK(handlers map[string][]byte) runner {
 	return func(args ...string) ([]byte, error) {
@@ -25,14 +28,42 @@ func ghOK(handlers map[string][]byte) runner {
 	}
 }
 
-func TestFetchWithGroupsChainFromGhJSON(t *testing.T) {
+func TestFetchUsesRESTPullsNotGraphQL(t *testing.T) {
+	var calls []string
+	run := func(args ...string) ([]byte, error) {
+		joined := strings.Join(args, " ")
+		calls = append(calls, joined)
+		if args[0] == "pr" || strings.Contains(joined, "pr list") {
+			t.Fatalf("must not call gh pr list: %v", args)
+		}
+		if args[0] == "repo" || strings.Contains(joined, "repo view") {
+			t.Fatalf("must not call gh repo view: %v", args)
+		}
+		if strings.Contains(joined, "--json") {
+			t.Fatalf("must not use GraphQL --json: %v", args)
+		}
+		if len(args) < 2 || args[0] != "api" || !strings.Contains(args[1], "repos/owner/demo/pulls") {
+			t.Fatalf("first list must be REST gh api repos/.../pulls, got %v", args)
+		}
+		if !strings.Contains(args[1], "state=open") || !strings.Contains(args[1], "per_page=100") {
+			t.Fatalf("REST pulls query: %s", args[1])
+		}
+		return []byte(`[]`), nil
+	}
+	if _, err := fetchWith(run, "owner/demo"); err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 1 {
+		t.Fatalf("open is one REST list, got %v", calls)
+	}
+}
+
+func TestFetchWithGroupsChainFromREST(t *testing.T) {
 	run := ghOK(map[string][]byte{
-		"repo view": []byte(`{"nameWithOwner":"owner/demo","defaultBranchRef":{"name":"main"}}`),
-		"pr list": []byte(`[
-				{"number":1,"title":"bottom","url":"https://github.com/owner/demo/pull/1","headRefName":"a","baseRefName":"main","headRefOid":"aaa","author":{"login":"gm"},"isDraft":false,"state":"OPEN","mergeable":"MERGEABLE","reviewDecision":"APPROVED","latestReviews":[{"state":"APPROVED"}],"additions":1,"deletions":0,"changedFiles":1,"body":"","statusCheckRollup":[{"state":"SUCCESS"}]},
-				{"number":2,"title":"top","url":"https://github.com/owner/demo/pull/2","headRefName":"b","baseRefName":"a","headRefOid":"bbb","author":{"login":"gm"},"isDraft":false,"state":"OPEN","mergeable":"MERGEABLE","reviewDecision":"","latestReviews":[],"additions":3,"deletions":1,"changedFiles":2,"body":"","statusCheckRollup":[{"state":"FAILURE"}]}
-			]`),
-		"api repos/": []byte(`[]`),
+		"api repos/owner/demo/pulls": restPulls(`[
+			{"number":1,"title":"bottom","html_url":"https://github.com/owner/demo/pull/1","head":{"ref":"a"},"base":{"ref":"main"},"user":{"login":"gm"},"labels":[],"draft":false,"state":"open"},
+			{"number":2,"title":"top","html_url":"https://github.com/owner/demo/pull/2","head":{"ref":"b"},"base":{"ref":"a"},"user":{"login":"gm"},"labels":[],"draft":false,"state":"open"}
+		]`),
 	})
 	stacks, err := fetchWith(run, "owner/demo")
 	if err != nil {
@@ -44,11 +75,14 @@ func TestFetchWithGroupsChainFromGhJSON(t *testing.T) {
 	if stacks[0].PRs[0].Number != 1 || stacks[0].PRs[1].Number != 2 {
 		t.Fatalf("order %+v", numbers(stacks[0].PRs))
 	}
-	if stacks[0].PRs[1].CI.State != "failure" {
-		t.Fatalf("ci %s", stacks[0].PRs[1].CI.State)
-	}
 	if stacks[0].PRs[0].Author != "gm" || stacks[0].PRs[0].AuthorColor != domain.LoginColor("gm") {
 		t.Fatalf("author fallback: %+v", stacks[0].PRs[0])
+	}
+	if stacks[0].PRs[0].URL != "https://github.com/owner/demo/pull/1" {
+		t.Fatalf("html_url %q", stacks[0].PRs[0].URL)
+	}
+	if stacks[0].PRs[0].Branch != "a" || stacks[0].PRs[1].Branch != "b" {
+		t.Fatalf("head.ref mapping: %+v %+v", stacks[0].PRs[0], stacks[0].PRs[1])
 	}
 	if len(stacks[0].PRs[0].Labels) != 0 {
 		t.Fatalf("no labels in this fixture: %+v", stacks[0].PRs[0].Labels)
@@ -57,11 +91,9 @@ func TestFetchWithGroupsChainFromGhJSON(t *testing.T) {
 
 func TestFetchMapsLabelsAndAuthor(t *testing.T) {
 	run := ghOK(map[string][]byte{
-		"repo view": []byte(`{"nameWithOwner":"owner/demo","defaultBranchRef":{"name":"main"}}`),
-		"pr list": []byte(`[
-				{"number":1,"title":"bottom","url":"https://github.com/owner/demo/pull/1","headRefName":"a","baseRefName":"main","headRefOid":"aaa","author":{"login":"gm","avatarUrl":"https://avatars.example/gm.png"},"labels":[{"name":"bug","color":"d73a4a"},{"name":"auth","color":"0e8a16"}],"isDraft":false,"state":"OPEN","mergeable":"MERGEABLE","reviewDecision":"APPROVED","latestReviews":[{"state":"APPROVED"}],"additions":1,"deletions":0,"changedFiles":1,"body":"","statusCheckRollup":[{"state":"SUCCESS"}]}
-			]`),
-		"api repos/": []byte(`[]`),
+		"api repos/owner/demo/pulls": restPulls(`[
+			{"number":1,"title":"bottom","html_url":"https://github.com/owner/demo/pull/1","head":{"ref":"a"},"base":{"ref":"main"},"user":{"login":"gm"},"labels":[{"name":"bug","color":"d73a4a"},{"name":"auth","color":"0e8a16"}],"draft":false,"state":"open"}
+		]`),
 	})
 	stacks, err := fetchWith(run, "owner/demo")
 	if err != nil {
@@ -74,7 +106,7 @@ func TestFetchMapsLabelsAndAuthor(t *testing.T) {
 	if pr.Labels[1].Name != "auth" || pr.Labels[1].Color != "#0e8a16" {
 		t.Fatalf("labels %+v", pr.Labels)
 	}
-	if pr.Author != "gm" || pr.AvatarURL != "https://avatars.example/gm.png" {
+	if pr.Author != "gm" {
 		t.Fatalf("author %+v", pr)
 	}
 	if pr.AuthorColor != domain.LoginColor("gm") {
@@ -126,84 +158,43 @@ func TestFetchWithMissingBinary(t *testing.T) {
 	}
 }
 
-func TestPRListFieldsAreSlim(t *testing.T) {
-	want := []string{
-		"number", "title", "url", "headRefName", "baseRefName",
-		"author", "labels", "isDraft", "state",
-	}
-	if strings.Join(prListFields, ",") != strings.Join(want, ",") {
-		t.Fatalf("first list fields %v, want %v", prListFields, want)
-	}
-	joined := strings.Join(prListFields, ",")
-	for _, banned := range []string{
-		"body", "statusCheckRollup", "latestReviews", "reviews",
-		"mergeStateStatus", "mergeable", "additions", "deletions",
-		"changedFiles", "headRefOid",
-	} {
-		if strings.Contains(joined, banned) {
-			t.Fatalf("first list must not request %s: %v", banned, prListFields)
-		}
-	}
-}
+func TestFetchPaginatesRESTPulls(t *testing.T) {
+	old := pullsPerPage
+	pullsPerPage = 2
+	t.Cleanup(func() { pullsPerPage = old })
 
-func TestFetchDoesNotCallStacks(t *testing.T) {
-	var mu sync.Mutex
-	seen := map[string]bool{}
-	var jsonFields string
+	var pages []string
 	run := func(args ...string) ([]byte, error) {
-		mu.Lock()
-		if len(args) > 0 {
-			seen[args[0]] = true
-		}
 		joined := strings.Join(args, " ")
-		if strings.HasPrefix(joined, "pr list") {
-			for i, a := range args {
-				if a == "--json" && i+1 < len(args) {
-					jsonFields = args[i+1]
-				}
-			}
+		if args[0] != "api" || !strings.Contains(args[1], "repos/owner/demo/pulls") {
+			t.Fatalf("paginate must stay on REST pulls, got %v", args)
 		}
-		if args[0] == "api" {
-			t.Fatal(" /stacks is not on the hot path")
+		pages = append(pages, joined)
+		if strings.Contains(args[1], "&page=2") {
+			return restPulls(`[{"number":3,"title":"c","html_url":"https://github.com/owner/demo/pull/3","head":{"ref":"c"},"base":{"ref":"b"},"user":{"login":"gm"},"draft":false,"state":"open"}]`), nil
 		}
-		mu.Unlock()
-		return ghOK(map[string][]byte{
-			"repo view": []byte(`{"nameWithOwner":"owner/demo","defaultBranchRef":{"name":"main"}}`),
-			"pr list":   []byte(`[]`),
-		})(args...)
+		return restPulls(`[
+			{"number":1,"title":"a","html_url":"https://github.com/owner/demo/pull/1","head":{"ref":"a"},"base":{"ref":"main"},"user":{"login":"gm"},"draft":false,"state":"open"},
+			{"number":2,"title":"b","html_url":"https://github.com/owner/demo/pull/2","head":{"ref":"b"},"base":{"ref":"a"},"user":{"login":"gm"},"draft":false,"state":"open"}
+		]`), nil
 	}
-	if _, err := fetchWith(run, "owner/demo"); err != nil {
-		t.Fatal(err)
-	}
-	if seen["api"] || seen["stacks"] {
-		t.Fatalf("/stacks was called: %v", seen)
-	}
-	if !seen["repo"] || !seen["pr"] {
-		t.Fatalf("need repo view + pr list, got %v", seen)
-	}
-	if strings.Contains(jsonFields, "body") || strings.Contains(jsonFields, "statusCheckRollup") {
-		t.Fatalf("pr list still heavy: %s", jsonFields)
-	}
-}
-
-func TestFetchSlimJSONStillGroups(t *testing.T) {
-	run := ghOK(map[string][]byte{
-		"repo view": []byte(`{"nameWithOwner":"owner/demo","defaultBranchRef":{"name":"main"}}`),
-		"pr list": []byte(`[
-			{"number":1,"title":"bottom","url":"https://github.com/owner/demo/pull/1","headRefName":"a","baseRefName":"main","author":{"login":"gm"},"labels":[],"isDraft":false,"state":"OPEN"},
-			{"number":2,"title":"top","url":"https://github.com/owner/demo/pull/2","headRefName":"b","baseRefName":"a","author":{"login":"gm"},"labels":[],"isDraft":false,"state":"OPEN"}
-		]`),
-	})
 	stacks, err := fetchWith(run, "owner/demo")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(stacks) != 1 || len(stacks[0].PRs) != 2 {
-		t.Fatalf("slim list must still chain, got %+v", stacks)
+	if len(pages) != 2 {
+		t.Fatalf("pages %v", pages)
+	}
+	n := 0
+	for _, s := range stacks {
+		n += len(s.PRs)
+	}
+	if n != 3 {
+		t.Fatalf("paginated layers %d stacks %+v", n, stacks)
 	}
 }
 
-func TestFetchRetries502ThenSucceeds(t *testing.T) {
+func TestFetchRetries502OnceThenSucceeds(t *testing.T) {
 	var slept []time.Duration
 	oldSleep := sleep
 	sleep = func(d time.Duration) { slept = append(slept, d) }
@@ -211,52 +202,45 @@ func TestFetchRetries502ThenSucceeds(t *testing.T) {
 
 	var listCalls atomic.Int32
 	run := func(args ...string) ([]byte, error) {
-		joined := strings.Join(args, " ")
-		if strings.HasPrefix(joined, "repo view") {
-			return []byte(`{"nameWithOwner":"owner/demo","defaultBranchRef":{"name":"main"}}`), nil
+		if args[0] != "api" || !strings.Contains(args[1], "/pulls") {
+			t.Fatalf("unexpected gh %v", args)
 		}
-		if strings.HasPrefix(joined, "pr list") {
-			n := listCalls.Add(1)
-			if n < 3 {
-				return nil, fmt.Errorf("gh pr list: HTTP 502: Bad Gateway (https://api.github.com/graphql)")
-			}
-			return []byte(`[]`), nil
+		if listCalls.Add(1) == 1 {
+			return nil, fmt.Errorf("gh api: HTTP 502: Bad Gateway (https://api.github.com/repos/owner/demo/pulls)")
 		}
-		t.Fatalf("unexpected gh %s", joined)
-		return nil, nil
+		return []byte(`[]`), nil
 	}
 	if _, err := fetchWith(run, "owner/demo"); err != nil {
-		t.Fatalf("502 should retry: %v", err)
+		t.Fatalf("one 502 retry should succeed: %v", err)
 	}
-	if listCalls.Load() != 3 {
-		t.Fatalf("list calls %d", listCalls.Load())
+	if listCalls.Load() != 2 {
+		t.Fatalf("one quick retry, got %d calls", listCalls.Load())
 	}
-	if len(slept) != 2 {
-		t.Fatalf("backoff waits %v", slept)
+	if len(slept) != 1 {
+		t.Fatalf("one short backoff, got %v", slept)
 	}
 }
 
-func TestFetch503RetriesThenErrors(t *testing.T) {
+func TestFetch502ThenErrorScreen(t *testing.T) {
 	sleep = func(time.Duration) {}
 	t.Cleanup(func() { sleep = time.Sleep })
 
 	var calls atomic.Int32
 	_, err := fetchWith(func(args ...string) ([]byte, error) {
-		joined := strings.Join(args, " ")
-		if strings.HasPrefix(joined, "repo view") {
-			return []byte(`{"nameWithOwner":"owner/demo","defaultBranchRef":{"name":"main"}}`), nil
-		}
 		calls.Add(1)
-		return nil, fmt.Errorf("HTTP 503: Service Unavailable")
+		return nil, fmt.Errorf("HTTP 502: Bad Gateway (https://api.github.com/repos/owner/demo/pulls)")
 	}, "owner/demo")
 	if err == nil {
-		t.Fatal("exhausted retries must fail")
+		t.Fatal("two 502s must fail")
 	}
-	if !strings.Contains(err.Error(), "503") {
-		t.Fatalf("keep the 503: %v", err)
+	if !strings.Contains(err.Error(), "502") {
+		t.Fatalf("keep the 502: %v", err)
 	}
 	if calls.Load() != retryLimit {
-		t.Fatalf("list 503 should stop after %d, got %d", retryLimit, calls.Load())
+		t.Fatalf("at most one retry, got %d (limit %d)", calls.Load(), retryLimit)
+	}
+	if retryLimit != 2 {
+		t.Fatalf("first list is try + one retry, not %d", retryLimit)
 	}
 }
 
@@ -267,7 +251,7 @@ func TestFetchAuthIsNotA502(t *testing.T) {
 	var calls atomic.Int32
 	_, err := fetchWith(func(args ...string) ([]byte, error) {
 		calls.Add(1)
-		return nil, fmt.Errorf("gh pr list: HTTP 401: Bad credentials")
+		return nil, fmt.Errorf("gh api: HTTP 401: Bad credentials")
 	}, "owner/demo")
 	if !errors.Is(err, ErrGHAuth) {
 		t.Fatalf("auth: %v", err)
@@ -283,40 +267,15 @@ func TestFetchAuthIsNotA502(t *testing.T) {
 	}
 }
 
-func TestFetchIsSerial(t *testing.T) {
-	var current, max atomic.Int32
-	run := func(args ...string) ([]byte, error) {
-		n := current.Add(1)
-		for {
-			old := max.Load()
-			if n <= old || max.CompareAndSwap(old, n) {
-				break
-			}
-		}
-		time.Sleep(20 * time.Millisecond)
-		current.Add(-1)
-		return ghOK(map[string][]byte{
-			"repo view": []byte(`{"nameWithOwner":"owner/demo","defaultBranchRef":{"name":"main"}}`),
-			"pr list":   []byte(`[]`),
-		})(args...)
-	}
-	if _, err := fetchWith(run, "owner/demo"); err != nil {
-		t.Fatal(err)
-	}
-	if max.Load() != 1 {
-		t.Fatalf("stampeded the API, max in flight %d", max.Load())
-	}
-}
-
 func TestGHCommandInheritsEnv(t *testing.T) {
-	cmd := ghCommand("pr", "list")
+	cmd := ghCommand("api", "repos/owner/name/pulls?state=open&per_page=100")
 	if cmd.Env != nil {
 		t.Fatalf("cmd.Env must stay nil so GH_TOKEN/GH_HOST inherit, got %v", cmd.Env)
 	}
 }
 
 func TestRunGHNotFound(t *testing.T) {
-	err := mapGHError(&exec.Error{Name: "gh", Err: exec.ErrNotFound}, "exec: \"gh\": executable file not found in $PATH", []string{"pr", "list"})
+	err := mapGHError(&exec.Error{Name: "gh", Err: exec.ErrNotFound}, "exec: \"gh\": executable file not found in $PATH", []string{"api", "repos/x/y/pulls"})
 	if !errors.Is(err, ErrGHMissing) {
 		t.Fatalf("runGH not-found: %v", err)
 	}
@@ -325,7 +284,7 @@ func TestRunGHNotFound(t *testing.T) {
 	}
 
 	t.Setenv("PATH", "")
-	_, err = runGH("pr", "list")
+	_, err = runGH("api", "repos/x/y/pulls")
 	if !errors.Is(err, ErrGHMissing) {
 		t.Fatalf("PATH-empty runGH: %v", err)
 	}
