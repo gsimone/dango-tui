@@ -545,7 +545,40 @@ func TestRepoJSONMissingFileIsErrorNotFixtures(t *testing.T) {
 	}
 }
 
-func TestLiveDropsOnePRStacksAndShowsGitHubTitle(t *testing.T) {
+func TestLiveArchetypeAppNoOneBallRows(t *testing.T) {
+	if os.Getenv("DANGO_LIVE_PROOF") == "" {
+		t.Skip("manual: DANGO_LIVE_PROOF=1 go test ./internal/tui -run TestLiveArchetypeAppNoOneBallRows")
+	}
+	stacks, err := live.Fetch("archetype-labs/app")
+	if err != nil {
+		t.Fatalf("live Fetch archetype-labs/app: %v", err)
+	}
+	ones := 0
+	layers := 0
+	for i, stack := range stacks {
+		layers += len(stack.PRs)
+		if len(stack.PRs) < 2 {
+			ones++
+			t.Errorf("one-ball row %d %q n=%d", i, stack.Name, len(stack.PRs))
+		}
+	}
+	if ones > 0 {
+		t.Fatalf("live list still has %d one-ball rows", ones)
+	}
+	m := tui.New(tui.Options{
+		Repo:   "archetype-labs/app",
+		Width:  120,
+		Height: 30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return stacks, nil
+		},
+	})
+	m, _ = applyLiveFetch(m)
+	frame := frameOf(m)
+	t.Logf("live archetype-labs/app: %d stacks / %d layers\n%s", len(m.Stacks()), layers, frame)
+}
+
+func TestLiveDropsOnePRStacksKeepsShortListTitle(t *testing.T) {
 	title := "LEV-182: Bound hosts to the session so undo does not wedge"
 	m := tui.New(tui.Options{
 		Repo:   "archetype-labs/app",
@@ -569,11 +602,15 @@ func TestLiveDropsOnePRStacksAndShowsGitHubTitle(t *testing.T) {
 	if strings.Contains(frame, "solo open PR") {
 		t.Fatalf("one-ball stack leaked:\n%s", frame)
 	}
-	if strings.Contains(strings.Join(listRows(frame), "\n"), "LEV-182") && !strings.Contains(frame, "Bound hosts") {
-		t.Fatalf("ticket prefix dumped without the title:\n%s", frame)
+	list := strings.Join(listRows(frame), "\n")
+	if strings.Contains(list, "Bound hosts") || strings.Contains(list, "does not wedge") {
+		t.Fatalf("list must stay the short title:\n%s", list)
+	}
+	if !strings.Contains(list, "LEV-182") {
+		t.Fatalf("list keeps the ticket:\n%s", frame)
 	}
 	if !strings.Contains(frame, "Bound hosts") || !strings.Contains(frame, "session") {
-		t.Fatalf("list must show the GitHub title:\n%s", frame)
+		t.Fatalf("pane must show the GitHub title:\n%s", frame)
 	}
 	if !strings.Contains(frame, "archetype-labs/app  •  1 stacks / 2 layers") {
 		t.Fatalf("counts are real stacks only:\n%s", frame)

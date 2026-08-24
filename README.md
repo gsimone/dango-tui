@@ -31,7 +31,7 @@ go run ./cmd/dango
 ```bash
 go run ./cmd/dango --repo archetype-labs/app
 go run ./cmd/dango --repo testdata/test.json
-go run ./cmd/dango --frame 80x24      # print one frame and exit
+go run ./cmd/dango --frame 120x30     # print the product pane and exit
 ```
 
 Or build:
@@ -45,9 +45,9 @@ make build
 
 Nightly (not 0.1.0, no semver): after CI on `main`, plus 02:00 UTC and `workflow_dispatch`, the `Nightly` workflow replaces a single prerelease tag `nightly` with stripped `dango-linux-amd64` and `dango-darwin-arm64`. No darwin/amd64. PRs do not publish. `make dist` builds those locally.
 
-Provider comes from `dango.json` / `dango.yml` / `dango.yaml`. `--provider` overrides. Missing config file = no generated title; the list keeps the GitHub title. A set provider may still swap a short stack title in place after first paint, plus a description (inspector only). `dango.json` is not a stack dump.
+Provider comes from `dango.json` / `dango.yml` / `dango.yaml`. `--provider` overrides. Missing config file = no generated title; the list keeps a short stack title (ticket id, or the gh title when it is already short). The full sentence lives in the inspector pane. A set provider may still swap a short stack title in place after first paint, plus a description (inspector only). `dango.json` is not a stack dump.
 
-A stack is two or more open PRs. A single open PR is not a stack and does not appear as a one-ball row. List names are the GitHub titles (paper, full leftover width, two wrap lines).
+A stack is two or more open PRs. A single open PR is not a stack and does not appear as a one-ball row. List names stay short (paper, leftover width, one line).
 
 The header mark is `●-●-● DANGO` over the repo slug and counts. Type is paper
 `#f2ebe0` or meta `#9a8f82`. Two-col list: name + ball chain. Inspector is the
@@ -107,7 +107,7 @@ CI on pull requests and pushes to `main` publishes coverage (total %) and real g
 - Header: `●-●-● DANGO`, then `archetype-labs/app  •  N stacks / M layers` (fixtures use `org/reponame`)
 - 2-column side pad, 1 blank row at the top
 - Stack list on the left; one `│` rule; inspector pane on the right (left/right pad)
-- List names are GitHub titles in paper, full leftover measure, two lines if needed
+- List names are short stack titles in paper, leftover measure, one line. Full GitHub title lives in the right pane.
 - Inspector facts include status (status ink on the value only), labels in their GitHub hex, and author (`●` + login)
 - Selected row `#242018` with paper ink; list titles stay paper; chrome is meta
-- **40×20 / 80×24 / 120×30 / 160×40** — column stays on-screen
+- **120×30** is the product: list + right inspector pane. Narrow widths keep a stacked card clipped to content + pad.

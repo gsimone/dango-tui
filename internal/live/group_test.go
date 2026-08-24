@@ -90,10 +90,32 @@ func TestGroupStacksDoesNotInventTitle(t *testing.T) {
 		t.Fatalf("got %d", len(stacks))
 	}
 	if stacks[0].Name != "base layer" {
-		t.Fatalf("list paints the gh name first, got %q", stacks[0].Name)
+		t.Fatalf("list paints the short gh name first, got %q", stacks[0].Name)
 	}
 	if stacks[0].Summary != "" {
 		t.Fatalf("fetch must not invent a generated summary, got %q", stacks[0].Summary)
+	}
+}
+
+func TestShortNameKeepsTicketInTheList(t *testing.T) {
+	if got := ShortName("LEV-182: Bound hosts to the session"); got != "LEV-182" {
+		t.Fatalf("ticket sentence: %q", got)
+	}
+	if got := ShortName("LEV-182 — Bound hosts"); got != "LEV-182" {
+		t.Fatalf("em dash: %q", got)
+	}
+	if got := ShortName("auth cleanup"); got != "auth cleanup" {
+		t.Fatalf("authored short name: %q", got)
+	}
+	if got := ShortName("LEV-182"); got != "LEV-182" {
+		t.Fatalf("bare ticket: %q", got)
+	}
+	stamped := StampGhNames([]domain.Stack{{
+		Name: "LEV-182: Bound hosts to the session",
+		PRs:  []domain.PullRequest{{Title: "LEV-182: Bound hosts to the session"}, {Title: "head"}},
+	}})
+	if stamped[0].Name != "LEV-182" {
+		t.Fatalf("stamp must clip the sentence, got %q", stamped[0].Name)
 	}
 }
 

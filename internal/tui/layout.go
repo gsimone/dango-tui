@@ -17,7 +17,7 @@ const (
 	BallColW      = 20
 	ColGutter     = 2
 	InspectorPadX = 2
-	ListNameLines = 2
+	ListNameLines = 1
 	listMarkerW   = 2
 )
 

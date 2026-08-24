@@ -146,33 +146,11 @@ func repoCountLine(repo string, stacks, layers int) string {
 }
 
 func stackListName(stack domain.Stack) string {
-	gh := live.GhTitle(stack)
 	name := strings.TrimSpace(stack.Name)
 	if name == "" {
-		return gh
+		return live.ShortName(live.GhTitle(stack))
 	}
-	if gh != "" && ticketPrefixOf(name, gh) {
-		return gh
-	}
-	return name
-}
-
-// ticketPrefixOf is a Linear/Jira style id ("LEV-182") when the GitHub
-// title is the same id plus the real sentence. Show the title.
-func ticketPrefixOf(name, title string) bool {
-	if name == title || !strings.HasPrefix(title, name) {
-		return false
-	}
-	rest := strings.TrimSpace(strings.TrimPrefix(title, name))
-	if rest == "" {
-		return false
-	}
-	switch []rune(rest)[0] {
-	case ':', '-', '—', '–':
-		return true
-	default:
-		return false
-	}
+	return live.ShortName(name)
 }
 
 func stackTitleLines(name string, nameW int) []string {

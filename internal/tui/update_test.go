@@ -15,23 +15,27 @@ import (
 
 var ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\x07]*(?:\x07|\x1b\\)`)
 
-func TestStackListNamePrefersGitHubTitle(t *testing.T) {
+func TestStackListNameKeepsShortTitle(t *testing.T) {
 	gh := "LEV-182: Bound hosts to the session"
 	stack := domain.Stack{
 		Name: "LEV-182",
 		PRs:  []domain.PullRequest{{Title: gh}, {Title: "head"}},
 	}
-	if got := stackListName(stack); got != gh {
-		t.Fatalf("ticket prefix must yield the GitHub title, got %q", got)
+	if got := stackListName(stack); got != "LEV-182" {
+		t.Fatalf("list keeps the ticket, got %q", got)
 	}
 	named := stack
 	named.Name = "from the title agent"
 	if got := stackListName(named); got != "from the title agent" {
 		t.Fatalf("landed provider title still swaps in place, got %q", got)
 	}
-	blank := domain.Stack{PRs: []domain.PullRequest{{Title: gh}}}
-	if got := stackListName(blank); got != gh {
-		t.Fatalf("empty name uses GhTitle, got %q", got)
+	stamped := domain.Stack{Name: gh, PRs: []domain.PullRequest{{Title: gh}, {Title: "head"}}}
+	if got := stackListName(stamped); got != "LEV-182" {
+		t.Fatalf("full sentence belongs in the pane, got %q", got)
+	}
+	blank := domain.Stack{PRs: []domain.PullRequest{{Title: gh}, {Title: "head"}}}
+	if got := stackListName(blank); got != "LEV-182" {
+		t.Fatalf("empty name uses the short gh title, got %q", got)
 	}
 }
 
