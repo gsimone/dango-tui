@@ -24,6 +24,21 @@ func applyLiveFetch(m tui.Model) (tui.Model, tea.Cmd) {
 	return next.(tui.Model), extra
 }
 
+func applyLiveCmds(m tui.Model, cmd tea.Cmd) tui.Model {
+	if cmd == nil {
+		return m
+	}
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, c := range batch {
+			m = applyLiveCmds(m, c)
+		}
+		return m
+	}
+	next, extra := m.Update(msg)
+	return applyLiveCmds(next.(tui.Model), extra)
+}
+
 func testdataJSON(t *testing.T) string {
 	t.Helper()
 	dir, err := os.Getwd()
@@ -354,15 +369,87 @@ func TestProviderWritesStackTitleOnly(t *testing.T) {
 		Fetch:  fetch,
 	})
 	plain, extra := applyLiveFetch(plain)
-	if extra != nil {
-		t.Fatal("missing provider must not start summaries")
+	if extra == nil {
+		t.Fatal("live still starts Describe() after first paint")
 	}
 	bare := strings.Join(listRows(frameOf(plain)), "\n")
 	if !strings.Contains(bare, "alpha layer") {
 		t.Fatalf("missing provider keeps the gh name:\n%s", bare)
 	}
 	if strings.Contains(bare, "alpha layer and beta layer") {
+		t.Fatalf("first paint must not wait on a generated title:\n%s", bare)
+	}
+	plain = applyLiveCmds(plain, extra)
+	bare = strings.Join(listRows(frameOf(plain)), "\n")
+	if strings.Contains(bare, "alpha layer and beta layer") {
 		t.Fatalf("missing provider must not invent a generated title:\n%s", bare)
+	}
+	if plain.Stacks()[0].Name != "alpha layer" {
+		t.Fatalf("list name must stay the gh title: %+v", plain.Stacks()[0])
+	}
+	if plain.Stacks()[0].Description == "" {
+		t.Fatal("Describe() must land in the inspector with no provider")
+	}
+}
+
+func TestLiveFillsDescriptionWithoutProvider(t *testing.T) {
+	title := "LEV-182: Bound hosts to the session so undo does not wedge"
+	m := tui.New(tui.Options{
+		Repo:   "archetype-labs/app",
+		Width:  120,
+		Height: 30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{{
+				ID: "s",
+				PRs: []domain.PullRequest{
+					{Number: 182, Title: title, Body: "<!-- CURSOR_AGENT_PR_BODY_BEGIN -->\nPin each bound host to the worker.\n"},
+					{Number: 183, Title: "Pin each host to the worker"},
+				},
+			}}, nil
+		},
+	})
+	if !strings.Contains(frameOf(m), "fetching archetype-labs/app") {
+		t.Fatalf("splash first:\n%s", frameOf(m))
+	}
+	m, sumCmd := applyLiveFetch(m)
+	if sumCmd == nil {
+		t.Fatal("live must start Describe() after first paint")
+	}
+	if m.Provider.Raw != "" {
+		t.Fatal("no dango.json / --provider")
+	}
+	first := frameOf(m)
+	list := strings.Join(listRows(first), "\n")
+	if !strings.Contains(list, "LEV-182") {
+		t.Fatalf("first paint keeps the short list title:\n%s", first)
+	}
+	if strings.Contains(list, "and pin each") {
+		t.Fatalf("first paint must not invent a list title:\n%s", list)
+	}
+	if strings.Contains(first, "CURSOR_AGENT") || strings.Contains(first, "Covers ") || strings.Contains(first, "Pin each bound host to the worker") {
+		t.Fatalf("first paint leaked body:\n%s", first)
+	}
+	want := summary.Describe(m.Stacks()[0])
+	if want == "" || strings.EqualFold(want, title) || strings.HasPrefix(want, "Covers ") {
+		t.Fatalf("Describe() clause: %q", want)
+	}
+	m = applyLiveCmds(m, sumCmd)
+	if m.Stacks()[0].Name != "LEV-182" {
+		t.Fatalf("list title must stay short, got %q", m.Stacks()[0].Name)
+	}
+	if m.Stacks()[0].Description != want {
+		t.Fatalf("landed %q, want Describe() %q", m.Stacks()[0].Description, want)
+	}
+	frame := frameOf(m)
+	t.Logf("120x30 after Describe():\n%s", frame)
+	if strings.Contains(strings.Join(listRows(frame), "\n"), want) {
+		t.Fatalf("description belongs in the pane, not the list:\n%s", frame)
+	}
+	if !strings.Contains(frame, want) && !strings.Contains(frame, "bound hosts") {
+		t.Fatalf("pane must show the generated description:\n%s", frame)
+	}
+	if strings.Contains(frame, "CURSOR_AGENT") || strings.Contains(frame, "Covers ") || strings.Contains(frame, "Pin each bound host to the worker") {
+		t.Fatalf("body / Covers leaked:\n%s", frame)
 	}
 }
 

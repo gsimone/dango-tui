@@ -46,9 +46,10 @@ type none struct{}
 func (none) Summarize(domain.Stack) string { return "" }
 
 // Chosen is the Summarizer picked for a provider. --provider writes the
-// stack title (and Run fills the inspector description). No provider → none.
-// A provider with no network summarizer yet uses Local(). Fetch does not
-// wait on this.
+// stack title. No provider → none (list keeps the gh / short name).
+// Run still fills the inspector description via Describe() with no
+// provider. A provider with no network summarizer yet uses Local().
+// Fetch does not wait on this.
 type Chosen struct {
 	Provider Provider
 	Inner    Summarizer

@@ -183,7 +183,7 @@ func (m Model) splashCopyText() string {
 }
 
 func (m Model) startSummaries() tea.Cmd {
-	if !m.Live || m.Provider.Empty() {
+	if !m.Live {
 		return nil
 	}
 	token := m.fetchSeq

@@ -564,7 +564,7 @@ const inspectorDescLines = 2
 func (m Model) reserveInspectorDesc() bool {
 	// Wide pane keeps a reserved slot so a land does not shift facts.
 	// Stacked card is content+pad only — empty reserve would eat the list.
-	return m.Live && !m.Provider.Empty() && !StackedInspector(m.Width)
+	return m.Live && !StackedInspector(m.Width)
 }
 
 func (m Model) inspectorDescRows(innerW int) int {

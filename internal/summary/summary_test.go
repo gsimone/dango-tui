@@ -118,8 +118,11 @@ func TestRunWritesTitleAndDescription(t *testing.T) {
 	if empty.ID != "stack-1" {
 		t.Fatalf("id %q", empty.ID)
 	}
-	if empty.Title != "" || empty.Description != "" {
+	if empty.Title != "" {
 		t.Fatalf("missing provider must not invent a title: %+v", empty)
+	}
+	if empty.Description == "" {
+		t.Fatal("missing provider still writes Describe() for the pane")
 	}
 
 	res := summary.Run(summary.Job{

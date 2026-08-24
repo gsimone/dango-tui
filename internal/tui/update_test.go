@@ -100,9 +100,19 @@ func TestSummariesAreAsyncAndLandInPlace(t *testing.T) {
 	if m.Fetching || strings.Contains(stripANSI(m.View()), "⠋") {
 		t.Fatal("title wait must not be a spinner")
 	}
-	_, extra := applyFetch(New(Options{Repo: "archetype-labs/app", Width: 80, Height: 24, Fetch: fetch}))
-	if extra != nil {
-		t.Fatal("missing provider must not start summaries")
+	bare, extra := applyFetch(New(Options{Repo: "archetype-labs/app", Width: 80, Height: 24, Fetch: fetch}))
+	if extra == nil {
+		t.Fatal("live still starts Describe() after first paint")
+	}
+	bare = applyCmd(bare, extra)
+	if bare.stacks[0].Name != "alpha layer" {
+		t.Fatalf("missing provider must keep the gh list name: %+v", bare.stacks[0])
+	}
+	if bare.stacks[0].Description == "" {
+		t.Fatal("missing provider must still land an inspector description")
+	}
+	if strings.Contains(strings.Join(listNames(stripANSI(bare.View())), "\n"), "alpha layer and beta layer") {
+		t.Fatalf("missing provider must not invent a list title:\n%s", stripANSI(bare.View()))
 	}
 
 	next, extra := m.Update(summaryDoneMsg{token: m.fetchSeq, id: "s"})

@@ -24,19 +24,21 @@ type Result struct {
 // Func is one provider hook. Tests inject a fake; production uses Run.
 type Func func(Job) Result
 
-// Run generates a short stack title and an inspector description when the
-// job has a provider. Missing provider returns empty fills and keeps the
-// gh name. Fetch and first paint do not call this. local/demo write a
-// distinct clause — they never echo the raw gh title.
+// Run fills the inspector description from local Describe() even when
+// --provider / dango.json is missing. A title is written only when a
+// provider is set, so first paint keeps the gh / short list name.
+// Fetch and first paint do not call this. Describe never echoes the
+// raw gh title, never pastes pr.Body, and never wraps Covers.
 func Run(job Job) Result {
 	id := job.ID
 	if id == "" {
 		id = job.Stack.ID
 	}
-	if job.Provider.Empty() {
-		return Result{ID: id}
+	res := Result{ID: id, Description: Describe(job.Stack)}
+	if !job.Provider.Empty() {
+		res.Title = Title(job.Stack)
 	}
-	return Result{ID: id, Title: Title(job.Stack), Description: Describe(job.Stack)}
+	return res
 }
 
 func stripTicket(s string) string {
