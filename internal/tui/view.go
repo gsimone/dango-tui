@@ -146,10 +146,50 @@ func repoCountLine(repo string, stacks, layers int) string {
 }
 
 func stackListName(stack domain.Stack) string {
-	if name := strings.TrimSpace(stack.Name); name != "" {
-		return name
+	gh := live.GhTitle(stack)
+	name := strings.TrimSpace(stack.Name)
+	if name == "" {
+		return gh
 	}
-	return live.GhTitle(stack)
+	if gh != "" && ticketPrefixOf(name, gh) {
+		return gh
+	}
+	return name
+}
+
+// ticketPrefixOf is a Linear/Jira style id ("LEV-182") when the GitHub
+// title is the same id plus the real sentence. Show the title.
+func ticketPrefixOf(name, title string) bool {
+	if name == title || !strings.HasPrefix(title, name) {
+		return false
+	}
+	rest := strings.TrimSpace(strings.TrimPrefix(title, name))
+	if rest == "" {
+		return false
+	}
+	switch []rune(rest)[0] {
+	case ':', '-', '—', '–':
+		return true
+	default:
+		return false
+	}
+}
+
+func stackTitleLines(name string, nameW int) []string {
+	inner := max(1, nameW-listMarkerW)
+	lines := wrapWords(name, inner)
+	if len(lines) == 0 {
+		return []string{""}
+	}
+	if len(lines) > ListNameLines {
+		rest := strings.Join(lines[1:], " ")
+		lines = []string{lines[0], clip(rest, inner)}
+	}
+	return lines
+}
+
+func stackRowHeight(stack domain.Stack, nameW int) int {
+	return len(stackTitleLines(stackListName(stack), nameW))
 }
 
 func layerBallInk(pr domain.PullRequest) string {
@@ -287,29 +327,32 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 	if gutter < 1 {
 		gutter = ColGutter
 	}
-	start := m.listOrigin(len(stacks), sel.StackIndex, top, bottom)
+	start := m.listOrigin(stacks, sel.StackIndex, top, bottom)
 	y := top
 	for i := start; i < len(stacks); i++ {
 		stack := stacks[i]
 		if y >= bottom {
 			break
 		}
+		lines := stackTitleLines(stackListName(stack), nameW)
+		rowH := len(lines)
 		rowBg := surface
-		nameFg := meta
 		selectedStack := i == sel.StackIndex
 		focus := 0
 		if selectedStack {
 			rowBg = raised
-			nameFg = paper
 			focus = sel.PRIndex
-			c.fill(PadX, y, listWidth, 1, rowBg)
+			c.fill(PadX, y, listWidth, rowH, rowBg)
 		}
 		cells := ballCells(len(stack.PRs), focus)
 		marker := "· "
 		if selectedStack {
 			marker = "▸ "
 		}
-		c.text(PadX, y, marker+stackListName(stack), nameFg, rowBg, nameW)
+		c.text(PadX, y, marker+lines[0], paper, rowBg, nameW)
+		for li := 1; li < rowH && y+li < bottom; li++ {
+			c.text(PadX+listMarkerW, y+li, lines[li], paper, rowBg, max(1, nameW-listMarkerW))
+		}
 
 		ballX := PadX + nameW + gutter
 		x := ballX
@@ -347,7 +390,7 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 				x++
 			}
 		}
-		y++
+		y += rowH
 		if StackedInspector(m.Width) && selectedStack && m.State.CardVisible {
 			inspH := m.stackedPaneHeight(listWidth)
 			if y+inspH > bottom {
@@ -483,15 +526,19 @@ func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper
 		if w < 1 || h < 1 {
 			return
 		}
-		pad := 1
-		if w > pad*2 && h > pad*2 {
-			x += pad
-			y += pad
-			w -= pad * 2
-			h -= pad * 2
+		padX, padY := InspectorPadX, 1
+		if w > padX*2 && h > padY*2 {
+			x += padX
+			y += padY
+			w -= padX * 2
+			h -= padY * 2
 		}
 	} else {
 		c.fill(x, y, w, h, surface)
+		if w > InspectorPadX*2 {
+			x += InspectorPadX
+			w -= InspectorPadX * 2
+		}
 	}
 	pr, ok := m.SelectedPR()
 	if !m.State.CardVisible || !ok {
@@ -649,31 +696,46 @@ func stackHealthColor(stack domain.Stack) string {
 	return domain.Color(domain.StateColorToken(domain.GetDisplayState(head)))
 }
 
-func (m Model) listOrigin(n, selected, top, bottom int) int {
+func (m Model) listOrigin(stacks []domain.Stack, selected, top, bottom int) int {
+	n := len(stacks)
+	if n == 0 {
+		return 0
+	}
 	room := max(1, bottom-top)
 	if StackedInspector(m.Width) && m.State.CardVisible {
 		room = max(1, room-m.stackedPaneHeight(ListPaneWidth(m.Width)))
 	}
-	if selected < room {
-		return 0
+	if selected < 0 {
+		selected = 0
 	}
 	if selected > n-1 {
 		selected = n - 1
 	}
-	return selected - room + 1
+	nameW := GetListRowLayout(ListPaneWidth(m.Width), m.Width, 0).NameWidth
+	used := stackRowHeight(stacks[selected], nameW)
+	start := selected
+	for start > 0 {
+		h := stackRowHeight(stacks[start-1], nameW)
+		if used+h > room {
+			break
+		}
+		used += h
+		start--
+	}
+	return start
 }
 
 func (m Model) stackedPaneHeight(listWidth int) int {
-	border, pad := 1, 1
-	innerW := max(1, listWidth-2*(border+pad))
+	border, padX, padY := 1, InspectorPadX, 1
+	innerW := max(1, listWidth-2*(border+padX))
 	pr, ok := m.SelectedPR()
 	if !ok {
-		return 2*border + 2*pad + 1
+		return 2*border + 2*padY + 1
 	}
 	title := "#" + itoa(pr.Number) + " " + pr.Title
 	lines := len(wrapWords(title, innerW))
 	descLines := m.inspectorDescRows(innerW)
-	return max(2*border+2*pad+1, 2*border+2*pad+lines+1+descLines+len(inspectorFacts(pr)))
+	return max(2*border+2*padY+1, 2*border+2*padY+lines+1+descLines+len(inspectorFacts(pr)))
 }
 
 func (m Model) ballHit(x, y int) (stackIndex, prIndex int, ok bool) {
@@ -686,15 +748,17 @@ func (m Model) ballHit(x, y int) (stackIndex, prIndex int, ok bool) {
 		return 0, 0, false
 	}
 	sel := app.ClampSelection(m.State.Selection, stacks)
-	start := m.listOrigin(len(stacks), sel.StackIndex, ListStartY, ListBottomY(m.Height))
+	start := m.listOrigin(stacks, sel.StackIndex, ListStartY, ListBottomY(m.Height))
+	nameW := GetListRowLayout(listWidth, m.Width, 0).NameWidth
 	rowY := ListStartY
 	stackIndex = -1
 	for i := start; i < len(stacks); i++ {
+		h := stackRowHeight(stacks[i], nameW)
 		if y == rowY {
 			stackIndex = i
 			break
 		}
-		rowY++
+		rowY += h
 		if StackedInspector(m.Width) && i == sel.StackIndex && m.State.CardVisible {
 			rowY += m.stackedPaneHeight(listWidth)
 		}

@@ -49,8 +49,11 @@ func TestSplashPaintsBeforeFetchAndDies(t *testing.T) {
 		Fetch: func(string) ([]domain.Stack, error) {
 			fetches++
 			return []domain.Stack{{
-				ID:  "s",
-				PRs: []domain.PullRequest{{Number: 1, Title: "landed layer"}},
+				ID: "s",
+				PRs: []domain.PullRequest{
+					{Number: 1, Title: "landed layer"},
+					{Number: 2, Title: "landed head"},
+				},
 			}}, nil
 		},
 	})

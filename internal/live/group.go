@@ -32,10 +32,25 @@ func GroupStacks(prs []RemotePR, defaultBranch string) []domain.Stack {
 	sort.SliceStable(stacks, func(i, j int) bool {
 		return stackKey(stacks[i]) > stackKey(stacks[j])
 	})
+	stacks = KeepRealStacks(stacks)
 	for i := range stacks {
 		stacks[i].Number = i + 1
 	}
 	return StampGhNames(stacks)
+}
+
+// KeepRealStacks drops 1-PR groups. A stack is two or more PRs.
+func KeepRealStacks(stacks []domain.Stack) []domain.Stack {
+	out := stacks[:0]
+	for _, stack := range stacks {
+		if len(stack.PRs) >= 2 {
+			out = append(out, stack)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func stackKey(stack domain.Stack) int {

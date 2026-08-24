@@ -377,7 +377,7 @@ func TestInspectorIsARightColumn(t *testing.T) {
 	m := makeUI(size, "mixed")
 	raw := m.View()
 	wide := strip(raw)
-	if !strings.Contains(wide, "#184 Split auth scope from session checks") {
+	if !strings.Contains(wide, "#184 Split auth scope") {
 		t.Fatalf("inspector missing title:\n%s", wide)
 	}
 	if strings.Contains(wide, "┌") || strings.Contains(wide, "└") {
@@ -440,7 +440,7 @@ func TestInspectorStatusColorStaysOnTheValue(t *testing.T) {
 func TestInspectorIsLabeledRows(t *testing.T) {
 	size := tui.TerminalSize{Width: 120, Height: 30}
 	frame := frameOf(makeUI(size, "mixed"))
-	if !strings.Contains(frame, "#184 Split auth scope from session checks") {
+	if !strings.Contains(frame, "#184 Split auth scope") {
 		t.Fatalf("paper title missing:\n%s", frame)
 	}
 	if strings.Contains(frame, "split auth scope from session checks, keep") {
@@ -469,7 +469,7 @@ func TestInspectorIsLabeledRows(t *testing.T) {
 		return line
 	}
 	for i, line := range lines {
-		if strings.Contains(pane(line), "#184 Split auth scope from session checks") {
+		if strings.Contains(pane(line), "#184 Split auth scope") {
 			titleAt = i
 			break
 		}
@@ -700,8 +700,8 @@ func TestStackedCardIsInsetBox(t *testing.T) {
 	if !strings.Contains(stacked, "┌") || !strings.Contains(stacked, "└") {
 		t.Fatalf("stacked card needs one dim box:\n%s", stacked)
 	}
-	if !strings.Contains(stacked, "│ #184") && !strings.Contains(stacked, "│  #184") {
-		t.Fatalf("stacked card needs padding inside the box:\n%s", stacked)
+	if !strings.Contains(stacked, "│  #184") && !strings.Contains(stacked, "│   #184") {
+		t.Fatalf("stacked card needs left/right padding inside the box:\n%s", stacked)
 	}
 	wide := frameOf(makeUI(tui.TerminalSize{Width: 120, Height: 30}, "mixed"))
 	if strings.Contains(wide, "┌") || strings.Contains(wide, "└") {
@@ -758,5 +758,48 @@ func TestPDoesNotOpenAPicker(t *testing.T) {
 	}
 	if strings.Contains(after, "[ enter ]") && !strings.Contains(before, "[ enter ]") {
 		t.Fatalf("p must not invent picker chrome:\n%s", after)
+	}
+}
+
+func TestInspectorHasLeftRightPadding(t *testing.T) {
+	size := tui.TerminalSize{Width: 120, Height: 30}
+	frame := frameOf(makeUI(size, "mixed"))
+	var pane string
+	for _, line := range strings.Split(frame, "\n") {
+		idx := strings.Index(line, "│")
+		if idx < 0 {
+			continue
+		}
+		rest := line[idx+len("│"):]
+		if strings.Contains(rest, "#184 Split auth scope") {
+			pane = rest
+			break
+		}
+	}
+	if pane == "" {
+		t.Fatalf("inspector title missing:\n%s", frame)
+	}
+	if !strings.HasPrefix(pane, "  ") {
+		t.Fatalf("inspector flush against the rule:\n%q", pane)
+	}
+	if strings.HasPrefix(strings.TrimRight(pane, " "), "#184") {
+		t.Fatalf("no left pad: %q", pane)
+	}
+}
+
+func TestListTitlesArePaperFullMeasure(t *testing.T) {
+	size := tui.TerminalSize{Width: 120, Height: 30}
+	m := makeUI(size, "mixed")
+	raw := m.View()
+	frame := strip(raw)
+	if !strings.Contains(frame, "auth cleanup") {
+		t.Fatalf("list name missing:\n%s", frame)
+	}
+	if !nearHex(raw, "auth cleanup", domain.Color("paper")) {
+		t.Fatal("list titles are paper, not dim meta")
+	}
+	layout := tui.GetListRowLayout(tui.ListPaneWidth(size.Width), size.Width, 3)
+	if layout.NameWidth < 30 {
+		t.Fatalf("name column still locked cramped: %d", layout.NameWidth)
 	}
 }

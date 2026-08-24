@@ -80,8 +80,11 @@ func TestNoFlagDetectsOriginAndFetches(t *testing.T) {
 				t.Fatalf("fetched %q", repo)
 			}
 			return []domain.Stack{{
-				ID:  "s",
-				PRs: []domain.PullRequest{{Number: 1, Title: "detected layer", Branch: "gm/detected"}},
+				ID: "s",
+				PRs: []domain.PullRequest{
+					{Number: 1, Title: "detected layer", Branch: "gm/detected"},
+					{Number: 2, Title: "detected head", Branch: "gm/detected-head"},
+				},
 			}}, nil
 		},
 	})
@@ -496,6 +499,41 @@ func TestRepoJSONMissingFileIsErrorNotFixtures(t *testing.T) {
 	}
 }
 
+func TestLiveDropsOnePRStacksAndShowsGitHubTitle(t *testing.T) {
+	title := "LEV-182: Bound hosts to the session so undo does not wedge"
+	m := tui.New(tui.Options{
+		Repo:   "archetype-labs/app",
+		Width:  120,
+		Height: 30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{
+				{ID: "solo", Name: "LEV-182", PRs: []domain.PullRequest{{Number: 1, Title: "solo open PR"}}},
+				{ID: "s", Name: "LEV-182", PRs: []domain.PullRequest{
+					{Number: 182, Title: title, Branch: "gm/bound"},
+					{Number: 183, Title: "head layer", Branch: "gm/bound-head"},
+				}},
+			}, nil
+		},
+	})
+	m, _ = applyLiveFetch(m)
+	if len(m.Stacks()) != 1 || len(m.Stacks()[0].PRs) != 2 {
+		t.Fatalf("1-PR row must not appear: %+v", m.Stacks())
+	}
+	frame := frameOf(m)
+	if strings.Contains(frame, "solo open PR") {
+		t.Fatalf("one-ball stack leaked:\n%s", frame)
+	}
+	if strings.Contains(strings.Join(listRows(frame), "\n"), "LEV-182") && !strings.Contains(frame, "Bound hosts") {
+		t.Fatalf("ticket prefix dumped without the title:\n%s", frame)
+	}
+	if !strings.Contains(frame, "Bound hosts") || !strings.Contains(frame, "session") {
+		t.Fatalf("list must show the GitHub title:\n%s", frame)
+	}
+	if !strings.Contains(frame, "archetype-labs/app  •  1 stacks / 2 layers") {
+		t.Fatalf("counts are real stacks only:\n%s", frame)
+	}
+}
+
 func TestRepoOwnerNameStillFetches(t *testing.T) {
 	fetches := 0
 	m := tui.New(tui.Options{
@@ -508,8 +546,11 @@ func TestRepoOwnerNameStillFetches(t *testing.T) {
 				t.Fatalf("repo %q", repo)
 			}
 			return []domain.Stack{{
-				ID:  "s",
-				PRs: []domain.PullRequest{{Number: 1, Title: "live layer"}},
+				ID: "s",
+				PRs: []domain.PullRequest{
+					{Number: 1, Title: "live layer"},
+					{Number: 2, Title: "live head"},
+				},
 			}}, nil
 		},
 	})

@@ -126,6 +126,29 @@ func TestMutantGhTitleAndCI(t *testing.T) {
 	}
 }
 
+func TestMutantGroupStacksDropsSingles(t *testing.T) {
+	prs := []RemotePR{
+		{Number: 1, Title: "solo", HeadRefName: "a", BaseRefName: "main"},
+		{Number: 2, Title: "base", HeadRefName: "b", BaseRefName: "main"},
+		{Number: 3, Title: "head", HeadRefName: "c", BaseRefName: "b"},
+	}
+	got := GroupStacks(prs, "main")
+	if len(got) != 1 || len(got[0].PRs) != 2 {
+		t.Fatalf("real grouping drops the 1-PR row, got %+v", ids(got))
+	}
+	keepAll := func(in []RemotePR) []domain.Stack {
+		var stacks []domain.Stack
+		stacks = append(stacks, chainStacks(in, "main")...)
+		return stacks
+	}
+	if mutant := keepAll(prs); len(mutant) != 2 {
+		t.Fatal("keep-all mutant must still produce a solo stack")
+	}
+	if KeepRealStacks([]domain.Stack{{PRs: []domain.PullRequest{{Number: 1}}}}) != nil {
+		t.Fatal("KeepRealStacks must drop a one-ball stack")
+	}
+}
+
 func TestMutantAuthorColorIsLoginStable(t *testing.T) {
 	prs := []RemotePR{{Author: "gm", AvatarURL: "https://avatars.example/gm.png"}}
 	applyAuthorColors(prs)

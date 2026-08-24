@@ -15,27 +15,32 @@ func TestGroupStacksWalksBaseChains(t *testing.T) {
 		{Number: 20, Title: "solo", HeadRefName: "fix/one", BaseRefName: "main"},
 	}
 	stacks := GroupStacks(prs, "main")
-	if len(stacks) != 2 {
-		t.Fatalf("got %d stacks", len(stacks))
+	if len(stacks) != 1 {
+		t.Fatalf("solo is not a stack, got %d stacks", len(stacks))
 	}
-	var chain, solo []int
-	for _, stack := range stacks {
-		nums := numbers(stack.PRs)
-		if len(nums) == 3 {
-			chain = nums
-		}
-		if len(nums) == 1 {
-			solo = nums
-		}
-	}
+	chain := numbers(stacks[0].PRs)
 	if strings.Join(itoaAll(chain), ",") != "10,11,12" {
 		t.Fatalf("chain %v", chain)
 	}
-	if strings.Join(itoaAll(solo), ",") != "20" {
-		t.Fatalf("solo %v", solo)
+	if stackKey(stacks[0]) != 12 {
+		t.Fatalf("chain key %d", stackKey(stacks[0]))
 	}
-	if stackKey(stacks[0]) != 20 {
-		t.Fatalf("newer head should sort first, got %d", stackKey(stacks[0]))
+}
+
+func TestGroupStacksDropsOnePR(t *testing.T) {
+	stacks := GroupStacks([]RemotePR{
+		{Number: 20, Title: "solo", HeadRefName: "fix/one", BaseRefName: "main"},
+	}, "main")
+	if len(stacks) != 0 {
+		t.Fatalf("1-PR group must not be a stack: %+v", stacks)
+	}
+	mixed := GroupStacks([]RemotePR{
+		{Number: 1, Title: "base", HeadRefName: "a", BaseRefName: "main"},
+		{Number: 2, Title: "head", HeadRefName: "b", BaseRefName: "a"},
+		{Number: 9, Title: "other", HeadRefName: "solo", BaseRefName: "main"},
+	}, "main")
+	if len(mixed) != 1 || len(mixed[0].PRs) != 2 {
+		t.Fatalf("keep the 2-PR chain only, got %+v", mixed)
 	}
 }
 
@@ -65,17 +70,14 @@ func TestGroupStacksUsesGitHubNativeStack(t *testing.T) {
 		{Number: 9, Title: "other", HeadRefName: "solo", BaseRefName: "main"},
 	}
 	stacks := GroupStacks(prs, "main")
-	if len(stacks) != 2 {
-		t.Fatalf("got %d", len(stacks))
+	if len(stacks) != 1 {
+		t.Fatalf("solo dropped, got %d", len(stacks))
 	}
-	var native []int
-	for _, stack := range stacks {
-		if stack.ID == "gh-stack-7" {
-			native = numbers(stack.PRs)
-		}
+	if stacks[0].ID != "gh-stack-7" {
+		t.Fatalf("native id %s", stacks[0].ID)
 	}
-	if strings.Join(itoaAll(native), ",") != "1,2" {
-		t.Fatalf("native %v", native)
+	if strings.Join(itoaAll(numbers(stacks[0].PRs)), ",") != "1,2" {
+		t.Fatalf("native %v", numbers(stacks[0].PRs))
 	}
 }
 

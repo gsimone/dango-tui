@@ -45,7 +45,9 @@ make build
 
 Nightly (not 0.1.0, no semver): after CI on `main`, plus 02:00 UTC and `workflow_dispatch`, the `Nightly` workflow replaces a single prerelease tag `nightly` with stripped `dango-linux-amd64` and `dango-darwin-arm64`. No darwin/amd64. PRs do not publish. `make dist` builds those locally.
 
-Provider comes from `dango.json` / `dango.yml` / `dango.yaml`. `--provider` overrides. Missing config file = no generated title. A set provider writes a short stack title (list name, in place) and a description (inspector only) after first paint. First paint is always the gh name. `dango.json` is not a stack dump.
+Provider comes from `dango.json` / `dango.yml` / `dango.yaml`. `--provider` overrides. Missing config file = no generated title; the list keeps the GitHub title. A set provider may still swap a short stack title in place after first paint, plus a description (inspector only). `dango.json` is not a stack dump.
+
+A stack is two or more open PRs. A single open PR is not a stack and does not appear as a one-ball row. List names are the GitHub titles (paper, full leftover width, two wrap lines).
 
 The header mark is `●-●-● DANGO` over the repo slug and counts. Type is paper
 `#f2ebe0` or meta `#9a8f82`. Two-col list: name + ball chain. Inspector is the
@@ -104,7 +106,8 @@ CI on pull requests and pushes to `main` publishes coverage (total %) and real g
 - Live first frame: 3-row ░▒▓█ DANGO, then `●-●-●`, then `fetching archetype-labs/app` (meta). Dies when the list exists. A failed fetch stays here.
 - Header: `●-●-● DANGO`, then `archetype-labs/app  •  N stacks / M layers` (fixtures use `org/reponame`)
 - 2-column side pad, 1 blank row at the top
-- Stack list on the left; one `│` rule; inspector pane on the right
+- Stack list on the left; one `│` rule; inspector pane on the right (left/right pad)
+- List names are GitHub titles in paper, full leftover measure, two lines if needed
 - Inspector facts include status (status ink on the value only), labels in their GitHub hex, and author (`●` + login)
-- Selected row `#242018` with paper ink; everything else meta
+- Selected row `#242018` with paper ink; list titles stay paper; chrome is meta
 - **40×20 / 80×24 / 120×30 / 160×40** — column stays on-screen

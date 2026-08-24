@@ -140,15 +140,34 @@ func TestFetchWithGroupsChainFromGhJSON(t *testing.T) {
 	}
 }
 
-func TestFetchMapsLabelsAndAuthor(t *testing.T) {
+func TestFetchDropsOnePRStacks(t *testing.T) {
 	run := ghOK(map[string][]byte{
 		"pr list": []byte(`[
-			{"number":1,"title":"bottom","url":"https://github.com/owner/demo/pull/1","headRefName":"a","baseRefName":"main","author":{"login":"gm","avatarUrl":"https://avatars.example/gm.png"},"labels":[{"name":"bug","color":"d73a4a"},{"name":"auth","color":"0e8a16"}],"isDraft":false,"state":"OPEN"}
+			{"number":1,"title":"solo","url":"https://github.com/owner/demo/pull/1","headRefName":"a","baseRefName":"main","author":{"login":"gm"},"labels":[],"isDraft":false,"state":"OPEN"}
 		]`),
 	})
 	stacks, err := fetchWith(run, "owner/demo")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(stacks) != 0 {
+		t.Fatalf("1-PR is not a stack: %+v", stacks)
+	}
+}
+
+func TestFetchMapsLabelsAndAuthor(t *testing.T) {
+	run := ghOK(map[string][]byte{
+		"pr list": []byte(`[
+			{"number":1,"title":"bottom","url":"https://github.com/owner/demo/pull/1","headRefName":"a","baseRefName":"main","author":{"login":"gm","avatarUrl":"https://avatars.example/gm.png"},"labels":[{"name":"bug","color":"d73a4a"},{"name":"auth","color":"0e8a16"}],"isDraft":false,"state":"OPEN"},
+			{"number":2,"title":"top","url":"https://github.com/owner/demo/pull/2","headRefName":"b","baseRefName":"a","author":{"login":"gm"},"labels":[],"isDraft":false,"state":"OPEN"}
+		]`),
+	})
+	stacks, err := fetchWith(run, "owner/demo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stacks) != 1 || len(stacks[0].PRs) != 2 {
+		t.Fatalf("want one 2-PR stack, got %+v", stacks)
 	}
 	pr := stacks[0].PRs[0]
 	if len(pr.Labels) != 2 || pr.Labels[0].Name != "bug" || pr.Labels[0].Color != "#d73a4a" {

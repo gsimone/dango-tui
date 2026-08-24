@@ -59,7 +59,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cacheState = data.CacheError
 			} else {
 				m.fetchErr = nil
-				m.stacks = live.StampGhNames(msg.stacks)
+				m.stacks = live.KeepRealStacks(live.StampGhNames(msg.stacks))
 				m.cacheState = data.CacheCurrent
 				m.clamp()
 				return m, m.startSummaries()
