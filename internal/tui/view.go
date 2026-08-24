@@ -40,6 +40,11 @@ func (m Model) renderFrame(width, height int) string {
 	listWidth := ListPaneWidth(width)
 	inner := innerWidth(width)
 
+	if m.splash() {
+		m.paintSplash(c, width, height, surface, paper, meta, stick)
+		return c.render()
+	}
+
 	// y=0 is the one blank row at the top.
 	m.paintBrand(c, width, surface, paper, meta, stick)
 	// one blank row under the header, then the list.

@@ -1,0 +1,75 @@
+package tui
+
+import (
+	"strings"
+
+	"github.com/gsimone/dango-tui/internal/domain"
+)
+
+// dangoBlock is a 3-row ░▒▓█ DANGO. Not a 5-row figlet.
+var dangoBlock = buildDangoBlock()
+
+func buildDangoBlock() [3]string {
+	letters := [][3]string{
+		{"███░", "█ ▓█", "███░"},
+		{"░██░", "█▒▓█", "█  █"},
+		{"█  █", "█▓▒█", "█ ▓█"},
+		{"░███", "█   ", "░█▓█"},
+		{"░██░", "█  █", "░██░"},
+	}
+	var out [3]string
+	for row := 0; row < 3; row++ {
+		var b strings.Builder
+		for i, letter := range letters {
+			if i > 0 {
+				b.WriteByte(' ')
+			}
+			b.WriteString(letter[row])
+		}
+		out[row] = b.String()
+	}
+	return out
+}
+
+func (m Model) splash() bool {
+	return m.Live && m.fetchErr == nil && len(m.stacks) == 0 && m.fetchedAt.IsZero()
+}
+
+func (m Model) paintSplash(c *canvas, width, height int, surface, paper, meta, stick string) {
+	blockW := displayWidth(dangoBlock[0])
+	fetchLine := "fetching " + m.repoLabel()
+	contentH := 6
+	startY := (height - contentH) / 2
+	if startY < 0 {
+		startY = 0
+	}
+	letterX := (width - blockW) / 2
+	if letterX < 0 {
+		letterX = 0
+	}
+	for i, row := range dangoBlock {
+		c.text(letterX, startY+i, row, paper, surface, max(1, width-letterX))
+	}
+	dotsY := startY + 4
+	dotsX := (width - 5) / 2
+	if dotsX < 0 {
+		dotsX = 0
+	}
+	x := dotsX
+	for i, token := range m.LogoDots {
+		if token == "" || !domain.IsLogoToken(token) {
+			token = domain.LogoTokens[i]
+		}
+		c.set(x, dotsY, '●', domain.Color(token), surface)
+		if i < 2 {
+			c.set(x+1, dotsY, '-', stick, surface)
+		}
+		x += 2
+	}
+	fetchY := startY + 5
+	fetchX := (width - displayWidth(fetchLine)) / 2
+	if fetchX < 0 {
+		fetchX = 0
+	}
+	c.text(fetchX, fetchY, fetchLine, meta, surface, max(1, width-fetchX))
+}

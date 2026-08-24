@@ -212,12 +212,7 @@ func (m Model) refresh() (tea.Model, tea.Cmd) {
 	}
 	m.fetchSeq++
 	token := m.fetchSeq
-	repo := m.Repo
-	fetch := m.fetch
-	return m, func() tea.Msg {
-		stacks, err := fetch(repo)
-		return fetchDoneMsg{stacks: stacks, err: err, at: time.Now(), token: token, live: true}
-	}
+	return m, m.fetchCmd(token)
 }
 
 func (m Model) handleMouse(msg tea.MouseMsg) Model {

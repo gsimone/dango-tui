@@ -51,6 +51,10 @@ The header mark is `●-●-● DANGO` over the repo slug and counts. Type is pa
 `#f2ebe0` or meta `#9a8f82`. Two-col list: name + ball chain. Inspector is the
 right pane on the same field.
 
+A live repo paints a 3-row ░▒▓█ DANGO, then `●-●-●`, then `fetching owner/name`
+in meta before `gh` returns. The splash dies once the list exists. `--frame`
+on a live `--repo` is that first frame.
+
 ## Controls
 
 | Input | Result |
@@ -95,6 +99,7 @@ CI on pull requests and pushes to `main` publishes coverage (total %) and real g
 
 ## Layout
 
+- Live first frame: 3-row ░▒▓█ DANGO, then `●-●-●`, then `fetching owner/name` (meta). Dies when the list exists.
 - Header: `●-●-● DANGO`, then `owner/name  •  N stacks / M layers` (examples use `org/reponame`)
 - 2-column side pad, 1 blank row at the top
 - Stack list on the left; one `│` rule; inspector pane on the right

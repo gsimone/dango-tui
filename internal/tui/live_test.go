@@ -15,6 +15,15 @@ import (
 	"github.com/gsimone/dango-tui/internal/tui"
 )
 
+func applyLiveFetch(m tui.Model) (tui.Model, tea.Cmd) {
+	cmd := m.Init()
+	if cmd == nil {
+		return m, nil
+	}
+	next, extra := m.Update(cmd())
+	return next.(tui.Model), extra
+}
+
 func testdataJSON(t *testing.T) string {
 	t.Helper()
 	dir, err := os.Getwd()
@@ -76,8 +85,13 @@ func TestNoFlagDetectsOriginAndFetches(t *testing.T) {
 			}}, nil
 		},
 	})
-	if fetches != 1 || !m.Live || m.File {
-		t.Fatalf("no-flag detect is live gh, fetches=%d live=%v file=%v", fetches, m.Live, m.File)
+	if fetches != 0 || !m.Live || m.File {
+		t.Fatalf("constructor must not fetch, fetches=%d live=%v file=%v", fetches, m.Live, m.File)
+	}
+	assertSplash(t, frameOf(m), "owner/from-detect")
+	m, _ = applyLiveFetch(m)
+	if fetches != 1 {
+		t.Fatalf("Init fetches once, got %d", fetches)
 	}
 	if !strings.Contains(frameOf(m), "detected layer") || !strings.Contains(frameOf(m), "owner/from-detect") {
 		t.Fatalf("live frame:\n%s", frameOf(m))
@@ -131,6 +145,11 @@ func TestLiveMissingGHShowsErrorNotFixtures(t *testing.T) {
 			return nil, live.ErrGHMissing
 		},
 	})
+	if fetches != 0 {
+		t.Fatalf("constructor must not fetch, got %d", fetches)
+	}
+	assertSplash(t, frameOf(m), "owner/name")
+	m, _ = applyLiveFetch(m)
 	if fetches != 1 {
 		t.Fatalf("live --repo must fetch, got %d", fetches)
 	}
@@ -217,6 +236,11 @@ func TestLiveRepoHeaderAndTwoColumns(t *testing.T) {
 			}}, nil
 		},
 	})
+	if fetches != 0 {
+		t.Fatalf("constructor must not fetch, got %d", fetches)
+	}
+	assertSplash(t, frameOf(m), "gsimone/leva-2")
+	m, _ = applyLiveFetch(m)
 	if fetches != 1 {
 		t.Fatalf("initial fetch %d", fetches)
 	}
@@ -286,7 +310,8 @@ func TestProviderWritesStackTitleOnly(t *testing.T) {
 	if with.Provider.Name != "codex" || with.Provider.Model != "luna.medium" {
 		t.Fatalf("store provider, got %+v", with.Provider)
 	}
-	if with.Init() == nil {
+	with, sumCmd := applyLiveFetch(with)
+	if sumCmd == nil {
 		t.Fatal("provider must kick summary cmds after first paint")
 	}
 	first := listRows(frameOf(with))
@@ -306,7 +331,8 @@ func TestProviderWritesStackTitleOnly(t *testing.T) {
 		Height: 24,
 		Fetch:  fetch,
 	})
-	if plain.Init() != nil {
+	plain, extra := applyLiveFetch(plain)
+	if extra != nil {
 		t.Fatal("missing provider must not start summaries")
 	}
 	bare := strings.Join(listRows(frameOf(plain)), "\n")
@@ -468,8 +494,13 @@ func TestRepoOwnerNameStillFetches(t *testing.T) {
 			}}, nil
 		},
 	})
-	if fetches != 1 || !m.Live || m.File {
-		t.Fatalf("owner/name is live gh, fetches=%d live=%v file=%v", fetches, m.Live, m.File)
+	if fetches != 0 || !m.Live || m.File {
+		t.Fatalf("constructor must not fetch, fetches=%d live=%v file=%v", fetches, m.Live, m.File)
+	}
+	assertSplash(t, frameOf(m), "gsimone/leva-2")
+	m, _ = applyLiveFetch(m)
+	if fetches != 1 {
+		t.Fatalf("owner/name is live gh, fetches=%d", fetches)
 	}
 	if !strings.Contains(frameOf(m), "live layer") {
 		t.Fatalf("live list:\n%s", frameOf(m))
@@ -505,4 +536,115 @@ func TestFixtureRefreshStaysSimulated(t *testing.T) {
 	if !strings.Contains(frameOf(m), "⠋") {
 		t.Fatalf("fixture spinner:\n%s", frameOf(m))
 	}
+}
+
+func TestLiveSplashDiesWhenListExists(t *testing.T) {
+	blocked := make(chan struct{})
+	m := tui.New(tui.Options{
+		Repo:   "owner/name",
+		Width:  80,
+		Height: 24,
+		Fetch: func(string) ([]domain.Stack, error) {
+			<-blocked
+			return []domain.Stack{{
+				ID:  "s",
+				PRs: []domain.PullRequest{{Number: 1, Title: "after splash", Branch: "gm/after"}},
+			}}, nil
+		},
+	})
+	first := frameOf(m)
+	assertSplash(t, first, "owner/name")
+	if strings.Contains(first, "after splash") {
+		t.Fatalf("list must wait on gh:\n%s", first)
+	}
+
+	close(blocked)
+	m, _ = applyLiveFetch(m)
+	listed := frameOf(m)
+	if strings.Contains(listed, "fetching owner/name") {
+		t.Fatalf("splash must die once the list exists:\n%s", listed)
+	}
+	if !strings.Contains(listed, "after splash") || !strings.Contains(listed, "●-●-● DANGO") {
+		t.Fatalf("list frame:\n%s", listed)
+	}
+	blockRows := 0
+	for _, line := range strings.Split(listed, "\n") {
+		if strings.Contains(line, "█") {
+			blockRows++
+		}
+	}
+	if blockRows != 0 {
+		t.Fatalf("block letters must leave with the splash:\n%s", listed)
+	}
+
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
+	m = next.(tui.Model)
+	refresh := frameOf(m)
+	if strings.Contains(refresh, "fetching owner/name") {
+		t.Fatalf("refresh must not bring the splash back:\n%s", refresh)
+	}
+	if !strings.Contains(refresh, "after splash") {
+		t.Fatalf("refresh keeps the list:\n%s", refresh)
+	}
+}
+
+func TestStoryAndFileSkipSplash(t *testing.T) {
+	story := frameOf(tui.New(tui.Options{StoryID: "mixed", Width: 80, Height: 24}))
+	if strings.Contains(story, "fetching ") || strings.Contains(story, "███░") {
+		t.Fatalf("fixtures are not a splash:\n%s", story)
+	}
+	file := frameOf(tui.New(tui.Options{Repo: testdataJSON(t), Width: 80, Height: 24}))
+	if strings.Contains(file, "fetching ") || strings.Contains(file, "███░") {
+		t.Fatalf("JSON dump is not a splash:\n%s", file)
+	}
+}
+
+func assertSplash(t *testing.T, frame, repo string) {
+	t.Helper()
+	lines := strings.Split(frame, "\n")
+	var block []int
+	for i, line := range lines {
+		if strings.Contains(line, "█") {
+			block = append(block, i)
+		}
+	}
+	if len(block) != 3 {
+		t.Fatalf("need 3-row block DANGO, got %d rows:\n%s", len(block), frame)
+	}
+	if block[1] != block[0]+1 || block[2] != block[0]+2 {
+		t.Fatalf("block rows must be consecutive:\n%s", frame)
+	}
+	for _, row := range []string{dangoBlockRow(0), dangoBlockRow(1), dangoBlockRow(2)} {
+		if !strings.Contains(frame, row) {
+			t.Fatalf("missing block row %q:\n%s", row, frame)
+		}
+	}
+	if !strings.Contains(frame, "░") || !strings.Contains(frame, "▒") || !strings.Contains(frame, "▓") || !strings.Contains(frame, "█") {
+		t.Fatalf("letters must use ░▒▓█:\n%s", frame)
+	}
+	if strings.Count(frame, "●-●-●") != 1 {
+		t.Fatalf("splash needs one ●-●-● under the letters:\n%s", frame)
+	}
+	want := "fetching " + repo
+	if !strings.Contains(frame, want) {
+		t.Fatalf("missing %q:\n%s", want, frame)
+	}
+	if strings.Contains(frame, "YOINKS") || strings.Contains(strings.ToLower(frame), "yoinks") {
+		t.Fatalf("no joke words:\n%s", frame)
+	}
+	if strings.Contains(frame, "●-●-● DANGO") {
+		t.Fatalf("splash is not the list header:\n%s", frame)
+	}
+	if strings.Contains(frame, "stacks /") || strings.Contains(frame, "last fetched") {
+		t.Fatalf("splash is not list chrome:\n%s", frame)
+	}
+}
+
+func dangoBlockRow(i int) string {
+	rows := [3]string{
+		"███░ ░██░ █  █ ░███ ░██░",
+		"█ ▓█ █▒▓█ █▓▒█ █    █  █",
+		"███░ █  █ █ ▓█ ░█▓█ ░██░",
+	}
+	return rows[i]
 }
