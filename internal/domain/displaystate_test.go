@@ -125,7 +125,7 @@ func TestBallGlyphsAreOneMeaning(t *testing.T) {
 		glyph rune
 	}{
 		{domain.StateOpen, '○'},
-		{domain.StateDraft, '◐'},
+		{domain.StateDraft, '○'},
 		{domain.StateCIFailure, '○'},
 		{domain.StateReviewBlocked, '◎'},
 		{domain.StateReady, '○'},
@@ -142,10 +142,6 @@ func TestBallGlyphsAreOneMeaning(t *testing.T) {
 		if domain.IsLogoToken(domain.StateColorToken(tc.state)) {
 			t.Fatalf("%s used a logo token", tc.state)
 		}
-	}
-	draft := domain.BallGlyph(domain.StateDraft)
-	if draft != '◐' || draft == '◒' || draft == '◖' || draft == '○' {
-		t.Fatalf("idle draft is ◐, got %q", string(draft))
 	}
 }
 

@@ -433,11 +433,8 @@ func TestDraftUnmergeableKeepsDraftInk(t *testing.T) {
 	if got := layerBallInk(draft); got == "#f2ebe0" || got == "#e6b84d" {
 		t.Fatalf("draft must not be paper or review: %s", got)
 	}
-	if got := layerBallGlyph(draft, false); got != '◐' {
-		t.Fatalf("idle draft is ◐, not %q", string(got))
-	}
-	if got := layerBallGlyph(draft, false); got == '◒' || got == '◖' || got == '○' {
-		t.Fatalf("idle draft is left-half ◐, not %q", string(got))
+	if got := layerBallGlyph(draft, false); got != '○' {
+		t.Fatalf("idle draft is ○, not %q", string(got))
 	}
 	if got := layerBallGlyph(draft, true); got != '●' {
 		t.Fatalf("active draft is ●, not %q", string(got))
@@ -460,7 +457,7 @@ func TestDraftChainGlance(t *testing.T) {
 		layerBallGlyph(draft, false), '-',
 		layerBallGlyph(review, false),
 	})
-	if idle != "○-◐-◎" {
+	if idle != "○-○-◎" {
 		t.Fatalf("idle chain %q", idle)
 	}
 	onYou := string([]rune{

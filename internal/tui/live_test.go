@@ -431,12 +431,6 @@ func TestLivePabloBallsOn120(t *testing.T) {
 	if !strings.Contains(list, "◌-○") {
 		t.Fatalf("queued is ◌:\n%s", frame)
 	}
-	if !strings.Contains(list, "◐-○") {
-		t.Fatalf("idle draft is ◐:\n%s", frame)
-	}
-	if strings.Contains(list, "◒") || strings.Contains(list, "◖") {
-		t.Fatalf("draft is left-half ◐, not pie or cut D:\n%s", frame)
-	}
 	if !strings.Contains(list, "○-○") {
 		t.Fatalf("idle layers are ○:\n%s", frame)
 	}
@@ -458,9 +452,6 @@ func TestLivePabloBallsOn120(t *testing.T) {
 	draftList := strings.Join(listRows(frameOf(draft)), "\n")
 	if !strings.Contains(draftList, "●-○") || strings.Count(draftList, "●") != 1 {
 		t.Fatalf("draft you are on is one filled:\n%s", frameOf(draft))
-	}
-	if strings.Contains(draftList, "◐") {
-		t.Fatalf("draft you are on is gray ●, not ◐:\n%s", frameOf(draft))
 	}
 	for _, row := range listRows(frameOf(draft)) {
 		if strings.Contains(row, "draft base") && strings.Contains(row, "◎") {
@@ -517,19 +508,13 @@ func TestLiveDraftChainOn120(t *testing.T) {
 	})
 	m, _ = applyLiveFetch(m)
 	list := strings.Join(listRows(frameOf(m)), "\n")
-	if !strings.Contains(list, "●-◐-◎") {
-		t.Fatalf("idle draft in chain is ◐:\n%s", frameOf(m))
-	}
-	if strings.Contains(list, "◒") || strings.Contains(list, "◖") {
-		t.Fatalf("not pie or cut D:\n%s", frameOf(m))
+	if !strings.Contains(list, "●-○-◎") {
+		t.Fatalf("idle #5209 is ○ in the chain:\n%s", frameOf(m))
 	}
 	onDraft := applyKey(m, key("right"))
 	onList := strings.Join(listRows(frameOf(onDraft)), "\n")
 	if !strings.Contains(onList, "○-●-◎") {
-		t.Fatalf("draft you are on is gray ●:\n%s", frameOf(onDraft))
-	}
-	if strings.Contains(onList, "◐") {
-		t.Fatalf("active draft is not ◐:\n%s", frameOf(onDraft))
+		t.Fatalf("#5209 you are on is gray ● plus ○/◎:\n%s", frameOf(onDraft))
 	}
 	dr, dg, db, _ := domain.ParseRGB("#8b8e93")
 	if !strings.Contains(onDraft.View(), fmt.Sprintf("38;2;%d;%d;%d", dr, dg, db)) {

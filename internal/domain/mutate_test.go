@@ -97,17 +97,8 @@ func TestMutantBallGlyphNeverFilledStatus(t *testing.T) {
 	if filledStatus(domain.StateCIFailure) == domain.BallGlyph(domain.StateCIFailure) {
 		t.Fatal("filled-as-status mutant must not survive")
 	}
-	if domain.BallGlyph(domain.StateDraft) != '◐' {
-		t.Fatal("idle draft is ◐")
-	}
-	hollowDraft := func(state domain.PrDisplayState) rune {
-		if state == domain.StateDraft {
-			return '○'
-		}
-		return domain.BallGlyph(state)
-	}
-	if hollowDraft(domain.StateDraft) == domain.BallGlyph(domain.StateDraft) {
-		t.Fatal("hollow-draft mutant must not survive")
+	if domain.BallGlyph(domain.StateDraft) != '○' {
+		t.Fatal("idle draft is hollow")
 	}
 }
 

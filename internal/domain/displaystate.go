@@ -113,12 +113,10 @@ func StateColorToken(state PrDisplayState) string {
 }
 
 // BallGlyph is the resting mark. Filled is never a status — the list
-// paints filled only on the active layer. Draft idle is ◐ (left half).
+// paints filled only on the active layer. Draft idle is ○ (meta ink).
 // Review is ◎, queued is ◌, everything else is ○. No logo rainbow.
 func BallGlyph(state PrDisplayState) rune {
 	switch state {
-	case StateDraft:
-		return '◐'
 	case StateReviewBlocked:
 		return '◎'
 	case StateQueued:
