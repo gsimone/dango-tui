@@ -30,9 +30,14 @@ func (p Provider) Empty() bool {
 	return p.Raw == "" && p.Name == ""
 }
 
-// Local is the current summarizer: PreferDescription, then FromLayers.
+type titleWriter struct{}
+
+func (titleWriter) Summarize(stack domain.Stack) string { return Title(stack) }
+
+// Local is the current summarizer: PreferDescription, then a short
+// generated title that does not echo the gh name.
 func Local() Summarizer {
-	return PreferDescription{Fallback: FromLayers{}}
+	return PreferDescription{Fallback: titleWriter{}}
 }
 
 // none writes no stack title. Missing --provider must not invent one.
@@ -40,9 +45,10 @@ type none struct{}
 
 func (none) Summarize(domain.Stack) string { return "" }
 
-// Chosen is the Summarizer picked for a provider. --provider is only for the
-// stack title. No provider → none. A provider with no network summarizer yet
-// uses Local(). Fetch does not wait on this.
+// Chosen is the Summarizer picked for a provider. --provider writes the
+// stack title (and Run fills the inspector description). No provider → none.
+// A provider with no network summarizer yet uses Local(). Fetch does not
+// wait on this.
 type Chosen struct {
 	Provider Provider
 	Inner    Summarizer
@@ -68,6 +74,7 @@ func Choose(p Provider) Chosen {
 
 // Apply writes a generated stack title when s returns one. Empty/nil s
 // leaves Name alone — it does not invent a local title to fill the row.
+// A generated title also fills a missing Description for the inspector.
 func Apply(stacks []domain.Stack, s Summarizer) []domain.Stack {
 	if s == nil {
 		s = none{}
@@ -77,6 +84,9 @@ func Apply(stacks []domain.Stack, s Summarizer) []domain.Stack {
 		stacks[i].Summary = title
 		if title != "" {
 			stacks[i].Name = title
+			if strings.TrimSpace(stacks[i].Description) == "" || stacks[i].Description == "A deterministic fixture stack" {
+				stacks[i].Description = Describe(stacks[i])
+			}
 		}
 	}
 	return stacks

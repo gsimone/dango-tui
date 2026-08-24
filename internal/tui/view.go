@@ -464,22 +464,9 @@ func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper
 		return
 	}
 	row++
-	if m.Live || m.File {
-		if stack, ok := m.SelectedStack(); ok {
-			if desc := strings.TrimSpace(stack.Description); desc != "" {
-				for _, line := range wrapWords(desc, maxLine) {
-					if row >= h {
-						return
-					}
-					c.text(x, y+row, line, meta, bg, maxLine)
-					row++
-				}
-				if row >= h {
-					return
-				}
-				row++
-			}
-		}
+	row = m.paintStackDescription(c, x, y, row, h, maxLine, meta, bg)
+	if row >= h {
+		return
 	}
 	for _, fact := range inspectorFacts(pr) {
 		if row >= h {
@@ -491,6 +478,88 @@ func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper
 		}
 		row++
 	}
+}
+
+// inspectorDescLines is the reserved body of the inspector description
+// slot. A landed description paints into these rows; it must not grow
+// the card or shift the fact rows.
+const inspectorDescLines = 2
+
+func (m Model) reserveInspectorDesc() bool {
+	return m.Live && !m.Provider.Empty()
+}
+
+func (m Model) inspectorDescRows(innerW int) int {
+	if m.reserveInspectorDesc() {
+		return inspectorDescLines + 1
+	}
+	if !m.Live && !m.File {
+		return 0
+	}
+	stack, ok := m.SelectedStack()
+	if !ok {
+		return 0
+	}
+	desc := strings.TrimSpace(stack.Description)
+	if desc == "" {
+		return 0
+	}
+	return len(wrapDesc(desc, max(1, innerW))) + 1
+}
+
+func (m Model) paintStackDescription(c *canvas, x, y, row, h, maxLine int, meta, bg string) int {
+	if m.reserveInspectorDesc() {
+		desc := ""
+		if stack, ok := m.SelectedStack(); ok {
+			desc = strings.TrimSpace(stack.Description)
+		}
+		painted := 0
+		if desc != "" {
+			for _, line := range wrapDesc(desc, maxLine) {
+				if painted >= inspectorDescLines || row >= h {
+					break
+				}
+				c.text(x, y+row, line, meta, bg, maxLine)
+				row++
+				painted++
+			}
+		}
+		row += inspectorDescLines - painted
+		if row < h {
+			row++
+		}
+		return row
+	}
+	if !m.Live && !m.File {
+		return row
+	}
+	stack, ok := m.SelectedStack()
+	if !ok {
+		return row
+	}
+	desc := strings.TrimSpace(stack.Description)
+	if desc == "" {
+		return row
+	}
+	for _, line := range wrapDesc(desc, maxLine) {
+		if row >= h {
+			return row
+		}
+		c.text(x, y+row, line, meta, bg, maxLine)
+		row++
+	}
+	if row < h {
+		row++
+	}
+	return row
+}
+
+func wrapDesc(desc string, width int) []string {
+	lines := wrapWords(desc, width)
+	if len(lines) > inspectorDescLines {
+		return lines[:inspectorDescLines]
+	}
+	return lines
 }
 
 func paintFactValue(c *canvas, x, y int, fact inspectorFact, pr domain.PullRequest, maxW int, bg string) {
@@ -555,14 +624,7 @@ func (m Model) stackedPaneHeight(listWidth int) int {
 	}
 	title := "#" + itoa(pr.Number) + " " + pr.Title
 	lines := len(wrapWords(title, innerW))
-	descLines := 0
-	if m.Live || m.File {
-		if stack, ok := m.SelectedStack(); ok {
-			if desc := strings.TrimSpace(stack.Description); desc != "" {
-				descLines = len(wrapWords(desc, innerW)) + 1
-			}
-		}
-	}
+	descLines := m.inspectorDescRows(innerW)
 	return max(2*border+2*pad+1, 2*border+2*pad+lines+1+descLines+len(inspectorFacts(pr)))
 }
 

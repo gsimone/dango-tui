@@ -19,6 +19,8 @@ type Options struct {
 	Width    int
 	Height   int
 	Fetch    live.FetchFunc
+	// Summarize is the provider hook. Nil uses summary.Run. Tests inject a fake.
+	Summarize summary.Func
 }
 
 type Model struct {
@@ -43,6 +45,7 @@ type Model struct {
 	fetchErr    error
 	fetchedAt   time.Time
 	fetch       live.FetchFunc
+	summarize   summary.Func
 }
 
 func New(opts Options) Model {
@@ -58,11 +61,15 @@ func New(opts Options) Model {
 		Height:   height,
 		State:    app.InitialState(),
 		LogoDots: domain.ProcessLogoDots(),
-		Provider: opts.Provider,
-		fetch:    opts.Fetch,
+		Provider:  opts.Provider,
+		fetch:     opts.Fetch,
+		summarize: opts.Summarize,
 	}
 	if m.fetch == nil {
 		m.fetch = live.Fetch
+	}
+	if m.summarize == nil {
+		m.summarize = summary.Run
 	}
 
 	repo := strings.TrimSpace(opts.Repo)
@@ -156,8 +163,9 @@ func (m Model) startSummaries() tea.Cmd {
 			continue
 		}
 		job := summary.Job{Provider: m.Provider, Stack: stack, ID: id}
+		run := m.summarize
 		cmds = append(cmds, func() tea.Msg {
-			res := summary.Run(job)
+			res := run(job)
 			return summaryDoneMsg{
 				token:       token,
 				id:          res.ID,

@@ -44,7 +44,9 @@ func Usage() string {
 		"No GitHub remote: pass --repo owner/name or --repo testdata/test.json.\n" +
 		"--repo owner/name fetches via gh. --repo path.json is a stack dump, not live gh.\n" +
 		"dango.json / dango.yml / dango.yaml sets the title provider.\n" +
-		"Missing config file = no generated title. --provider overrides. No picker.\n"
+		"Missing config file = no generated title. --provider overrides.\n" +
+		"A set provider writes a short stack title and an inspector description after first paint.\n" +
+		"No picker.\n"
 }
 
 func Parse(args []string) (Args, error) {

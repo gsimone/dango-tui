@@ -57,6 +57,7 @@ func ToDomain(pr RemotePR) domain.PullRequest {
 		Deletions:        pr.Deletions,
 		ChangedFiles:     pr.ChangedFiles,
 		HeadSHA:          pr.HeadSHA,
+		Body:             pr.Body,
 		CI: domain.CISummary{
 			State:   ciState(pr.CIState),
 			Failed:  pr.CIFailed,
