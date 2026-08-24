@@ -44,14 +44,22 @@ func TestGetDisplayStatePrecedence(t *testing.T) {
 		t.Fatalf("changes requested beats queue: got %s", got)
 	}
 
-	conflict := data.PRFixture(data.PullRequestFixtureInput{
+	draftConflict := data.PRFixture(data.PullRequestFixtureInput{
+		Draft:     domain.BoolPtr(true),
+		Mergeable: domain.MergeableFalse(),
+	})
+	if got := domain.GetDisplayState(draftConflict); got != domain.StateDraft {
+		t.Fatalf("unmergeable draft stays draft: got %s", got)
+	}
+
+	conflictApproved := data.PRFixture(data.PullRequestFixtureInput{
 		Mergeable:       domain.MergeableFalse(),
 		MergeQueueState: strPtr("QUEUED"),
 		ReviewDecision:  strPtr("APPROVED"),
 		CI:              &domain.CISummary{State: domain.CISuccess, Failed: 0, Pending: 0, Total: 3},
 	})
-	if got := domain.GetDisplayState(conflict); got != domain.StateReviewBlocked {
-		t.Fatalf("unmergeable beats queue: got %s", got)
+	if got := domain.GetDisplayState(conflictApproved); got != domain.StateReady {
+		t.Fatalf("CONFLICTING is not review: got %s", got)
 	}
 
 	queuedApproved := data.PRFixture(data.PullRequestFixtureInput{
@@ -93,7 +101,8 @@ func TestStateColorTokenFromPRFields(t *testing.T) {
 		{name: "merged", pr: domain.PullRequest{Merged: true}, token: "merged"},
 		{name: "draft-beats-merged", pr: domain.PullRequest{Merged: true, Draft: true}, token: "draft"},
 		{name: "blocked-review", pr: domain.PullRequest{ReviewDecision: "CHANGES_REQUESTED"}, token: "warning"},
-		{name: "blocked-conflict", pr: domain.PullRequest{Mergeable: domain.MergeableFalse()}, token: "warning"},
+		{name: "conflict-is-not-review", pr: domain.PullRequest{Mergeable: domain.MergeableFalse()}, token: "paper"},
+		{name: "draft-unmergeable", pr: domain.PullRequest{Draft: true, Mergeable: domain.MergeableFalse()}, token: "draft"},
 		{name: "open-slim", pr: domain.PullRequest{}, token: "paper"},
 		{name: "open-isDraft-state-only", pr: domain.PullRequest{Draft: false, Merged: false}, token: "paper"},
 		{name: "queued", pr: domain.PullRequest{MergeQueueState: "QUEUED"}, token: "paper"},
@@ -116,7 +125,7 @@ func TestBallGlyphsAreOneMeaning(t *testing.T) {
 		glyph rune
 	}{
 		{domain.StateOpen, '○'},
-		{domain.StateDraft, '○'},
+		{domain.StateDraft, '◐'},
 		{domain.StateCIFailure, '○'},
 		{domain.StateReviewBlocked, '◎'},
 		{domain.StateReady, '○'},
@@ -133,6 +142,10 @@ func TestBallGlyphsAreOneMeaning(t *testing.T) {
 		if domain.IsLogoToken(domain.StateColorToken(tc.state)) {
 			t.Fatalf("%s used a logo token", tc.state)
 		}
+	}
+	draft := domain.BallGlyph(domain.StateDraft)
+	if draft != '◐' || draft == '◒' || draft == '◖' || draft == '○' {
+		t.Fatalf("idle draft is ◐, got %q", string(draft))
 	}
 }
 

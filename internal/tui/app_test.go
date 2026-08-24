@@ -634,6 +634,16 @@ func TestHoverFillsBallAndShowsInspector(t *testing.T) {
 	}
 }
 
+func TestPagerBookendsStayGuillemets(t *testing.T) {
+	frame := frameOf(makeUI(tui.TerminalSize{Width: 120, Height: 30}, "freight"))
+	if !strings.Contains(frame, "‹›") {
+		t.Fatalf("bookends are ‹›:\n%s", frame)
+	}
+	if strings.Contains(frame, "<->") || strings.Contains(frame, "<>") {
+		t.Fatalf("never ASCII pager:\n%s", frame)
+	}
+}
+
 func TestTypeIsThreeInks(t *testing.T) {
 	raw := makeUI(tui.TerminalSize{Width: 120, Height: 30}, "mixed").View()
 	paper := ansiFG(domain.Color("paper"))

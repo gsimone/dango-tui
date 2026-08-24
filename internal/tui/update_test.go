@@ -422,6 +422,60 @@ func TestActiveLayerKeepsInkAndFills(t *testing.T) {
 	}
 }
 
+func TestDraftUnmergeableKeepsDraftInk(t *testing.T) {
+	draft := domain.PullRequest{Number: 5209, Draft: true, Mergeable: domain.MergeableFalse()}
+	if domain.GetDisplayState(draft) != domain.StateDraft {
+		t.Fatalf("unmergeable draft is draft, got %s", domain.GetDisplayState(draft))
+	}
+	if got := layerBallInk(draft); got != "#8b8e93" {
+		t.Fatalf("draft ink %s, want #8b8e93", got)
+	}
+	if got := layerBallInk(draft); got == "#f2ebe0" || got == "#e6b84d" {
+		t.Fatalf("draft must not be paper or review: %s", got)
+	}
+	if got := layerBallGlyph(draft, false); got != '◐' {
+		t.Fatalf("idle draft is ◐, not %q", string(got))
+	}
+	if got := layerBallGlyph(draft, false); got == '◒' || got == '◖' || got == '○' {
+		t.Fatalf("idle draft is left-half ◐, not %q", string(got))
+	}
+	if got := layerBallGlyph(draft, true); got != '●' {
+		t.Fatalf("active draft is ●, not %q", string(got))
+	}
+	review := domain.PullRequest{ReviewDecision: "CHANGES_REQUESTED"}
+	if got := layerBallGlyph(review, false); got != '◎' {
+		t.Fatalf("real review stays ◎, got %q", string(got))
+	}
+	if got := layerBallGlyph(review, true); got != '●' || layerBallInk(review) != "#e6b84d" {
+		t.Fatalf("active review is amber ●, glyph=%q ink=%s", string(layerBallGlyph(review, true)), layerBallInk(review))
+	}
+}
+
+func TestDraftChainGlance(t *testing.T) {
+	open := domain.PullRequest{}
+	draft := domain.PullRequest{Draft: true, Mergeable: domain.MergeableFalse()}
+	review := domain.PullRequest{ReviewDecision: "CHANGES_REQUESTED"}
+	idle := string([]rune{
+		layerBallGlyph(open, false), '-',
+		layerBallGlyph(draft, false), '-',
+		layerBallGlyph(review, false),
+	})
+	if idle != "○-◐-◎" {
+		t.Fatalf("idle chain %q", idle)
+	}
+	onYou := string([]rune{
+		layerBallGlyph(open, false), '-',
+		layerBallGlyph(draft, true), '-',
+		layerBallGlyph(review, false),
+	})
+	if onYou != "○-●-◎" {
+		t.Fatalf("on-draft chain %q", onYou)
+	}
+	if layerBallInk(draft) != "#8b8e93" {
+		t.Fatalf("draft ink %s", layerBallInk(draft))
+	}
+}
+
 func TestLayerBallsUseStatusTokens(t *testing.T) {
 	auth := New(Options{StoryID: "mixed", Width: 120, Height: 30}).Stacks()[0]
 	want := []string{domain.Color("merged"), domain.Color("ready"), domain.Color("ciFailure")}

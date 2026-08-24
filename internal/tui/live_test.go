@@ -406,7 +406,7 @@ func TestLivePabloBallsOn120(t *testing.T) {
 			}
 			return []domain.Stack{
 				{ID: "open", PRs: []domain.PullRequest{pr(1, "open base", domain.PullRequest{}), pr(2, "open head", domain.PullRequest{})}},
-				{ID: "draft", PRs: []domain.PullRequest{pr(3, "draft base", domain.PullRequest{Draft: true}), pr(4, "draft head", domain.PullRequest{})}},
+				{ID: "draft", PRs: []domain.PullRequest{pr(3, "draft base", domain.PullRequest{Draft: true, Mergeable: domain.MergeableFalse()}), pr(4, "draft head", domain.PullRequest{})}},
 				{ID: "fail", PRs: []domain.PullRequest{pr(5, "fail base", domain.PullRequest{CI: domain.CISummary{State: domain.CIFailure, Failed: 1}}), pr(6, "fail head", domain.PullRequest{})}},
 				{ID: "review", PRs: []domain.PullRequest{pr(7, "review base", domain.PullRequest{ReviewDecision: "CHANGES_REQUESTED"}), pr(8, "review head", domain.PullRequest{})}},
 				{ID: "ok", PRs: []domain.PullRequest{pr(9, "approved base", domain.PullRequest{ReviewDecision: "APPROVED"}), pr(10, "approved head", domain.PullRequest{})}},
@@ -431,6 +431,12 @@ func TestLivePabloBallsOn120(t *testing.T) {
 	if !strings.Contains(list, "◌-○") {
 		t.Fatalf("queued is ◌:\n%s", frame)
 	}
+	if !strings.Contains(list, "◐-○") {
+		t.Fatalf("idle draft is ◐:\n%s", frame)
+	}
+	if strings.Contains(list, "◒") || strings.Contains(list, "◖") {
+		t.Fatalf("draft is left-half ◐, not pie or cut D:\n%s", frame)
+	}
 	if !strings.Contains(list, "○-○") {
 		t.Fatalf("idle layers are ○:\n%s", frame)
 	}
@@ -446,6 +452,27 @@ func TestLivePabloBallsOn120(t *testing.T) {
 	rr, rg, rb, _ := domain.ParseRGB(domain.Color("surfaceRaised"))
 	if strings.Contains(m.View(), fmt.Sprintf("48;2;%d;%d;%d", rr, rg, rb)) {
 		t.Fatalf("selected row must not wash:\n%s", frame)
+	}
+
+	draft := applyKey(m, key("down"))
+	draftList := strings.Join(listRows(frameOf(draft)), "\n")
+	if !strings.Contains(draftList, "●-○") || strings.Count(draftList, "●") != 1 {
+		t.Fatalf("draft you are on is one filled:\n%s", frameOf(draft))
+	}
+	if strings.Contains(draftList, "◐") {
+		t.Fatalf("draft you are on is gray ●, not ◐:\n%s", frameOf(draft))
+	}
+	for _, row := range listRows(frameOf(draft)) {
+		if strings.Contains(row, "draft base") && strings.Contains(row, "◎") {
+			t.Fatalf("unmergeable draft row is not review:\n%s", row)
+		}
+	}
+	dr, dg, db, _ := domain.ParseRGB("#8b8e93")
+	if !strings.Contains(draft.View(), fmt.Sprintf("38;2;%d;%d;%d", dr, dg, db)) {
+		t.Fatal("draft you are on keeps meta gray #8b8e93")
+	}
+	if !strings.Contains(frameOf(draft), "status    draft") {
+		t.Fatalf("inspector stays draft:\n%s", frameOf(draft))
 	}
 
 	fail := applyKey(applyKey(m, key("down")), key("down"))
@@ -469,6 +496,47 @@ func TestLivePabloBallsOn120(t *testing.T) {
 	ar, ag, ab, _ := domain.ParseRGB("#e6b84d")
 	if !strings.Contains(review.View(), fmt.Sprintf("38;2;%d;%d;%d", ar, ag, ab)) {
 		t.Fatal("review layer you are on keeps amber ink")
+	}
+}
+
+func TestLiveDraftChainOn120(t *testing.T) {
+	m := tui.New(tui.Options{
+		Repo:   "archetype-labs/app",
+		Width:  120,
+		Height: 30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{{
+				ID: "s",
+				PRs: []domain.PullRequest{
+					{Number: 1, Title: "open layer"},
+					{Number: 5209, Title: "draft layer", Draft: true, Mergeable: domain.MergeableFalse()},
+					{Number: 3, Title: "review layer", ReviewDecision: "CHANGES_REQUESTED"},
+				},
+			}}, nil
+		},
+	})
+	m, _ = applyLiveFetch(m)
+	list := strings.Join(listRows(frameOf(m)), "\n")
+	if !strings.Contains(list, "●-◐-◎") {
+		t.Fatalf("idle draft in chain is ◐:\n%s", frameOf(m))
+	}
+	if strings.Contains(list, "◒") || strings.Contains(list, "◖") {
+		t.Fatalf("not pie or cut D:\n%s", frameOf(m))
+	}
+	onDraft := applyKey(m, key("right"))
+	onList := strings.Join(listRows(frameOf(onDraft)), "\n")
+	if !strings.Contains(onList, "○-●-◎") {
+		t.Fatalf("draft you are on is gray ●:\n%s", frameOf(onDraft))
+	}
+	if strings.Contains(onList, "◐") {
+		t.Fatalf("active draft is not ◐:\n%s", frameOf(onDraft))
+	}
+	dr, dg, db, _ := domain.ParseRGB("#8b8e93")
+	if !strings.Contains(onDraft.View(), fmt.Sprintf("38;2;%d;%d;%d", dr, dg, db)) {
+		t.Fatal("draft you are on is meta gray")
+	}
+	if !strings.Contains(frameOf(onDraft), "status    draft") {
+		t.Fatalf("unmergeable draft stays draft:\n%s", frameOf(onDraft))
 	}
 }
 

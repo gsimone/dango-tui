@@ -46,23 +46,21 @@ func TestMutantDisplayStateOrder(t *testing.T) {
 		t.Fatal("review-before-ci mutant must not survive")
 	}
 
-	conflict := domain.PullRequest{
-		Mergeable:       domain.MergeableFalse(),
-		MergeQueueState: "QUEUED",
-		ReviewDecision:  "APPROVED",
-		CI:              domain.CISummary{State: domain.CISuccess},
+	draftConflict := domain.PullRequest{
+		Draft:     true,
+		Mergeable: domain.MergeableFalse(),
 	}
-	if got := domain.GetDisplayState(conflict); got != domain.StateReviewBlocked {
-		t.Fatalf("real conflict: %s", got)
+	if got := domain.GetDisplayState(draftConflict); got != domain.StateDraft {
+		t.Fatalf("real unmergeable draft: %s", got)
 	}
-	queueFirst := func(pr domain.PullRequest) domain.PrDisplayState {
-		if pr.MergeQueueState != "" {
-			return domain.StateQueued
+	conflictIsReview := func(pr domain.PullRequest) domain.PrDisplayState {
+		if pr.Mergeable != nil && !*pr.Mergeable {
+			return domain.StateReviewBlocked
 		}
 		return domain.GetDisplayState(pr)
 	}
-	if queueFirst(conflict) == domain.StateReviewBlocked {
-		t.Fatal("queue-before-conflict mutant must not survive")
+	if conflictIsReview(draftConflict) == domain.StateDraft {
+		t.Fatal("CONFLICTING-as-review mutant must not survive")
 	}
 
 	approvedQueued := domain.PullRequest{
@@ -98,6 +96,18 @@ func TestMutantBallGlyphNeverFilledStatus(t *testing.T) {
 	}
 	if filledStatus(domain.StateCIFailure) == domain.BallGlyph(domain.StateCIFailure) {
 		t.Fatal("filled-as-status mutant must not survive")
+	}
+	if domain.BallGlyph(domain.StateDraft) != '◐' {
+		t.Fatal("idle draft is ◐")
+	}
+	hollowDraft := func(state domain.PrDisplayState) rune {
+		if state == domain.StateDraft {
+			return '○'
+		}
+		return domain.BallGlyph(state)
+	}
+	if hollowDraft(domain.StateDraft) == domain.BallGlyph(domain.StateDraft) {
+		t.Fatal("hollow-draft mutant must not survive")
 	}
 }
 

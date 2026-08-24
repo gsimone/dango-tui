@@ -12,10 +12,9 @@ func GetDisplayState(pr PullRequest) PrDisplayState {
 		return StateCIFailure
 	}
 
-	reviewBlocked := pr.ChangesRequested ||
-		pr.ReviewDecision == "CHANGES_REQUESTED" ||
-		(pr.Mergeable != nil && !*pr.Mergeable)
-	if reviewBlocked {
+	// Review is "you must reply", not CONFLICTING. Drafts are often
+	// unmergeable and must stay draft.
+	if pr.ChangesRequested || pr.ReviewDecision == "CHANGES_REQUESTED" {
 		return StateReviewBlocked
 	}
 
@@ -52,10 +51,7 @@ func DisplayStateDetail(pr PullRequest) string {
 	case StateDraft:
 		return "not requesting review"
 	case StateReviewBlocked:
-		if pr.Mergeable != nil && !*pr.Mergeable {
-			return "merge conflict"
-		}
-		if pr.ChangesRequested {
+		if pr.ChangesRequested || pr.ReviewDecision == "CHANGES_REQUESTED" {
 			return "changes requested"
 		}
 	case StateCIFailure:
@@ -117,10 +113,12 @@ func StateColorToken(state PrDisplayState) string {
 }
 
 // BallGlyph is the resting mark. Filled is never a status — the list
-// paints filled only on the active layer. Review is double, queued is dotted,
-// everything else is hollow. No logo rainbow.
+// paints filled only on the active layer. Draft idle is ◐ (left half).
+// Review is ◎, queued is ◌, everything else is ○. No logo rainbow.
 func BallGlyph(state PrDisplayState) rune {
 	switch state {
+	case StateDraft:
+		return '◐'
 	case StateReviewBlocked:
 		return '◎'
 	case StateQueued:

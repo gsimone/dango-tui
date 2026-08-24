@@ -130,7 +130,8 @@ func TestFetchMapsStateColorTokens(t *testing.T) {
 	cases := []row{
 		{name: "draft", extra: `"isDraft":true,"state":"OPEN"`, token: "draft", ci: domain.CIUnknown},
 		{name: "merged", extra: `"isDraft":false,"state":"MERGED"`, token: "merged", ci: domain.CIUnknown},
-		{name: "blocked-conflict", extra: `"isDraft":false,"state":"OPEN","mergeable":"CONFLICTING"`, token: "warning", ci: domain.CIUnknown},
+		{name: "conflict-is-not-review", extra: `"isDraft":false,"state":"OPEN","mergeable":"CONFLICTING"`, token: "paper", ci: domain.CIUnknown},
+		{name: "draft-unmergeable", extra: `"isDraft":true,"state":"OPEN","mergeable":"CONFLICTING"`, token: "draft", ci: domain.CIUnknown},
 		{name: "blocked-review", extra: `"isDraft":false,"state":"OPEN","reviewDecision":"CHANGES_REQUESTED"`, token: "warning", ci: domain.CIUnknown},
 		{name: "queued", extra: `"isDraft":false,"state":"OPEN","mergeStateStatus":"QUEUED"`, token: "paper", ci: domain.CIUnknown},
 		{name: "open-slim", extra: `"isDraft":false,"state":"OPEN"`, token: "paper", ci: domain.CIUnknown},
