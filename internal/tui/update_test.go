@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -27,6 +28,15 @@ func TestRelativeFetched(t *testing.T) {
 	}
 }
 
+func applyFetch(m Model) (Model, tea.Cmd) {
+	cmd := m.Init()
+	if cmd == nil {
+		return m, nil
+	}
+	next, extra := m.Update(cmd())
+	return next.(Model), extra
+}
+
 func TestSummariesAreAsyncAndLandInPlace(t *testing.T) {
 	fetch := func(string) ([]domain.Stack, error) {
 		return []domain.Stack{{
@@ -41,6 +51,14 @@ func TestSummariesAreAsyncAndLandInPlace(t *testing.T) {
 		Height:   24,
 		Fetch:    fetch,
 	})
+	if len(m.stacks) != 0 {
+		t.Fatal("constructor must not wait on gh")
+	}
+	if !strings.Contains(stripANSI(m.View()), "fetching owner/name") {
+		t.Fatalf("first frame before gh:\n%s", stripANSI(m.View()))
+	}
+	var sumCmd tea.Cmd
+	m, sumCmd = applyFetch(m)
 	if len(m.stacks) != 1 || m.stacks[0].Name != "alpha layer" || m.stacks[0].Summary != "" {
 		t.Fatalf("first paint is the gh name, no generated title: %+v", m.stacks)
 	}
@@ -51,14 +69,14 @@ func TestSummariesAreAsyncAndLandInPlace(t *testing.T) {
 	if strings.Contains(first, "alpha layer and beta layer") {
 		t.Fatalf("first paint must not wait on a generated title:\n%s", first)
 	}
-	cmd := m.Init()
-	if cmd == nil {
+	if sumCmd == nil {
 		t.Fatal("provider must kick a summary cmd after first paint")
 	}
 	if m.Fetching || strings.Contains(stripANSI(m.View()), "⠋") {
 		t.Fatal("title wait must not be a spinner")
 	}
-	if New(Options{Repo: "owner/name", Width: 80, Height: 24, Fetch: fetch}).Init() != nil {
+	_, extra := applyFetch(New(Options{Repo: "owner/name", Width: 80, Height: 24, Fetch: fetch}))
+	if extra != nil {
 		t.Fatal("missing provider must not start summaries")
 	}
 
@@ -162,6 +180,7 @@ func TestSummaryDonePaneDescriptionIsNotGhTitle(t *testing.T) {
 		Height:   30,
 		Fetch:    fetch,
 	})
+	m, _ = applyFetch(m)
 	before := stripANSI(m.View())
 	if !strings.Contains(strings.Join(listNames(before), "\n"), "LEV-182") {
 		t.Fatalf("first paint is the gh name:\n%s", before)
@@ -227,6 +246,8 @@ func TestDescriptionFillsInspectorInPlace(t *testing.T) {
 			Height:   size.h,
 			Fetch:    fetch,
 		})
+		var sumCmd tea.Cmd
+		m, sumCmd = applyFetch(m)
 		before := stripANSI(m.View())
 		if strings.Contains(before, "alpha layer and beta layer") {
 			t.Fatalf("%dx%d first paint waited on a description:\n%s", size.w, size.h, before)
@@ -241,7 +262,7 @@ func TestDescriptionFillsInspectorInPlace(t *testing.T) {
 		}
 		box := boxBounds(before)
 
-		m = applyCmd(m, m.Init())
+		m = applyCmd(m, sumCmd)
 		after := stripANSI(m.View())
 		if m.stacks[0].Description == "" {
 			t.Fatal("description must land")
@@ -402,6 +423,46 @@ func TestInspectorStatusInkIsValueOnly(t *testing.T) {
 	merged := auth.PRs[0]
 	if inspectorStatusColor(merged) != domain.Color("merged") {
 		t.Fatalf("merged status value %s", inspectorStatusColor(merged))
+	}
+}
+
+func TestDotCopiesFetchError(t *testing.T) {
+	err502 := errors.New("gh api repos/owner/private/pulls?state=open&per_page=100: HTTP 502: Bad Gateway (https://api.github.com/repos/owner/private/pulls)")
+	var copied string
+	old := copyText
+	copyText = func(s string) { copied = s }
+	t.Cleanup(func() { copyText = old })
+
+	m := New(Options{
+		Repo:   "owner/private",
+		Width:  80,
+		Height: 24,
+		Fetch:  func(string) ([]domain.Stack, error) { return nil, err502 },
+	})
+	if !strings.Contains(stripANSI(m.View()), "fetching owner/private") {
+		t.Fatalf("first frame before gh:\n%s", stripANSI(m.View()))
+	}
+	m, _ = applyFetch(m)
+	frame := stripANSI(m.View())
+	if !strings.Contains(frame, "Could not fetch pull requests.") {
+		t.Fatalf("paper sentence:\n%s", frame)
+	}
+	if !strings.Contains(frame, "502") {
+		t.Fatalf("error block missing 502:\n%s", frame)
+	}
+	if !strings.Contains(frame, "owner/private/pulls") {
+		t.Fatalf("error block missing REST url:\n%s", frame)
+	}
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(".")})
+	m = next.(Model)
+	if copied != err502.Error() {
+		t.Fatalf("dot copies the error, got %q", copied)
+	}
+	if cmd == nil {
+		t.Fatal("copy toast should clear")
+	}
+	if m.View() == "" {
+		t.Fatal("error must not quit the process")
 	}
 }
 
