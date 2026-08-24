@@ -1,13 +1,23 @@
 # dango
 
+[![CI](https://github.com/gsimone/dango-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/gsimone/dango-tui/actions/workflows/ci.yml)
+
 A small native terminal UI for reading a GitHub pull-request stack at a glance.
 
 The product path is a Go binary (Go 1.24+) built with
 [Bubble Tea](https://github.com/charmbracelet/bubbletea). No Bubbles restyle. No picker.
 
+## Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gsimone/dango-tui/main/install.sh | bash
+```
+
+That installs `dango` into `~/.local/bin` from the rolling `nightly` prerelease (linux/amd64 or darwin/arm64). Not a versioned 0.1.0. Other platforms are refused.
+
 ## Run
 
-From this branch:
+Dev, from this branch:
 
 ```bash
 go run ./cmd/dango
@@ -32,6 +42,8 @@ make build
 ```
 
 `make build` is `CGO_ENABLED=0 go build -ldflags="-s -w" -o dango ./cmd/dango`.
+
+Nightly (not 0.1.0, no semver): after CI on `main`, plus 02:00 UTC and `workflow_dispatch`, the `Nightly` workflow replaces a single prerelease tag `nightly` with stripped `dango-linux-amd64` and `dango-darwin-arm64`. No darwin/amd64. PRs do not publish. `make dist` builds those locally.
 
 Provider comes from `dango.json` / `dango.yml` / `dango.yaml`. `--provider` overrides. Missing config file = no generated title. A set provider writes a short stack title (list name, in place) and a description (inspector only) after first paint. First paint is always the gh name. `dango.json` is not a stack dump.
 
@@ -62,6 +74,24 @@ go test ./...
 ```
 
 or `make test`.
+
+Coverage (writes `coverage.out`, prints per-function stats and a total %):
+
+```bash
+make cover
+```
+
+`make mutate` runs the hand-written `Mutant_*` tests (`go test -run Mutant`). Those are ordinary tests, not a mutator.
+
+The real mutator is [gremlins](https://github.com/go-gremlins/gremlins) v0.6.0, the same tool CI uses. Install the release binary for your OS from the [v0.6.0 release](https://github.com/go-gremlins/gremlins/releases/tag/v0.6.0), then:
+
+```bash
+make mutation
+```
+
+That mutates `./internal` (app, cli, data, domain, live, summary, tui), writes `gremlins.json`, and does not fail on a score. `testdata/` is not a Go package. `cmd/dango` has no tests, so it is skipped.
+
+CI on pull requests and pushes to `main` publishes coverage (total %) and real gremlins mutation numbers (killed / survived / timed out / score). Those steps report only — no minimum coverage % or mutation score yet. `go test` still fails the job if tests fail.
 
 ## Layout
 
