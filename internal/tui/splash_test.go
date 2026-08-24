@@ -106,9 +106,7 @@ func TestSplashPaintsBeforeFetchAndDies(t *testing.T) {
 func TestFailedFetchStaysOnSplashWithArgv(t *testing.T) {
 	sha := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	withVCS(t, sha)
-	argv := live.FormatGHArgv(append([]string{"pr", "list", "--repo", "archetype-labs/app", "--state", "open", "--limit", "100", "--json"}, strings.Join([]string{
-		"number", "title", "url", "headRefName", "baseRefName", "author", "labels", "isDraft", "state",
-	}, ",")))
+	argv := live.FormatGHArgv(live.PRListArgs("archetype-labs/app"))
 	err502 := errors.New(argv + ": HTTP 502: Bad Gateway")
 	var copied string
 	old := copyText

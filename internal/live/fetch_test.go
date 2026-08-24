@@ -84,6 +84,12 @@ func TestFetchErrorIncludesExactArgv(t *testing.T) {
 	if !strings.Contains(err.Error(), "--json") || !strings.Contains(err.Error(), "isDraft") {
 		t.Fatalf("do not truncate argv: %v", err)
 	}
+	if !strings.Contains(err.Error(), "mergeable") || !strings.Contains(err.Error(), "reviewDecision") || !strings.Contains(err.Error(), "mergeStateStatus") {
+		t.Fatalf("error argv must keep display-state fields: %v", err)
+	}
+	if strings.Contains(err.Error(), "statusCheckRollup") || strings.Contains(err.Error(), "body") {
+		t.Fatalf("error argv must stay cheap: %v", err)
+	}
 	if strings.Contains(err.Error(), "/pulls") || strings.Contains(err.Error(), "repo view") {
 		t.Fatalf("must stay on pr list: %v", err)
 	}
@@ -93,6 +99,7 @@ func TestPRListFieldsAreSlim(t *testing.T) {
 	want := []string{
 		"number", "title", "url", "headRefName", "baseRefName",
 		"author", "labels", "isDraft", "state",
+		"mergeable", "reviewDecision", "mergeStateStatus",
 	}
 	if strings.Join(prListFields, ",") != strings.Join(want, ",") {
 		t.Fatalf("first list fields %v, want %v", prListFields, want)
@@ -100,13 +107,60 @@ func TestPRListFieldsAreSlim(t *testing.T) {
 	joined := strings.Join(prListFields, ",")
 	for _, banned := range []string{
 		"body", "statusCheckRollup", "latestReviews", "reviews",
-		"mergeStateStatus", "mergeable", "additions", "deletions",
-		"changedFiles", "headRefOid",
+		"additions", "deletions", "changedFiles", "headRefOid",
 	} {
 		if strings.Contains(joined, banned) {
 			t.Fatalf("first list must not request %s: %v", banned, prListFields)
 		}
 	}
+}
+
+func TestFetchMapsStateColorTokens(t *testing.T) {
+	type row struct {
+		name  string
+		extra string
+		token string
+		ci    domain.CIState
+	}
+	cases := []row{
+		{name: "draft", extra: `"isDraft":true,"state":"OPEN"`, token: "draft", ci: domain.CIUnknown},
+		{name: "merged", extra: `"isDraft":false,"state":"MERGED"`, token: "merged", ci: domain.CIUnknown},
+		{name: "blocked-conflict", extra: `"isDraft":false,"state":"OPEN","mergeable":"CONFLICTING"`, token: "reviewBlocked", ci: domain.CIUnknown},
+		{name: "blocked-review", extra: `"isDraft":false,"state":"OPEN","reviewDecision":"CHANGES_REQUESTED"`, token: "reviewBlocked", ci: domain.CIUnknown},
+		{name: "queued", extra: `"isDraft":false,"state":"OPEN","mergeStateStatus":"QUEUED"`, token: "queued", ci: domain.CIUnknown},
+		{name: "open-slim", extra: `"isDraft":false,"state":"OPEN"`, token: "open", ci: domain.CIUnknown},
+		{name: "draft-slim", extra: `"isDraft":true,"state":"OPEN"`, token: "draft", ci: domain.CIUnknown},
+		{name: "approved-no-ci", extra: `"isDraft":false,"state":"OPEN","mergeable":"MERGEABLE","reviewDecision":"APPROVED","mergeStateStatus":"CLEAN"`, token: "open", ci: domain.CIUnknown},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := `[{` + slimListPRJSON(tc.extra) + `}]`
+			run := ghOK(map[string][]byte{"pr list": []byte(raw)})
+			stacks, err := fetchWith(run, "archetype-labs/app")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(stacks) != 1 || len(stacks[0].PRs) != 1 {
+				t.Fatalf("want one layer, got %+v", stacks)
+			}
+			pr := stacks[0].PRs[0]
+			state := domain.GetDisplayState(pr)
+			if got := domain.StateColorToken(state); got != tc.token {
+				t.Fatalf("token %q, want %q (state %s, pr %+v)", got, tc.token, state, pr)
+			}
+			if pr.CI.State != tc.ci {
+				t.Fatalf("CI must stay %s without statusCheckRollup, got %s", tc.ci, pr.CI.State)
+			}
+		})
+	}
+}
+
+func slimListPRJSON(extra string) string {
+	base := `"number":1,"title":"layer","url":"https://github.com/owner/demo/pull/1","headRefName":"a","baseRefName":"main","author":{"login":"gm"},"labels":[]`
+	if extra == "" {
+		return base
+	}
+	return base + "," + extra
 }
 
 func TestFetchWithGroupsChainFromGhJSON(t *testing.T) {

@@ -76,6 +76,30 @@ func TestGetDisplayStatePrecedence(t *testing.T) {
 	}
 }
 
+func TestStateColorTokenFromPRFields(t *testing.T) {
+	cases := []struct {
+		name  string
+		pr    domain.PullRequest
+		token string
+	}{
+		{name: "draft", pr: domain.PullRequest{Draft: true}, token: "draft"},
+		{name: "merged", pr: domain.PullRequest{Merged: true, Draft: true}, token: "merged"},
+		{name: "blocked-review", pr: domain.PullRequest{ReviewDecision: "CHANGES_REQUESTED"}, token: "reviewBlocked"},
+		{name: "blocked-conflict", pr: domain.PullRequest{Mergeable: domain.MergeableFalse()}, token: "reviewBlocked"},
+		{name: "open-slim", pr: domain.PullRequest{}, token: "open"},
+		{name: "open-isDraft-state-only", pr: domain.PullRequest{Draft: false, Merged: false}, token: "open"},
+		{name: "queued", pr: domain.PullRequest{MergeQueueState: "QUEUED"}, token: "queued"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			state := domain.GetDisplayState(tc.pr)
+			if got := domain.StateColorToken(state); got != tc.token {
+				t.Fatalf("token %q, want %q (state %s)", got, tc.token, state)
+			}
+		})
+	}
+}
+
 func TestDisplayStateHeadlines(t *testing.T) {
 	for _, story := range data.Stories() {
 		for _, stack := range story.Stacks {

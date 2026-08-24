@@ -397,6 +397,34 @@ func TestLayerBallsUseStatusTokens(t *testing.T) {
 	}
 }
 
+func TestInspectorStatusInkMatchesBall(t *testing.T) {
+	cases := []struct {
+		name  string
+		pr    domain.PullRequest
+		token string
+	}{
+		{name: "draft", pr: domain.PullRequest{Draft: true}, token: "draft"},
+		{name: "merged", pr: domain.PullRequest{Merged: true}, token: "merged"},
+		{name: "blocked", pr: domain.PullRequest{ReviewDecision: "CHANGES_REQUESTED"}, token: "reviewBlocked"},
+		{name: "open", pr: domain.PullRequest{}, token: "open"},
+		{name: "queued", pr: domain.PullRequest{MergeQueueState: "QUEUED"}, token: "queued"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			want := domain.Color(tc.token)
+			if got := layerBallInk(tc.pr); got != want {
+				t.Fatalf("ball %s, want %s", got, want)
+			}
+			if got := inspectorStatusColor(tc.pr); got != want {
+				t.Fatalf("inspector %s, want %s", got, want)
+			}
+			if layerBallInk(tc.pr) != inspectorStatusColor(tc.pr) {
+				t.Fatal("ball and inspector status ink must share GetDisplayState")
+			}
+		})
+	}
+}
+
 func TestInspectorStatusInkIsValueOnly(t *testing.T) {
 	auth := New(Options{StoryID: "mixed", Width: 120, Height: 30}).Stacks()[0]
 	head := auth.PRs[len(auth.PRs)-1]
