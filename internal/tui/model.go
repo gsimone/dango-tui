@@ -161,17 +161,25 @@ func (m Model) errorCopyText() string {
 }
 
 func (m Model) splashCopyText() string {
+	body := ""
 	if text := m.errorCopyText(); text != "" {
-		return text
+		body = text
+	} else if len(live.LastGHArgv) > 0 {
+		body = live.FormatGHArgv(live.LastGHArgv)
+	} else {
+		repo := m.Repo
+		if repo == "" {
+			repo = "archetype-labs/app"
+		}
+		body = live.FormatGHArgv(live.PRListArgs(repo))
 	}
-	if len(live.LastGHArgv) > 0 {
-		return live.FormatGHArgv(live.LastGHArgv)
+	if sha := m.splashSHA(); sha != "" {
+		if body != "" {
+			return body + "\n" + sha
+		}
+		return sha
 	}
-	repo := m.Repo
-	if repo == "" {
-		repo = "archetype-labs/app"
-	}
-	return live.FormatGHArgv(live.PRListArgs(repo))
+	return body
 }
 
 func (m Model) startSummaries() tea.Cmd {

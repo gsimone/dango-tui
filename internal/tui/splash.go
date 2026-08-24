@@ -49,7 +49,12 @@ func (m Model) paintSplash(c *canvas, width, height int, surface, paper, meta, s
 	blockW := displayWidth(dangoBlock[0])
 	maxW := max(1, width-4)
 	status := m.splashStatusLines(maxW)
-	contentH := 5 + len(status)
+	sha := m.splashSHA()
+	shaLines := 0
+	if sha != "" {
+		shaLines = 1
+	}
+	contentH := 5 + len(status) + shaLines
 	startY := (height - contentH) / 2
 	if startY < 0 {
 		startY = 0
@@ -88,5 +93,13 @@ func (m Model) paintSplash(c *canvas, width, height int, surface, paper, meta, s
 			fetchX = 0
 		}
 		c.text(fetchX, fetchY, line, fg, surface, max(1, width-fetchX))
+	}
+	if sha != "" {
+		shaY := startY + 5 + len(status)
+		shaX := (width - displayWidth(sha)) / 2
+		if shaX < 0 {
+			shaX = 0
+		}
+		c.text(shaX, shaY, sha, meta, surface, max(1, width-shaX))
 	}
 }

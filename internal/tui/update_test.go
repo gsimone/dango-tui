@@ -427,6 +427,8 @@ func TestInspectorStatusInkIsValueOnly(t *testing.T) {
 }
 
 func TestDotCopiesFetchError(t *testing.T) {
+	sha := "dddddddddddddddddddddddddddddddddddddddd"
+	withVCS(t, sha)
 	err502 := errors.New("gh pr list --repo archetype-labs/app --state open --limit 100 --json number,title,url,headRefName,baseRefName,author,labels,isDraft,state: HTTP 502: Bad Gateway")
 	var copied string
 	old := copyText
@@ -458,8 +460,8 @@ func TestDotCopiesFetchError(t *testing.T) {
 	}
 	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(".")})
 	m = next.(Model)
-	if copied != err502.Error() {
-		t.Fatalf("dot copies the error, got %q", copied)
+	if !strings.Contains(copied, err502.Error()) || !strings.Contains(copied, sha) {
+		t.Fatalf("dot copies the error plus SHA, got %q", copied)
 	}
 	if cmd == nil {
 		t.Fatal("copy toast should clear")
