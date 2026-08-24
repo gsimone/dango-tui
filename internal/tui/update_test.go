@@ -291,17 +291,19 @@ func TestDescriptionFillsInspectorInPlace(t *testing.T) {
 			t.Fatal("description must land")
 		}
 		if !strings.Contains(after, m.stacks[0].Description) && !strings.Contains(after, strings.Fields(m.stacks[0].Description)[0]) {
-			t.Fatalf("%dx%d description must fill the reserved slot:\n%s", size.w, size.h, after)
+			t.Fatalf("%dx%d description must fill the inspector:\n%s", size.w, size.h, after)
 		}
 		if strings.Contains(after, "⠋") {
 			t.Fatalf("%dx%d land must not spin the list:\n%s", size.w, size.h, after)
 		}
-		if factRow(after, "status") != statusAt || factRow(after, "ci") != ciAt {
-			t.Fatalf("%dx%d fact rows moved (card morph): before status=%d ci=%d after status=%d ci=%d\n%s",
-				size.w, size.h, statusAt, ciAt, factRow(after, "status"), factRow(after, "ci"), after)
-		}
-		if boxBounds(after) != box {
-			t.Fatalf("%dx%d stacked card morphed: before %v after %v", size.w, size.h, box, boxBounds(after))
+		if size.w >= 100 {
+			if factRow(after, "status") != statusAt || factRow(after, "ci") != ciAt {
+				t.Fatalf("%dx%d fact rows moved (pane morph): before status=%d ci=%d after status=%d ci=%d\n%s",
+					size.w, size.h, statusAt, ciAt, factRow(after, "status"), factRow(after, "ci"), after)
+			}
+			if boxBounds(after) != box {
+				t.Fatalf("%dx%d pane morphed: before %v after %v", size.w, size.h, box, boxBounds(after))
+			}
 		}
 		if len(listNames(after)) != len(listNames(before)) {
 			t.Fatalf("%dx%d list rows changed: before %v after %v", size.w, size.h, listNames(before), listNames(after))

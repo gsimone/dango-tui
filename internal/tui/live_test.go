@@ -403,6 +403,52 @@ func listRows(frame string) []string {
 	return out
 }
 
+func TestStackedCardDoesNotEatTheList(t *testing.T) {
+	m := tui.New(tui.Options{
+		Repo:   testdataJSON(t),
+		Width:  80,
+		Height: 24,
+		Fetch: func(string) ([]domain.Stack, error) {
+			t.Fatal("JSON --repo must not call gh")
+			return nil, nil
+		},
+	})
+	frame := frameOf(m)
+	if !strings.Contains(frame, "┌") || !strings.Contains(frame, "└") {
+		t.Fatalf("stacked card:\n%s", frame)
+	}
+	rows := listRows(frame)
+	joined := strings.Join(rows, "\n")
+	for _, name := range []string{"auth cleanup", "composer tokens", "sync rewrite", "schema cutover"} {
+		if !strings.Contains(joined, name) {
+			t.Fatalf("short card must leave the list visible, missing %q:\n%s", name, frame)
+		}
+	}
+	top, bot := -1, -1
+	lines := strings.Split(frame, "\n")
+	for i, line := range lines {
+		if strings.Contains(line, "┌") {
+			top = i
+		}
+		if strings.Contains(line, "└") {
+			bot = i
+		}
+	}
+	if top < 0 || bot < 0 || bot-top > 16 {
+		t.Fatalf("stacked card is leftover-tall (%d..%d):\n%s", top, bot, frame)
+	}
+	composerAt := -1
+	for i, line := range lines {
+		if strings.Contains(line, "composer tokens") {
+			composerAt = i
+			break
+		}
+	}
+	if composerAt < 0 || composerAt < bot {
+		t.Fatalf("next stacks should sit under a short card, composer=%d bot=%d:\n%s", composerAt, bot, frame)
+	}
+}
+
 func TestRepoJSONFilePaintsAuthoredStacks(t *testing.T) {
 	path := testdataJSON(t)
 	parsed, err := cli.Parse([]string{"--repo", path})
