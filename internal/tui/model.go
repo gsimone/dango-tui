@@ -114,20 +114,15 @@ func (m *Model) loadFile(path string) {
 
 func (m *Model) loadFixture(storyID string) {
 	m.Fetched = "last fetched 2 mins ago"
-	if storyID == "" {
-		m.StoryIndex = -1
-		m.stacks = data.ExampleStacks()
-		m.cacheState = data.CacheCurrent
-		return
-	}
+	stories := data.Stories()
 	idx := 0
-	for i, story := range data.FixtureStories {
+	for i, story := range stories {
 		if story.ID == storyID {
 			idx = i
 			break
 		}
 	}
-	story := data.FixtureStories[idx]
+	story := stories[idx]
 	m.StoryIndex = idx
 	m.stacks = story.Stacks
 	m.cacheState = story.CacheState
@@ -212,10 +207,11 @@ func (m Model) repoLabel() string {
 }
 
 func (m Model) Story() data.FixtureStory {
-	if m.Live || m.File || m.StoryIndex < 0 || m.StoryIndex >= len(data.FixtureStories) {
+	stories := data.Stories()
+	if m.Live || m.File || m.StoryIndex < 0 || m.StoryIndex >= len(stories) {
 		return data.FixtureStory{Stacks: m.stacks, CacheState: m.cacheState}
 	}
-	return data.FixtureStories[m.StoryIndex]
+	return stories[m.StoryIndex]
 }
 
 func (m Model) Stacks() []domain.Stack {

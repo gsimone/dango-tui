@@ -4,23 +4,28 @@ Shipping order (Cassandra / Gianmarco). Do not skip ahead.
 
 ## Now (this PR)
 
-Agent titles/descriptions.
+Size / speed + mutation. Main is usable (#6 shipped: titles/descriptions, two-line inspector slot, no `Covers`).
 
-- Fetch paints first with the real gh names. Never block first paint on a summarizer.
-- When a description lands it fills the inspector pane in place — same rows, no card morph, no spinner on the list.
-- Title swaps the list name in place when the generated clause is not the gh title.
-- `--provider local` / `demo` write a two-line meta clause only if it is not the gh title pasted back. No invented `Covers …` prefix. If there is no distinct sentence, leave the reserved slot empty (dim). Never paste `pr.Body`, HTML comments, or agent markers. No Codex network call.
-- Provider from `dango.json` / `dango.yml` / `dango.yaml`, or `--provider` which wins. No new flags.
-- Missing provider = no generated title. Keep the gh name.
-- Pablo chrome (this PR only): pane fills in place, same rows, no card morph, no list spinner.
-- Inspector description is two lines under the title, meta ink, then stop. Same reserved slot every time. Card height does not jump. Wrap is clipped to `inspectorDescLines` (2) — never a third line.
+- Smaller stripped linux/amd64 binary (`CGO_ENABLED=0 -ldflags='-s -w'`).
+- Faster first paint / live `gh` fetch / TUI render. No UI/chrome work.
+- Deterministic mutation tests only. No `math/rand`, no flake, no shuffled fixtures. `make mutate` runs `-run Mutant`.
+- Product path unchanged: no-flag = cwd remote, `--repo owner/name` live `gh`, `--repo *.json` file, `.` copy, two-line inspector, no Covers, no picker.
 
 ## Later
 
-Build / publish / install the Go binary. The old #2 release PR stays parked. Do not start a release cut until a description has actually landed in the TUI.
+Build / publish / install the Go binary. Do not start a release cut from this PR.
 
-## Dead
+## Locked (already shipped)
 
-- Picker. No `[ p ] provider`. No settings screen.
-- `,` copy. `[ . ] copy` only.
-- Stacking on #5. #5 is already on main (no-flag = cwd origin, `--repo owner/name` live, `--repo *.json` dump, `.` copy, labels/author). This PR is off main, not #5.
+- Live `gh` via `--repo owner/name` (also `-repo`).
+- Two-col list: name + ball chain. Fixed gutter. No status column.
+- Header line 2 is the repo slug + counts.
+- `--provider` is optional and never blocks fetch or first paint.
+- Missing `gh` fails loudly (`LookPath` / `runGH`). No fixture fallback.
+- cwd git-remote detect when `--repo` is omitted. `--repo` wins (owner/name or JSON). Detect failure is a process error, not examples.
+- No status column. Status lives on balls + inspector.
+- Packed `●-●-●` logo (U+25CF). Three Pablo inks. No dumpling.
+- List balls use meaning colors, not logo hues.
+- Footer: bracketed keys. No enter / checkout. `?` help overlay. `[ . ] copy` only.
+- Inspector `labels` + `author` rows. Live labels come from `gh pr list --json`.
+- Agent titles/descriptions land in place. Inspector description is two wrap lines. No invented `Covers` prefix. No picker. `-story` stays a hidden hook.

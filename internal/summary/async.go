@@ -1,8 +1,8 @@
 package summary
 
 import (
-	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/gsimone/dango-tui/internal/domain"
 )
@@ -39,10 +39,89 @@ func Run(job Job) Result {
 	return Result{ID: id, Title: Title(job.Stack), Description: Describe(job.Stack)}
 }
 
-var (
-	ticketPrefix = regexp.MustCompile(`(?i)^(?:\[)?[A-Z][A-Z0-9]*-\d+(?:\])?\s*[:\-\x{2013}\x{2014}]\s*`)
-	hashPrefix   = regexp.MustCompile(`^#\d+\s*[:\-\x{2013}\x{2014}]\s*`)
-)
+func stripTicket(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.TrimSpace(stripIssuePrefix(s))
+	s = strings.TrimSpace(stripHashPrefix(s))
+	return s
+}
+
+func stripIssuePrefix(s string) string {
+	i := 0
+	if i < len(s) && s[i] == '[' {
+		i++
+	}
+	if i >= len(s) || !isASCIILetter(s[i]) {
+		return s
+	}
+	i++
+	for i < len(s) && isASCIIAlnum(s[i]) {
+		i++
+	}
+	if i >= len(s) || s[i] != '-' {
+		return s
+	}
+	i++
+	if i >= len(s) || s[i] < '0' || s[i] > '9' {
+		return s
+	}
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	if i < len(s) && s[i] == ']' {
+		i++
+	}
+	for i < len(s) && (s[i] == ' ' || s[i] == '\t') {
+		i++
+	}
+	if i >= len(s) || !isTicketSep(s[i:]) {
+		return s
+	}
+	_, w := utf8.DecodeRuneInString(s[i:])
+	i += w
+	for i < len(s) && (s[i] == ' ' || s[i] == '\t') {
+		i++
+	}
+	return s[i:]
+}
+
+func stripHashPrefix(s string) string {
+	if !strings.HasPrefix(s, "#") {
+		return s
+	}
+	i := 1
+	if i >= len(s) || s[i] < '0' || s[i] > '9' {
+		return s
+	}
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	for i < len(s) && (s[i] == ' ' || s[i] == '\t') {
+		i++
+	}
+	if i >= len(s) || !isTicketSep(s[i:]) {
+		return s
+	}
+	_, w := utf8.DecodeRuneInString(s[i:])
+	i += w
+	for i < len(s) && (s[i] == ' ' || s[i] == '\t') {
+		i++
+	}
+	return s[i:]
+}
+
+func isTicketSep(s string) bool {
+	r, _ := utf8.DecodeRuneInString(s)
+	return r == ':' || r == '-' || r == '\u2013' || r == '\u2014'
+}
+
+func isASCIILetter(c byte) bool {
+	return c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z'
+}
+
+func isASCIIAlnum(c byte) bool {
+	return isASCIILetter(c) || c >= '0' && c <= '9'
+}
 
 func ghName(stack domain.Stack) string {
 	for _, pr := range stack.PRs {
@@ -58,13 +137,6 @@ func ghName(stack domain.Stack) string {
 
 func sameFold(a, b string) bool {
 	return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b))
-}
-
-func stripTicket(s string) string {
-	s = strings.TrimSpace(s)
-	s = ticketPrefix.ReplaceAllString(s, "")
-	s = hashPrefix.ReplaceAllString(s, "")
-	return strings.TrimSpace(s)
 }
 
 func layerTitles(stack domain.Stack) []string {

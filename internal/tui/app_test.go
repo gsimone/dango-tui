@@ -130,22 +130,12 @@ func TestHeaderCopyIsTwoLines(t *testing.T) {
 		t.Fatalf("drop the data clause:\n%s", mixed)
 	}
 
-	chaos := makeUI(tui.TerminalSize{Width: 80, Height: 24}, "chaos")
-	story := data.StoryByID("chaos")
-	layers := 0
-	for _, stack := range story.Stacks {
-		layers += len(stack.PRs)
+	freight := frameOf(makeUI(tui.TerminalSize{Width: 80, Height: 24}, "freight"))
+	if !strings.Contains(freight, "org/reponame  •  1 stacks / 20 layers") {
+		t.Fatalf("freight counts:\n%s", freight)
 	}
-	want := fmt.Sprintf("org/reponame  •  %d stacks / %d layers", len(story.Stacks), layers)
-	frame := frameOf(chaos)
-	if !strings.Contains(frame, want) {
-		t.Fatalf("chaos counts: want %q\n%s", want, frame)
-	}
-	if strings.Contains(frame, "1 stacks / 20 layers") {
-		t.Fatalf("chaos must not show the freight-only count:\n%s", frame)
-	}
-	if len(story.Stacks) != 300 {
-		t.Fatalf("chaos fixture should be 300 stacks, got %d", len(story.Stacks))
+	if strings.Contains(freight, "3 stacks / 8 layers") {
+		t.Fatalf("freight must not show the mixed count:\n%s", freight)
 	}
 }
 
@@ -186,7 +176,7 @@ func TestKeyboardAndHoverRevealTheSameInspector(t *testing.T) {
 		t.Fatalf("keyboard selection glyph:\n%s", keyboard)
 	}
 
-	first := data.FixtureStories[0].Stacks[0]
+	first := data.Stories()[0].Stacks[0]
 	point := tui.GetBallPoint(size, 0, 1, len(first.PRs))
 	hovered, _ := makeUI(size, "mixed").Update(mouseMove(point.X, point.Y))
 	hover := frameOf(hovered.(tui.Model))
@@ -220,7 +210,7 @@ func TestCompactCardAndHomeEnd(t *testing.T) {
 
 func TestBallHitCellsSelect(t *testing.T) {
 	size := tui.TerminalSize{Width: 80, Height: 24}
-	first := data.FixtureStories[0].Stacks[0]
+	first := data.Stories()[0].Stacks[0]
 	point := tui.GetBallPoint(size, 0, 1, len(first.PRs))
 	m, _ := makeUI(size, "mixed").Update(mousePress(point.X+1, point.Y))
 	frame := frameOf(m.(tui.Model))
@@ -629,7 +619,7 @@ func TestListColumnsHaveGutters(t *testing.T) {
 
 func TestHoverFillsBallAndShowsInspector(t *testing.T) {
 	size := tui.TerminalSize{Width: 80, Height: 24}
-	first := data.FixtureStories[0].Stacks[0]
+	first := data.Stories()[0].Stacks[0]
 	point := tui.GetBallPoint(size, 0, 1, len(first.PRs))
 	m, _ := makeUI(size, "mixed").Update(mouseMove(point.X, point.Y))
 	frame := frameOf(m.(tui.Model))

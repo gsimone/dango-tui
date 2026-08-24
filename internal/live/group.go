@@ -2,15 +2,11 @@ package live
 
 import (
 	"fmt"
-	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/gsimone/dango-tui/internal/domain"
 )
-
-var graphiteItem = regexp.MustCompile(`(?m)^\s*(?:[-*]|\d+\.)\s+#(\d+)`)
 
 // GroupStacks turns repo PRs into stacks. Order of evidence:
 // GitHub native stack ids, Graphite body lists, then base-branch chains.
@@ -161,15 +157,49 @@ func graphiteNumbers(body string) []int {
 	}
 	seen := map[int]bool{}
 	var out []int
-	for _, match := range graphiteItem.FindAllStringSubmatch(body, -1) {
-		n, err := strconv.Atoi(match[1])
-		if err != nil || n <= 0 || seen[n] {
+	for _, line := range strings.Split(body, "\n") {
+		s := strings.TrimSpace(line)
+		if s == "" {
+			continue
+		}
+		if s[0] == '-' || s[0] == '*' {
+			s = strings.TrimSpace(s[1:])
+		} else {
+			i := 0
+			for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+				i++
+			}
+			if i == 0 || i >= len(s) || s[i] != '.' {
+				continue
+			}
+			s = strings.TrimSpace(s[i+1:])
+		}
+		if !strings.HasPrefix(s, "#") {
+			continue
+		}
+		n, ok := parseLeadingInt(s[1:])
+		if !ok || n <= 0 || seen[n] {
 			continue
 		}
 		seen[n] = true
 		out = append(out, n)
 	}
 	return out
+}
+
+func parseLeadingInt(s string) (int, bool) {
+	i := 0
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	if i == 0 {
+		return 0, false
+	}
+	n := 0
+	for j := 0; j < i; j++ {
+		n = n*10 + int(s[j]-'0')
+	}
+	return n, true
 }
 
 func chainStacks(prs []RemotePR, defaultBranch string) []domain.Stack {

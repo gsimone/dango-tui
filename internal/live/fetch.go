@@ -78,14 +78,36 @@ func fetchWith(run runner, repo string) ([]domain.Stack, error) {
 	if repo == "" || !strings.Contains(repo, "/") {
 		return nil, fmt.Errorf("pass --repo owner/name")
 	}
+	type call struct {
+		raw []byte
+		err error
+	}
+	var view, list, stacks call
+	done := make(chan string, 3)
+	go func() {
+		view.raw, view.err = run("repo", "view", repo, "--json", "nameWithOwner,defaultBranchRef")
+		done <- "view"
+	}()
+	go func() {
+		list.raw, list.err = run("pr", "list", "--repo", repo, "--state", "open", "--limit", "200",
+			"--json", strings.Join(prListFields, ","))
+		done <- "list"
+	}()
+	go func() {
+		stacks.raw, stacks.err = run("api", "repos/"+repo+"/stacks")
+		done <- "stacks"
+	}()
+	for i := 0; i < 3; i++ {
+		<-done
+	}
+
+	if isGHNotFound(view.err) || isGHNotFound(list.err) || isGHNotFound(stacks.err) {
+		return nil, ErrGHMissing
+	}
 	defaultBranch := "main"
-	if raw, err := run("repo", "view", repo, "--json", "nameWithOwner,defaultBranchRef"); err != nil {
-		if isGHNotFound(err) {
-			return nil, ErrGHMissing
-		}
-	} else {
+	if view.err == nil {
 		var viewed ghRepo
-		if json.Unmarshal(raw, &viewed) == nil {
+		if json.Unmarshal(view.raw, &viewed) == nil {
 			if viewed.DefaultBranchRef.Name != "" {
 				defaultBranch = viewed.DefaultBranchRef.Name
 			}
@@ -94,14 +116,11 @@ func fetchWith(run runner, repo string) ([]domain.Stack, error) {
 			}
 		}
 	}
-
-	raw, err := run("pr", "list", "--repo", repo, "--state", "open", "--limit", "200",
-		"--json", strings.Join(prListFields, ","))
-	if err != nil {
-		return nil, mapGHError(err, "", []string{"pr", "list"})
+	if list.err != nil {
+		return nil, mapGHError(list.err, "", []string{"pr", "list"})
 	}
 	var listed []ghPR
-	if err := json.Unmarshal(raw, &listed); err != nil {
+	if err := json.Unmarshal(list.raw, &listed); err != nil {
 		return nil, fmt.Errorf("decode gh pr list: %w", err)
 	}
 
@@ -110,14 +129,16 @@ func fetchWith(run runner, repo string) ([]domain.Stack, error) {
 		prs = append(prs, item.toRemote())
 	}
 	applyAuthorColors(prs)
-	applyNativeStacks(run, repo, prs)
+	if stacks.err == nil {
+		applyNativeStacks(stacks.raw, prs)
+	}
 	return GroupStacks(prs, defaultBranch), nil
 }
 
 var prListFields = []string{
 	"number", "title", "url", "headRefName", "baseRefName", "headRefOid",
 	"author", "labels", "isDraft", "state", "mergeable", "mergeStateStatus",
-	"reviewDecision", "latestReviews", "reviews",
+	"reviewDecision", "latestReviews",
 	"additions", "deletions", "changedFiles", "body", "statusCheckRollup",
 }
 
@@ -163,7 +184,6 @@ type ghPR struct {
 	MergeStateStatus  string     `json:"mergeStateStatus"`
 	ReviewDecision    string     `json:"reviewDecision"`
 	LatestReviews     []ghReview `json:"latestReviews"`
-	Reviews           []ghReview `json:"reviews"`
 	Additions         int        `json:"additions"`
 	Deletions         int        `json:"deletions"`
 	ChangedFiles      int        `json:"changedFiles"`
@@ -172,7 +192,7 @@ type ghPR struct {
 }
 
 func (p ghPR) toRemote() RemotePR {
-	approvals, changes := reviewCounts(p.LatestReviews, p.Reviews)
+	approvals, changes := reviewCounts(p.LatestReviews)
 	ciState, failed, pending, total := rollupCI(p.StatusCheckRollup)
 	queue := ""
 	if strings.EqualFold(p.MergeStateStatus, "QUEUED") {
@@ -214,12 +234,8 @@ func (p ghPR) toRemote() RemotePR {
 	}
 }
 
-func reviewCounts(latest, all []ghReview) (approvals int, changes bool) {
-	seen := latest
-	if len(seen) == 0 {
-		seen = all
-	}
-	for _, rev := range seen {
+func reviewCounts(latest []ghReview) (approvals int, changes bool) {
+	for _, rev := range latest {
 		switch strings.ToUpper(rev.State) {
 		case "APPROVED":
 			approvals++
@@ -276,9 +292,22 @@ type ghNativeStack struct {
 	} `json:"entries"`
 }
 
-func applyNativeStacks(run runner, repo string, prs []RemotePR) {
-	raw, err := run("api", "repos/"+repo+"/stacks")
-	if err != nil || len(bytes.TrimSpace(raw)) == 0 {
+func applyAuthorColors(prs []RemotePR) {
+	cache := map[string]string{}
+	for i := range prs {
+		login := prs[i].Author
+		if hex, ok := cache[login]; ok {
+			prs[i].AuthorColor = hex
+			continue
+		}
+		hex := domain.LoginColor(login)
+		cache[login] = hex
+		prs[i].AuthorColor = hex
+	}
+}
+
+func applyNativeStacks(raw []byte, prs []RemotePR) {
+	if len(bytes.TrimSpace(raw)) == 0 {
 		return
 	}
 	var stacks []ghNativeStack

@@ -243,18 +243,19 @@ func TestDescribeSkipsStub(t *testing.T) {
 	}
 }
 
-func TestLoadStoresSummariesOnFixtureStacks(t *testing.T) {
+func TestApplyStoresSummariesOnFixtureStacks(t *testing.T) {
 	stack := data.StoryByID("mixed").Stacks[0]
-	if stack.Summary == "" {
-		t.Fatal("load should store a summary on the stack")
+	got := summary.Apply([]domain.Stack{stack}, summary.FromLayers{})
+	if len(got) != 1 || got[0].Summary == "" {
+		t.Fatal("Apply should store a summary on the stack")
 	}
-	if strings.Contains(stack.Summary, "\n") {
-		t.Fatalf("stored summary must be one line: %q", stack.Summary)
+	if strings.Contains(got[0].Summary, "\n") {
+		t.Fatalf("stored summary must be one line: %q", got[0].Summary)
 	}
-	if strings.Contains(stack.Summary, "A deterministic fixture stack") {
-		t.Fatalf("stored stub: %s", stack.Summary)
+	if strings.Contains(got[0].Summary, "A deterministic fixture stack") {
+		t.Fatalf("stored stub: %s", got[0].Summary)
 	}
-	if !strings.Contains(strings.ToLower(stack.Summary), "split auth scope") {
-		t.Fatalf("stored summary: %s", stack.Summary)
+	if !strings.Contains(strings.ToLower(got[0].Summary), "split auth scope") {
+		t.Fatalf("stored summary: %s", got[0].Summary)
 	}
 }

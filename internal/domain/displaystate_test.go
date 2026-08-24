@@ -77,7 +77,7 @@ func TestGetDisplayStatePrecedence(t *testing.T) {
 }
 
 func TestDisplayStateHeadlines(t *testing.T) {
-	for _, story := range data.FixtureStories {
+	for _, story := range data.Stories() {
 		for _, stack := range story.Stacks {
 			for _, pr := range stack.PRs {
 				label := strings.ToLower(domain.DisplayStateLabel[domain.GetDisplayState(pr)])
