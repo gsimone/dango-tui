@@ -19,6 +19,9 @@ type Options struct {
 	Width    int
 	Height   int
 	Fetch    live.FetchFunc
+	// EnrichCI fills CI after first paint. Nil is a no-op unless Fetch
+	// is also nil (production then uses live.EnrichCI).
+	EnrichCI live.EnrichCIFunc
 	// Summarize is the provider hook. Nil uses summary.Run. Tests inject a fake.
 	Summarize summary.Func
 }
@@ -45,6 +48,7 @@ type Model struct {
 	fetchErr    error
 	fetchedAt   time.Time
 	fetch       live.FetchFunc
+	enrichCI    live.EnrichCIFunc
 	summarize   summary.Func
 	splashKeep  string
 }
@@ -64,10 +68,14 @@ func New(opts Options) Model {
 		LogoDots:  domain.ProcessLogoDots(),
 		Provider:  opts.Provider,
 		fetch:     opts.Fetch,
+		enrichCI:  opts.EnrichCI,
 		summarize: opts.Summarize,
 	}
 	if m.fetch == nil {
 		m.fetch = live.Fetch
+		if m.enrichCI == nil {
+			m.enrichCI = live.EnrichCI
+		}
 	}
 	if m.summarize == nil {
 		m.summarize = summary.Run
@@ -209,6 +217,26 @@ func (m Model) startSummaries() tea.Cmd {
 		return nil
 	}
 	return tea.Batch(cmds...)
+}
+
+func (m Model) startCIEnrich() tea.Cmd {
+	if !m.Live || m.enrichCI == nil {
+		return nil
+	}
+	token := m.fetchSeq
+	repo := m.Repo
+	snap := append([]domain.Stack(nil), m.stacks...)
+	for i := range snap {
+		snap[i].PRs = append([]domain.PullRequest(nil), snap[i].PRs...)
+	}
+	enrich := m.enrichCI
+	return func() tea.Msg {
+		return ciDoneMsg{token: token, stacks: enrich(repo, snap)}
+	}
+}
+
+func (m Model) afterFetch() tea.Cmd {
+	return tea.Batch(m.startSummaries(), m.startCIEnrich())
 }
 
 func (m Model) fetchBadge() string {

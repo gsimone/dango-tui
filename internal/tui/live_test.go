@@ -1,6 +1,7 @@
 package tui_test
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -291,7 +292,7 @@ func TestLiveRepoHeaderAndTwoColumns(t *testing.T) {
 	if !strings.Contains(frame, "gsimone/leva-2  •  1 stacks / 2 layers") {
 		t.Fatalf("live header:\n%s", frame)
 	}
-	if !strings.Contains(frame, "○") {
+	if !strings.Contains(frame, "●-●") {
 		t.Fatalf("list:\n%s", frame)
 	}
 	if !strings.Contains(strings.Join(listRows(frame), "\n"), "base") {
@@ -392,6 +393,98 @@ func TestProviderWritesStackTitleOnly(t *testing.T) {
 	}
 }
 
+func TestLivePabloBallsOn120(t *testing.T) {
+	m := tui.New(tui.Options{
+		Repo:   "archetype-labs/app",
+		Width:  120,
+		Height: 30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			pr := func(n int, title string, extra domain.PullRequest) domain.PullRequest {
+				extra.Number = n
+				extra.Title = title
+				return extra
+			}
+			return []domain.Stack{
+				{ID: "open", PRs: []domain.PullRequest{pr(1, "open base", domain.PullRequest{}), pr(2, "open head", domain.PullRequest{})}},
+				{ID: "draft", PRs: []domain.PullRequest{pr(3, "draft base", domain.PullRequest{Draft: true}), pr(4, "draft head", domain.PullRequest{})}},
+				{ID: "fail", PRs: []domain.PullRequest{pr(5, "fail base", domain.PullRequest{CI: domain.CISummary{State: domain.CIFailure, Failed: 1}}), pr(6, "fail head", domain.PullRequest{})}},
+				{ID: "review", PRs: []domain.PullRequest{pr(7, "review base", domain.PullRequest{ReviewDecision: "CHANGES_REQUESTED"}), pr(8, "review head", domain.PullRequest{})}},
+				{ID: "ok", PRs: []domain.PullRequest{pr(9, "approved base", domain.PullRequest{ReviewDecision: "APPROVED"}), pr(10, "approved head", domain.PullRequest{})}},
+				{ID: "landed", PRs: []domain.PullRequest{pr(11, "merged base", domain.PullRequest{Merged: true}), pr(12, "merged head", domain.PullRequest{})}},
+				{ID: "queue", PRs: []domain.PullRequest{pr(13, "queued base", domain.PullRequest{MergeQueueState: "QUEUED"}), pr(14, "queued head", domain.PullRequest{})}},
+			}, nil
+		},
+	})
+	m, _ = applyLiveFetch(m)
+	frame := frameOf(m)
+	t.Logf("120 Pablo balls:\n%s", frame)
+	list := strings.Join(listRows(frame), "\n")
+	if !strings.Contains(list, "▶") {
+		t.Fatalf("selected stack is ▶:\n%s", frame)
+	}
+	if !strings.Contains(list, "◉-●") {
+		t.Fatalf("active layer is ◉ on the chain:\n%s", frame)
+	}
+	if !strings.Contains(list, "◎-●") {
+		t.Fatalf("needs-review stays ◎:\n%s", frame)
+	}
+	if !strings.Contains(list, "◌-●") {
+		t.Fatalf("queued is ◌:\n%s", frame)
+	}
+	if !strings.Contains(list, "○-●") {
+		t.Fatalf("draft is ○:\n%s", frame)
+	}
+	if strings.Count(list, "◎") < 1 || strings.Count(list, "◉") < 1 {
+		t.Fatalf("review and active must both show:\n%s", frame)
+	}
+	if strings.Contains(list, "▸") {
+		t.Fatalf("selected marker is ▶, not ▸:\n%s", frame)
+	}
+	rr, rg, rb, _ := domain.ParseRGB(domain.Color("surfaceRaised"))
+	if strings.Contains(m.View(), fmt.Sprintf("48;2;%d;%d;%d", rr, rg, rb)) {
+		t.Fatalf("selected row must not wash:\n%s", frame)
+	}
+}
+
+func TestLiveCIEnrichPaintsFailAfterList(t *testing.T) {
+	m := tui.New(tui.Options{
+		Repo:   "archetype-labs/app",
+		Width:  120,
+		Height: 30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{{
+				ID: "s",
+				PRs: []domain.PullRequest{
+					{Number: 1, Title: "base layer"},
+					{Number: 2, Title: "head layer"},
+				},
+			}}, nil
+		},
+		EnrichCI: func(repo string, stacks []domain.Stack) []domain.Stack {
+			if repo != "archetype-labs/app" {
+				t.Fatalf("repo %q", repo)
+			}
+			stacks[0].PRs[0].CI = domain.CISummary{State: domain.CIFailure, Failed: 1, Total: 2}
+			return stacks
+		},
+	})
+	m, extra := applyLiveFetch(m)
+	first := frameOf(m)
+	if domain.GetDisplayState(m.Stacks()[0].PRs[0]) == domain.StateCIFailure {
+		t.Fatal("first paint must not wait on checks")
+	}
+	m = applyLiveCmds(m, extra)
+	if domain.GetDisplayState(m.Stacks()[0].PRs[0]) != domain.StateCIFailure {
+		t.Fatalf("enrich must paint fail: %+v", m.Stacks()[0].PRs[0])
+	}
+	if !strings.Contains(frameOf(m), "CI failing") {
+		t.Fatalf("inspector after enrich:\n%s", frameOf(m))
+	}
+	if strings.Contains(first, "statusCheckRollup") {
+		t.Fatal("first list must stay off rollup")
+	}
+}
+
 func TestLiveFillsDescriptionWithoutProvider(t *testing.T) {
 	title := "LEV-182: Bound hosts to the session so undo does not wedge"
 	m := tui.New(tui.Options{
@@ -483,7 +576,7 @@ func listRows(frame string) []string {
 		if idx := strings.Index(line, "│"); idx >= 0 {
 			part = line[:idx]
 		}
-		if strings.Contains(part, "▸") || strings.Contains(part, "·") {
+		if strings.Contains(part, "▶") || strings.Contains(part, "▸") || strings.Contains(part, "·") {
 			out = append(out, part)
 		}
 	}

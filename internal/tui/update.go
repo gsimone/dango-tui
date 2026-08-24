@@ -28,6 +28,11 @@ type summaryDoneMsg struct {
 	description string
 }
 
+type ciDoneMsg struct {
+	token  int
+	stacks []domain.Stack
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -62,7 +67,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.stacks = live.KeepRealStacks(live.StampGhNames(msg.stacks))
 				m.cacheState = data.CacheCurrent
 				m.clamp()
-				return m, m.startSummaries()
+				return m, m.afterFetch()
 			}
 		} else if msg.file || m.File {
 			m.Fetched = "last fetched 2 mins ago"
@@ -84,6 +89,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case summaryDoneMsg:
 		m.applySummary(msg)
+		return m, nil
+	case ciDoneMsg:
+		if msg.token != m.fetchSeq {
+			return m, nil
+		}
+		m.stacks = live.ApplyCI(m.stacks, msg.stacks)
 		return m, nil
 	case openResultMsg:
 		if strings.HasPrefix(m.State.Feedback, "Opening ") {

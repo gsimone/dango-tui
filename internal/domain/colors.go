@@ -103,7 +103,7 @@ var LogoTokens = []string{
 	"logoRed", "logoOrange", "logoYellow", "logoGreen", "logoBlue", "logoPurple", "logoPink",
 }
 
-// ChromeHex locks the field, selected row, type, and connectors to the mark.
+// ChromeHex locks the field, type, and connectors to the mark.
 // Type is paper or meta. Status words keep their OKLCH hues.
 var ChromeHex = map[string]string{
 	"surface":       "#14120f",

@@ -5,15 +5,9 @@ import (
 	"strings"
 )
 
-// GetDisplayState resolves the single status that earns a PR's ball color and
-// inspector headline. The order is product policy, not a rendering detail.
+// GetDisplayState resolves the single status that earns a PR's ball.
+// Worst state wins: CI fail > needs review > the rest.
 func GetDisplayState(pr PullRequest) PrDisplayState {
-	if pr.Merged {
-		return StateMerged
-	}
-	if pr.Draft {
-		return StateDraft
-	}
 	if pr.CI.State == CIFailure || pr.CI.Failed > 0 {
 		return StateCIFailure
 	}
@@ -25,10 +19,16 @@ func GetDisplayState(pr PullRequest) PrDisplayState {
 		return StateReviewBlocked
 	}
 
+	if pr.Merged {
+		return StateMerged
+	}
+	if pr.Draft {
+		return StateDraft
+	}
 	if pr.MergeQueueState != "" && pr.MergeQueueState != "NONE" {
 		return StateQueued
 	}
-	if pr.ReviewDecision == "APPROVED" && pr.CI.State == CISuccess {
+	if pr.ReviewDecision == "APPROVED" {
 		return StateReady
 	}
 	return StateOpen
@@ -38,9 +38,9 @@ var DisplayStateLabel = map[PrDisplayState]string{
 	StateMerged:        "merged",
 	StateDraft:         "draft",
 	StateCIFailure:     "CI failing",
-	StateReviewBlocked: "review / merge blocked",
+	StateReviewBlocked: "needs your review",
 	StateQueued:        "merge queued",
-	StateReady:         "ready to merge",
+	StateReady:         "approved",
 	StateOpen:          "open / pending",
 }
 
@@ -102,8 +102,28 @@ func StateColorToken(state PrDisplayState) string {
 	case StateCIFailure:
 		return "ciFailure"
 	case StateReviewBlocked:
-		return "reviewBlocked"
+		return "warning"
+	case StateDraft:
+		return "meta"
+	case StateOpen:
+		return "paper"
 	default:
 		return string(state)
+	}
+}
+
+// BallGlyph is the one mark for that state. The active layer is a
+// fisheye (◉) painted by the list — same ink, different shape. Review
+// stays ◎. No logo rainbow.
+func BallGlyph(state PrDisplayState) rune {
+	switch state {
+	case StateDraft:
+		return '○'
+	case StateReviewBlocked:
+		return '◎'
+	case StateQueued:
+		return '◌'
+	default:
+		return '●'
 	}
 }

@@ -374,7 +374,7 @@ func listNames(frame string) []string {
 		if idx := strings.Index(line, "│"); idx >= 0 {
 			part = line[:idx]
 		}
-		if strings.Contains(part, "▸") || strings.Contains(part, "·") {
+		if strings.Contains(part, "▶") || strings.Contains(part, "▸") || strings.Contains(part, "·") {
 			out = append(out, part)
 		}
 	}
@@ -389,6 +389,26 @@ func TestStatusWordsKeepStatusColor(t *testing.T) {
 	composer := New(Options{StoryID: "mixed", Width: 120, Height: 30}).Stacks()[1]
 	if got := stackHealthColor(composer); got != domain.Color("queued") {
 		t.Fatalf("composer head should be queued, got %s", got)
+	}
+}
+
+func TestActiveLayerIsFisheyeNotNewInk(t *testing.T) {
+	review := domain.PullRequest{ReviewDecision: "CHANGES_REQUESTED"}
+	if got := layerBallGlyph(review, false); got != '◎' {
+		t.Fatalf("review resting glyph %q", string(got))
+	}
+	if got := layerBallGlyph(review, true); got != '◉' {
+		t.Fatalf("active review is ◉, not %q", string(got))
+	}
+	if layerBallInk(review) != domain.Color("warning") {
+		t.Fatalf("active keeps review ink, got %s", layerBallInk(review))
+	}
+	open := domain.PullRequest{}
+	if got := layerBallGlyph(open, true); got != '◉' {
+		t.Fatalf("active open is ◉, not %q", string(got))
+	}
+	if layerBallInk(open) != domain.Color("paper") {
+		t.Fatalf("active open keeps paper ink, got %s", layerBallInk(open))
 	}
 }
 
@@ -414,11 +434,13 @@ func TestInspectorStatusInkMatchesBall(t *testing.T) {
 		pr    domain.PullRequest
 		token string
 	}{
-		{name: "draft", pr: domain.PullRequest{Draft: true}, token: "draft"},
+		{name: "draft", pr: domain.PullRequest{Draft: true}, token: "meta"},
 		{name: "merged", pr: domain.PullRequest{Merged: true}, token: "merged"},
-		{name: "blocked", pr: domain.PullRequest{ReviewDecision: "CHANGES_REQUESTED"}, token: "reviewBlocked"},
-		{name: "open", pr: domain.PullRequest{}, token: "open"},
+		{name: "blocked", pr: domain.PullRequest{ReviewDecision: "CHANGES_REQUESTED"}, token: "warning"},
+		{name: "open", pr: domain.PullRequest{}, token: "paper"},
 		{name: "queued", pr: domain.PullRequest{MergeQueueState: "QUEUED"}, token: "queued"},
+		{name: "approved", pr: domain.PullRequest{ReviewDecision: "APPROVED"}, token: "ready"},
+		{name: "fail", pr: domain.PullRequest{CI: domain.CISummary{State: domain.CIFailure, Failed: 1}}, token: "ciFailure"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -485,7 +507,7 @@ func TestInspectorStatusInkIsValueOnly(t *testing.T) {
 	}
 
 	blocked := New(Options{StoryID: "changes-requested", Width: 120, Height: 30}).Stacks()[0].PRs[0]
-	if got := inspectorStatusColor(blocked); got != domain.Color("reviewBlocked") {
+	if got := inspectorStatusColor(blocked); got != domain.Color("warning") {
 		t.Fatalf("blocked status value %s", got)
 	}
 	merged := auth.PRs[0]
@@ -528,8 +550,8 @@ func TestDotCopiesFetchError(t *testing.T) {
 	}
 	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(".")})
 	m = next.(Model)
-	if !strings.Contains(copied, err502.Error()) || !strings.Contains(copied, sha) {
-		t.Fatalf("dot copies the error plus SHA, got %q", copied)
+	if !strings.Contains(copied, err502.Error()) || !strings.Contains(copied, shortSHA(sha)) {
+		t.Fatalf("dot copies the error plus short SHA, got %q", copied)
 	}
 	if cmd == nil {
 		t.Fatal("copy toast should clear")

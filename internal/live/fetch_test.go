@@ -128,14 +128,14 @@ func TestFetchMapsStateColorTokens(t *testing.T) {
 		ci    domain.CIState
 	}
 	cases := []row{
-		{name: "draft", extra: `"isDraft":true,"state":"OPEN"`, token: "draft", ci: domain.CIUnknown},
+		{name: "draft", extra: `"isDraft":true,"state":"OPEN"`, token: "meta", ci: domain.CIUnknown},
 		{name: "merged", extra: `"isDraft":false,"state":"MERGED"`, token: "merged", ci: domain.CIUnknown},
-		{name: "blocked-conflict", extra: `"isDraft":false,"state":"OPEN","mergeable":"CONFLICTING"`, token: "reviewBlocked", ci: domain.CIUnknown},
-		{name: "blocked-review", extra: `"isDraft":false,"state":"OPEN","reviewDecision":"CHANGES_REQUESTED"`, token: "reviewBlocked", ci: domain.CIUnknown},
+		{name: "blocked-conflict", extra: `"isDraft":false,"state":"OPEN","mergeable":"CONFLICTING"`, token: "warning", ci: domain.CIUnknown},
+		{name: "blocked-review", extra: `"isDraft":false,"state":"OPEN","reviewDecision":"CHANGES_REQUESTED"`, token: "warning", ci: domain.CIUnknown},
 		{name: "queued", extra: `"isDraft":false,"state":"OPEN","mergeStateStatus":"QUEUED"`, token: "queued", ci: domain.CIUnknown},
-		{name: "open-slim", extra: `"isDraft":false,"state":"OPEN"`, token: "open", ci: domain.CIUnknown},
-		{name: "draft-slim", extra: `"isDraft":true,"state":"OPEN"`, token: "draft", ci: domain.CIUnknown},
-		{name: "approved-no-ci", extra: `"isDraft":false,"state":"OPEN","mergeable":"MERGEABLE","reviewDecision":"APPROVED","mergeStateStatus":"CLEAN"`, token: "open", ci: domain.CIUnknown},
+		{name: "open-slim", extra: `"isDraft":false,"state":"OPEN"`, token: "paper", ci: domain.CIUnknown},
+		{name: "draft-slim", extra: `"isDraft":true,"state":"OPEN"`, token: "meta", ci: domain.CIUnknown},
+		{name: "approved-no-ci", extra: `"isDraft":false,"state":"OPEN","mergeable":"MERGEABLE","reviewDecision":"APPROVED","mergeStateStatus":"CLEAN"`, token: "ready", ci: domain.CIUnknown},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

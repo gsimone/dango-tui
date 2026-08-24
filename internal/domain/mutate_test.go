@@ -16,17 +16,17 @@ func TestMutantDisplayStateOrder(t *testing.T) {
 		Draft:  true,
 		CI:     domain.CISummary{State: domain.CIFailure, Failed: 1},
 	}
-	if got := domain.GetDisplayState(mergedDraft); got != domain.StateMerged {
-		t.Fatalf("real merged+draft+ci: %s", got)
+	if got := domain.GetDisplayState(mergedDraft); got != domain.StateCIFailure {
+		t.Fatalf("real fail-wins: %s", got)
 	}
-	draftFirst := func(pr domain.PullRequest) domain.PrDisplayState {
-		if pr.Draft {
-			return domain.StateDraft
+	mergedFirst := func(pr domain.PullRequest) domain.PrDisplayState {
+		if pr.Merged {
+			return domain.StateMerged
 		}
 		return domain.GetDisplayState(pr)
 	}
-	if draftFirst(mergedDraft) == domain.StateMerged {
-		t.Fatal("draft-first mutant must not survive")
+	if mergedFirst(mergedDraft) == domain.StateCIFailure {
+		t.Fatal("merged-before-fail mutant must not survive")
 	}
 
 	ciBeatsReview := domain.PullRequest{

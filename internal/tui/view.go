@@ -174,6 +174,17 @@ func layerBallInk(pr domain.PullRequest) string {
 	return domain.Color(domain.StateColorToken(domain.GetDisplayState(pr)))
 }
 
+// Active layer is a shape, not new ink. Review stays ◎; the layer
+// you are on is ◉. Status color does not change.
+const activeBallGlyph = '◉'
+
+func layerBallGlyph(pr domain.PullRequest, active bool) rune {
+	if active {
+		return activeBallGlyph
+	}
+	return domain.BallGlyph(domain.GetDisplayState(pr))
+}
+
 func (m Model) paintRule(c *canvas, top, bottom int, meta, surface string) {
 	x := RuleX(m.Width)
 	for y := top; y < bottom; y++ {
@@ -284,7 +295,7 @@ func paintKeyLegend(c *canvas, x, y, maxWidth int, legend, paper, meta, bg strin
 	}
 }
 
-func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised, paper, meta, stick string) {
+func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, _, paper, meta, stick string) {
 	stacks := m.Stacks()
 	if len(stacks) == 0 {
 		width := max(1, listWidth)
@@ -318,14 +329,12 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 		selectedStack := i == sel.StackIndex
 		focus := 0
 		if selectedStack {
-			rowBg = raised
 			focus = sel.PRIndex
-			c.fill(PadX, y, listWidth, rowH, rowBg)
 		}
 		cells := ballCells(len(stack.PRs), focus)
 		marker := "· "
 		if selectedStack {
-			marker = "▸ "
+			marker = "▶ "
 		}
 		c.text(PadX, y, marker+lines[0], paper, rowBg, nameW)
 		for li := 1; li < rowH && y+li < bottom; li++ {
@@ -345,20 +354,12 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 				x += 2
 			} else if n <= 5 {
 				pr := stack.PRs[cell.pr]
-				fg := layerBallInk(pr)
-				selected := selectedStack && cell.pr == sel.PRIndex
-				glyph := '○'
-				if selected {
-					glyph = '●'
-				}
-				c.set(x, y, glyph, fg, rowBg)
+				active := selectedStack && cell.pr == focus
+				c.set(x, y, layerBallGlyph(pr, active), layerBallInk(pr), rowBg)
 				x++
 			} else {
 				pr := stack.PRs[cell.pr]
 				fg := layerBallInk(pr)
-				if selectedStack && cell.pr == sel.PRIndex {
-					fg = paper
-				}
 				label := "(" + itoa(cell.pr+1) + ")"
 				c.text(x, y, label, fg, rowBg, displayWidth(label))
 				x += displayWidth(label)
