@@ -87,7 +87,7 @@ func New(opts Options) Model {
 
 	m.Live = true
 	m.Repo = repo
-	m.loadLive()
+	m.Fetching = true
 	return m
 }
 
@@ -128,22 +128,35 @@ func (m *Model) loadFixture(storyID string) {
 	m.cacheState = story.CacheState
 }
 
-func (m *Model) loadLive() {
-	stacks, err := m.fetch(m.Repo)
-	m.fetchedAt = time.Now()
-	m.Fetched = relativeFetched(m.fetchedAt, m.fetchedAt)
-	if err != nil {
-		m.fetchErr = err
-		m.cacheState = data.CacheError
-		return
+func (m Model) Init() tea.Cmd {
+	if m.Live {
+		return m.fetchCmd(m.fetchSeq)
 	}
-	m.fetchErr = nil
-	m.stacks = live.StampGhNames(stacks)
-	m.cacheState = data.CacheCurrent
+	return m.startSummaries()
 }
 
-func (m Model) Init() tea.Cmd {
-	return m.startSummaries()
+func (m Model) fetchCmd(token int) tea.Cmd {
+	repo := m.Repo
+	fetch := m.fetch
+	return func() tea.Msg {
+		stacks, err := fetch(repo)
+		return fetchDoneMsg{stacks: stacks, err: err, at: time.Now(), token: token, live: true}
+	}
+}
+
+func (m Model) waiting() bool {
+	return m.Live && m.fetchErr == nil && len(m.stacks) == 0 && m.fetchedAt.IsZero()
+}
+
+func (m Model) showError() bool {
+	return m.fetchErr != nil && len(m.stacks) == 0
+}
+
+func (m Model) errorCopyText() string {
+	if m.fetchErr == nil {
+		return ""
+	}
+	return strings.TrimSpace(m.fetchErr.Error())
 }
 
 func (m Model) startSummaries() tea.Cmd {
@@ -263,6 +276,16 @@ func (m *Model) copyBranch(pr domain.PullRequest) tea.Cmd {
 	return m.clearFeedback()
 }
 
+func (m *Model) copyError() tea.Cmd {
+	text := m.errorCopyText()
+	if text == "" {
+		return nil
+	}
+	copyText(text)
+	m.State.Feedback = "copied"
+	return m.clearFeedback()
+}
+
 func (m *Model) clearFeedback() tea.Cmd {
 	m.feedbackSeq++
 	token := m.feedbackSeq
@@ -289,6 +312,9 @@ func (m Model) sourceState() string {
 func (m Model) emptyMessage() string {
 	if strings.TrimSpace(m.State.Query) != "" {
 		return "No match."
+	}
+	if m.waiting() {
+		return ""
 	}
 	if m.fetchErr != nil {
 		return m.fetchErr.Error()

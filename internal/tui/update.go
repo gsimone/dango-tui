@@ -144,6 +144,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.open(pr)
 		}
 	case ".":
+		if m.showError() {
+			return m, m.copyError()
+		}
 		if pr, ok := m.SelectedPR(); ok {
 			return m, m.copyBranch(pr)
 		}
@@ -159,6 +162,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "?":
 		m.Help = !m.Help
 	case "esc", "escape":
+		if m.waiting() || m.showError() {
+			m.quitting = true
+			return m, tea.Quit
+		}
 		if m.Help {
 			m.Help = false
 		} else {
@@ -212,12 +219,7 @@ func (m Model) refresh() (tea.Model, tea.Cmd) {
 	}
 	m.fetchSeq++
 	token := m.fetchSeq
-	repo := m.Repo
-	fetch := m.fetch
-	return m, func() tea.Msg {
-		stacks, err := fetch(repo)
-		return fetchDoneMsg{stacks: stacks, err: err, at: time.Now(), token: token, live: true}
-	}
+	return m, m.fetchCmd(token)
 }
 
 func (m Model) handleMouse(msg tea.MouseMsg) Model {

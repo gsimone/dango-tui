@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/gsimone/dango-tui/internal/domain"
 )
@@ -14,12 +15,20 @@ import (
 // ErrGHMissing is the loud failure when the gh CLI is not on PATH.
 var ErrGHMissing = errors.New("dango: gh CLI not found. Install https://cli.github.com and retry.")
 
+// ErrGHAuth is a 401/403 (or gh auth) failure, not a flaky 502.
+var ErrGHAuth = errors.New("dango: GitHub authentication or permission error. Check gh auth status.")
+
 // FetchFunc loads stacks for owner/name. Tests inject a fake; production uses Fetch.
 type FetchFunc func(repo string) ([]domain.Stack, error)
 
 type runner func(args ...string) ([]byte, error)
 
 var lookPath = exec.LookPath
+
+// sleep is the backoff wait. Tests replace this.
+var sleep = time.Sleep
+
+const retryLimit = 4
 
 func requireGH() error {
 	if _, err := lookPath("gh"); err != nil {
@@ -50,12 +59,108 @@ func mapGHError(err error, stderr string, args []string) error {
 	if msg == "" {
 		msg = err.Error()
 	}
+	if isAuthMessage(msg) {
+		return fmt.Errorf("%w %s", ErrGHAuth, msg)
+	}
 	n := min(len(args), 4)
 	return fmt.Errorf("gh %s: %s", strings.Join(args[:n], " "), msg)
 }
 
+func classifyGHError(err error, args []string) error {
+	if err == nil {
+		return nil
+	}
+	if isGHNotFound(err) {
+		return ErrGHMissing
+	}
+	if errors.Is(err, ErrGHAuth) || isAuthGH(err) {
+		if errors.Is(err, ErrGHAuth) {
+			return err
+		}
+		return fmt.Errorf("%w %s", ErrGHAuth, strings.TrimSpace(err.Error()))
+	}
+	if strings.HasPrefix(err.Error(), "gh ") {
+		return err
+	}
+	return mapGHError(err, "", args)
+}
+
+func isAuthGH(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, ErrGHAuth) {
+		return true
+	}
+	return isAuthMessage(err.Error())
+}
+
+func isAuthMessage(msg string) bool {
+	s := strings.ToLower(msg)
+	if isTransientMessage(s) {
+		return false
+	}
+	for _, needle := range []string{
+		"http 401", "http 403", " 401:", " 403:",
+		"unauthorized", "forbidden", "bad credentials",
+		"auth login", "authentication", "permission denied",
+		"resource not accessible", "must be authenticated",
+	} {
+		if strings.Contains(s, needle) {
+			return true
+		}
+	}
+	return false
+}
+
+func isTransientGH(err error) bool {
+	if err == nil || isGHNotFound(err) || isAuthGH(err) {
+		return false
+	}
+	return isTransientMessage(err.Error())
+}
+
+func isTransientMessage(msg string) bool {
+	s := strings.ToLower(msg)
+	return strings.Contains(s, "502") ||
+		strings.Contains(s, "503") ||
+		strings.Contains(s, "bad gateway") ||
+		strings.Contains(s, "service unavailable")
+}
+
+func retryBackoff(attempt int) time.Duration {
+	return 150 * time.Millisecond * time.Duration(1<<attempt)
+}
+
+func withRetry(run runner) runner {
+	return func(args ...string) ([]byte, error) {
+		var last error
+		var lastOut []byte
+		for attempt := 0; attempt < retryLimit; attempt++ {
+			out, err := run(args...)
+			if err == nil {
+				return out, nil
+			}
+			if !isTransientGH(err) {
+				return nil, err
+			}
+			last, lastOut = err, out
+			if attempt+1 < retryLimit {
+				sleep(retryBackoff(attempt))
+			}
+		}
+		return lastOut, last
+	}
+}
+
+// ghCommand builds `gh` so the process environment is inherited.
+// Do not set cmd.Env — that would drop GH_TOKEN / GH_HOST.
+func ghCommand(args ...string) *exec.Cmd {
+	return exec.Command("gh", args...)
+}
+
 func runGH(args ...string) ([]byte, error) {
-	cmd := exec.Command("gh", args...)
+	cmd := ghCommand(args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -78,36 +183,29 @@ func fetchWith(run runner, repo string) ([]domain.Stack, error) {
 	if repo == "" || !strings.Contains(repo, "/") {
 		return nil, fmt.Errorf("pass --repo owner/name")
 	}
-	type call struct {
-		raw []byte
-		err error
-	}
-	var view, list, stacks call
-	done := make(chan string, 3)
-	go func() {
-		view.raw, view.err = run("repo", "view", repo, "--json", "nameWithOwner,defaultBranchRef")
-		done <- "view"
-	}()
-	go func() {
-		list.raw, list.err = run("pr", "list", "--repo", repo, "--state", "open", "--limit", "200",
-			"--json", strings.Join(prListFields, ","))
-		done <- "list"
-	}()
-	go func() {
-		stacks.raw, stacks.err = run("api", "repos/"+repo+"/stacks")
-		done <- "stacks"
-	}()
-	for i := 0; i < 3; i++ {
-		<-done
-	}
+	run = withRetry(run)
 
-	if isGHNotFound(view.err) || isGHNotFound(list.err) || isGHNotFound(stacks.err) {
+	viewRaw, viewErr := run("repo", "view", repo, "--json", "nameWithOwner,defaultBranchRef")
+	if isGHNotFound(viewErr) {
 		return nil, ErrGHMissing
 	}
+	if isAuthGH(viewErr) {
+		return nil, classifyGHError(viewErr, []string{"repo", "view"})
+	}
+
+	listRaw, listErr := run("pr", "list", "--repo", repo, "--state", "open", "--limit", "200",
+		"--json", strings.Join(prListFields, ","))
+	if isGHNotFound(listErr) {
+		return nil, ErrGHMissing
+	}
+	if listErr != nil {
+		return nil, classifyGHError(listErr, []string{"pr", "list"})
+	}
+
 	defaultBranch := "main"
-	if view.err == nil {
+	if viewErr == nil {
 		var viewed ghRepo
-		if json.Unmarshal(view.raw, &viewed) == nil {
+		if json.Unmarshal(viewRaw, &viewed) == nil {
 			if viewed.DefaultBranchRef.Name != "" {
 				defaultBranch = viewed.DefaultBranchRef.Name
 			}
@@ -116,11 +214,8 @@ func fetchWith(run runner, repo string) ([]domain.Stack, error) {
 			}
 		}
 	}
-	if list.err != nil {
-		return nil, mapGHError(list.err, "", []string{"pr", "list"})
-	}
 	var listed []ghPR
-	if err := json.Unmarshal(list.raw, &listed); err != nil {
+	if err := json.Unmarshal(listRaw, &listed); err != nil {
 		return nil, fmt.Errorf("decode gh pr list: %w", err)
 	}
 
@@ -129,17 +224,14 @@ func fetchWith(run runner, repo string) ([]domain.Stack, error) {
 		prs = append(prs, item.toRemote())
 	}
 	applyAuthorColors(prs)
-	if stacks.err == nil {
-		applyNativeStacks(stacks.raw, prs)
-	}
 	return GroupStacks(prs, defaultBranch), nil
 }
 
+// prListFields is the first-paint grouping set. No body, no check rollup,
+// no review history — those 502 GraphQL on a normal private repo.
 var prListFields = []string{
-	"number", "title", "url", "headRefName", "baseRefName", "headRefOid",
-	"author", "labels", "isDraft", "state", "mergeable", "mergeStateStatus",
-	"reviewDecision", "latestReviews",
-	"additions", "deletions", "changedFiles", "body", "statusCheckRollup",
+	"number", "title", "url", "headRefName", "baseRefName",
+	"author", "labels", "isDraft", "state",
 }
 
 type ghRepo struct {

@@ -15,6 +15,15 @@ import (
 	"github.com/gsimone/dango-tui/internal/tui"
 )
 
+func applyLiveFetch(m tui.Model) (tui.Model, tea.Cmd) {
+	cmd := m.Init()
+	if cmd == nil {
+		return m, nil
+	}
+	next, extra := m.Update(cmd())
+	return next.(tui.Model), extra
+}
+
 func testdataJSON(t *testing.T) string {
 	t.Helper()
 	dir, err := os.Getwd()
@@ -76,8 +85,15 @@ func TestNoFlagDetectsOriginAndFetches(t *testing.T) {
 			}}, nil
 		},
 	})
-	if fetches != 1 || !m.Live || m.File {
-		t.Fatalf("no-flag detect is live gh, fetches=%d live=%v file=%v", fetches, m.Live, m.File)
+	if fetches != 0 || !m.Live || m.File {
+		t.Fatalf("constructor must not fetch, fetches=%d live=%v file=%v", fetches, m.Live, m.File)
+	}
+	if !strings.Contains(frameOf(m), "fetching owner/from-detect") {
+		t.Fatalf("first frame before gh:\n%s", frameOf(m))
+	}
+	m, _ = applyLiveFetch(m)
+	if fetches != 1 {
+		t.Fatalf("Init fetches once, got %d", fetches)
 	}
 	if !strings.Contains(frameOf(m), "detected layer") || !strings.Contains(frameOf(m), "owner/from-detect") {
 		t.Fatalf("live frame:\n%s", frameOf(m))
@@ -131,6 +147,13 @@ func TestLiveMissingGHShowsErrorNotFixtures(t *testing.T) {
 			return nil, live.ErrGHMissing
 		},
 	})
+	if fetches != 0 {
+		t.Fatalf("constructor must not fetch, got %d", fetches)
+	}
+	if !strings.Contains(frameOf(m), "fetching owner/name") {
+		t.Fatalf("first frame before gh:\n%s", frameOf(m))
+	}
+	m, _ = applyLiveFetch(m)
 	if fetches != 1 {
 		t.Fatalf("live --repo must fetch, got %d", fetches)
 	}
@@ -217,6 +240,13 @@ func TestLiveRepoHeaderAndTwoColumns(t *testing.T) {
 			}}, nil
 		},
 	})
+	if fetches != 0 {
+		t.Fatalf("constructor must not fetch, got %d", fetches)
+	}
+	if !strings.Contains(frameOf(m), "●-●-● DANGO") || !strings.Contains(frameOf(m), "fetching gsimone/leva-2") {
+		t.Fatalf("first frame before gh:\n%s", frameOf(m))
+	}
+	m, _ = applyLiveFetch(m)
 	if fetches != 1 {
 		t.Fatalf("initial fetch %d", fetches)
 	}
@@ -286,7 +316,8 @@ func TestProviderWritesStackTitleOnly(t *testing.T) {
 	if with.Provider.Name != "codex" || with.Provider.Model != "luna.medium" {
 		t.Fatalf("store provider, got %+v", with.Provider)
 	}
-	if with.Init() == nil {
+	with, sumCmd := applyLiveFetch(with)
+	if sumCmd == nil {
 		t.Fatal("provider must kick summary cmds after first paint")
 	}
 	first := listRows(frameOf(with))
@@ -306,7 +337,8 @@ func TestProviderWritesStackTitleOnly(t *testing.T) {
 		Height: 24,
 		Fetch:  fetch,
 	})
-	if plain.Init() != nil {
+	plain, extra := applyLiveFetch(plain)
+	if extra != nil {
 		t.Fatal("missing provider must not start summaries")
 	}
 	bare := strings.Join(listRows(frameOf(plain)), "\n")
@@ -468,8 +500,12 @@ func TestRepoOwnerNameStillFetches(t *testing.T) {
 			}}, nil
 		},
 	})
-	if fetches != 1 || !m.Live || m.File {
-		t.Fatalf("owner/name is live gh, fetches=%d live=%v file=%v", fetches, m.Live, m.File)
+	if fetches != 0 || !m.Live || m.File {
+		t.Fatalf("constructor must not fetch, fetches=%d live=%v file=%v", fetches, m.Live, m.File)
+	}
+	m, _ = applyLiveFetch(m)
+	if fetches != 1 {
+		t.Fatalf("owner/name is live gh, fetches=%d", fetches)
 	}
 	if !strings.Contains(frameOf(m), "live layer") {
 		t.Fatalf("live list:\n%s", frameOf(m))

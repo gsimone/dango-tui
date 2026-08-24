@@ -51,14 +51,16 @@ func (m Model) renderFrame(width, height int) string {
 		mainBottom = mainTop
 	}
 
-	if StackedInspector(width) {
+	if m.showError() {
+		m.paintError(c, width, mainTop, mainBottom, surface, raised, paper)
+	} else if StackedInspector(width) {
 		m.paintList(c, listWidth, mainTop, mainBottom, surface, raised, paper, meta, stick)
 	} else {
 		m.paintList(c, listWidth, mainTop, mainBottom, surface, raised, paper, meta, stick)
 		m.paintRule(c, mainTop, mainBottom, meta, surface)
 		m.paintInspectorPane(c, insp, surface, paper, meta)
 	}
-	if m.Help {
+	if m.Help && !m.showError() {
 		m.paintHelp(c, mainTop, mainBottom, raised, paper, meta)
 	}
 
@@ -72,10 +74,36 @@ func (m Model) renderFrame(width, height int) string {
 	} else if m.State.Feedback != "" {
 		c.text(footX, footerY, m.State.Feedback, meta, surface, footW)
 	} else {
-		paintKeyLegend(c, footX, footerY, footW, m.footer(), paper, meta, surface)
+		legend := m.footer()
+		if m.showError() {
+			legend = errorFooter()
+		}
+		paintKeyLegend(c, footX, footerY, footW, legend, paper, meta, surface)
 	}
 
 	return c.render()
+}
+
+func (m Model) paintError(c *canvas, width, top, bottom int, surface, raised, paper string) {
+	maxW := innerWidth(width)
+	y := top
+	if y >= bottom {
+		return
+	}
+	c.text(PadX, y, "Could not fetch pull requests.", paper, surface, maxW)
+	y += 2
+	for _, line := range wrapWords(m.errorCopyText(), maxW) {
+		if y >= bottom {
+			break
+		}
+		c.fill(PadX, y, maxW, 1, raised)
+		c.text(PadX, y, line, paper, raised, maxW)
+		y++
+	}
+}
+
+func errorFooter() string {
+	return "[ . ] copy  [ q ]"
 }
 
 func (m Model) paintBrand(c *canvas, width int, surface, paper, meta, stick string) {
@@ -93,7 +121,11 @@ func (m Model) paintBrand(c *canvas, width int, surface, paper, meta, stick stri
 		x += 2
 	}
 	c.text(PadX+6, PadTop, "DANGO", paper, surface, displayWidth("DANGO"))
-	c.text(PadX, PadTop+1, repoCountLine(m.repoLabel(), m.stackCount(), m.layerCount()), meta, surface, innerWidth(width))
+	line2 := repoCountLine(m.repoLabel(), m.stackCount(), m.layerCount())
+	if m.waiting() {
+		line2 = "fetching " + m.repoLabel()
+	}
+	c.text(PadX, PadTop+1, line2, meta, surface, innerWidth(width))
 }
 
 func repoCountLine(repo string, stacks, layers int) string {
