@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"strconv"
 	"strings"
 	"time"
 
@@ -31,8 +30,6 @@ var sleep = time.Sleep
 
 // retryLimit is first try + one quick retry. Four GraphQL retries were the stall.
 const retryLimit = 2
-
-var pullsPerPage = 100
 
 func requireGH() error {
 	if _, err := lookPath("gh"); err != nil {
@@ -190,10 +187,19 @@ func fetchWith(run runner, repo string) ([]domain.Stack, error) {
 	}
 	run = withRetry(run)
 
-	listed, err := listOpenPulls(run, repo)
-	if err != nil {
-		return nil, err
+	raw, err := run("pr", "list", "--repo", repo, "--state", "open", "--limit", "100",
+		"--json", strings.Join(prListFields, ","))
+	if isGHNotFound(err) {
+		return nil, ErrGHMissing
 	}
+	if err != nil {
+		return nil, classifyGHError(err, []string{"pr", "list"})
+	}
+	var listed []ghPR
+	if decErr := json.Unmarshal(raw, &listed); decErr != nil {
+		return nil, fmt.Errorf("decode gh pr list: %w", decErr)
+	}
+
 	prs := make([]RemotePR, 0, len(listed))
 	for _, item := range listed {
 		prs = append(prs, item.toRemote())
@@ -202,77 +208,11 @@ func fetchWith(run runner, repo string) ([]domain.Stack, error) {
 	return GroupStacks(prs, "main"), nil
 }
 
-func pullsAPIPath(repo string, page int) string {
-	path := "repos/" + repo + "/pulls?state=open&per_page=" + strconv.Itoa(pullsPerPage)
-	if page > 1 {
-		path += "&page=" + strconv.Itoa(page)
-	}
-	return path
-}
-
-func listOpenPulls(run runner, repo string) ([]restPR, error) {
-	var all []restPR
-	for page := 1; ; page++ {
-		path := pullsAPIPath(repo, page)
-		raw, err := run("api", path)
-		if isGHNotFound(err) {
-			return nil, ErrGHMissing
-		}
-		if err != nil {
-			return nil, classifyGHError(err, []string{"api", path})
-		}
-		var listed []restPR
-		if decErr := json.Unmarshal(raw, &listed); decErr != nil {
-			return nil, fmt.Errorf("decode gh api %s: %w", path, decErr)
-		}
-		all = append(all, listed...)
-		if len(listed) < pullsPerPage {
-			return all, nil
-		}
-		if page > 50 {
-			return all, fmt.Errorf("too many pull pages")
-		}
-	}
-}
-
-type restPR struct {
-	Number  int    `json:"number"`
-	Title   string `json:"title"`
-	HTMLURL string `json:"html_url"`
-	Head    struct {
-		Ref string `json:"ref"`
-	} `json:"head"`
-	Base struct {
-		Ref string `json:"ref"`
-	} `json:"base"`
-	User struct {
-		Login string `json:"login"`
-	} `json:"user"`
-	Labels []ghLabel `json:"labels"`
-	Draft  bool      `json:"draft"`
-	State  string    `json:"state"`
-}
-
-func (p restPR) toRemote() RemotePR {
-	labels := make([]domain.Label, 0, len(p.Labels))
-	for _, lab := range p.Labels {
-		name := strings.TrimSpace(lab.Name)
-		if name == "" {
-			continue
-		}
-		labels = append(labels, domain.Label{Name: name, Color: domain.NormalizeHex(lab.Color)})
-	}
-	return RemotePR{
-		Number:      p.Number,
-		Title:       p.Title,
-		URL:         p.HTMLURL,
-		HeadRefName: p.Head.Ref,
-		BaseRefName: p.Base.Ref,
-		Author:      p.User.Login,
-		Labels:      labels,
-		Draft:       p.Draft,
-		Merged:      false,
-	}
+// prListFields is the first-paint grouping set. No body, no check rollup,
+// no review history — those 502 GraphQL on a normal private repo.
+var prListFields = []string{
+	"number", "title", "url", "headRefName", "baseRefName",
+	"author", "labels", "isDraft", "state",
 }
 
 type ghRepo struct {

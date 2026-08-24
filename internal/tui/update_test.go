@@ -427,7 +427,7 @@ func TestInspectorStatusInkIsValueOnly(t *testing.T) {
 }
 
 func TestDotCopiesFetchError(t *testing.T) {
-	err502 := errors.New("gh api repos/owner/private/pulls?state=open&per_page=100: HTTP 502: Bad Gateway (https://api.github.com/repos/owner/private/pulls)")
+	err404 := errors.New("gh pr list --repo owner/private --state open --limit 100: gh: Not Found (HTTP 404)")
 	var copied string
 	old := copyText
 	copyText = func(s string) { copied = s }
@@ -437,7 +437,7 @@ func TestDotCopiesFetchError(t *testing.T) {
 		Repo:   "owner/private",
 		Width:  80,
 		Height: 24,
-		Fetch:  func(string) ([]domain.Stack, error) { return nil, err502 },
+		Fetch:  func(string) ([]domain.Stack, error) { return nil, err404 },
 	})
 	if !strings.Contains(stripANSI(m.View()), "fetching owner/private") {
 		t.Fatalf("first frame before gh:\n%s", stripANSI(m.View()))
@@ -447,15 +447,15 @@ func TestDotCopiesFetchError(t *testing.T) {
 	if !strings.Contains(frame, "Could not fetch pull requests.") {
 		t.Fatalf("paper sentence:\n%s", frame)
 	}
-	if !strings.Contains(frame, "502") {
-		t.Fatalf("error block missing 502:\n%s", frame)
+	if !strings.Contains(frame, "404") {
+		t.Fatalf("error block missing 404:\n%s", frame)
 	}
-	if !strings.Contains(frame, "owner/private/pulls") {
-		t.Fatalf("error block missing REST url:\n%s", frame)
+	if !strings.Contains(frame, "pr list") || !strings.Contains(frame, "owner/private") {
+		t.Fatalf("error block missing pr list path:\n%s", frame)
 	}
 	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(".")})
 	m = next.(Model)
-	if copied != err502.Error() {
+	if copied != err404.Error() {
 		t.Fatalf("dot copies the error, got %q", copied)
 	}
 	if cmd == nil {
