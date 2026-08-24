@@ -105,6 +105,6 @@ CI on pull requests and pushes to `main` publishes coverage (total %) and real g
 - Header: `●-●-● DANGO`, then `archetype-labs/app  •  N stacks / M layers` (fixtures use `org/reponame`)
 - 2-column side pad, 1 blank row at the top
 - Stack list on the left; one `│` rule; inspector pane on the right
-- Inspector facts include status (status ink on the value only), labels in their GitHub hex, and author (`●` + login)
+- Inspector facts include status (status ink on the value only), labels in their GitHub hex, and author (`●` + login). `●` is the dominant color from that user's GitHub avatar, never a picture. Fetch failure uses a stable login ink.
 - Selected row `#242018` with paper ink; everything else meta
 - **40×20 / 80×24 / 120×30 / 160×40** — column stays on-screen

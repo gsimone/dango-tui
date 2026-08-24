@@ -27,7 +27,7 @@ type PullRequest struct {
 	URL              string
 	Branch           string
 	Author           string
-	AuthorColor      string // ● ink; stable login color
+	AuthorColor      string // ● ink; avatar dominant color, else LoginColor
 	AvatarURL        string
 	Labels           []Label
 	Draft            bool

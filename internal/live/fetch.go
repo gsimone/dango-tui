@@ -400,20 +400,6 @@ type ghNativeStack struct {
 	} `json:"entries"`
 }
 
-func applyAuthorColors(prs []RemotePR) {
-	cache := map[string]string{}
-	for i := range prs {
-		login := prs[i].Author
-		if hex, ok := cache[login]; ok {
-			prs[i].AuthorColor = hex
-			continue
-		}
-		hex := domain.LoginColor(login)
-		cache[login] = hex
-		prs[i].AuthorColor = hex
-	}
-}
-
 func applyNativeStacks(raw []byte, prs []RemotePR) {
 	if len(bytes.TrimSpace(raw)) == 0 {
 		return

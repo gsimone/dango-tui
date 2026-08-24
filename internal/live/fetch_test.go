@@ -98,6 +98,11 @@ func TestPRListFieldsAreSlim(t *testing.T) {
 		t.Fatalf("first list fields %v, want %v", prListFields, want)
 	}
 	joined := strings.Join(prListFields, ",")
+	// gh pr list --json has no avatarUrl field (author is login/id/name).
+	// Avatar bytes come from author.avatarUrl when present, else github.com/{login}.png.
+	if strings.Contains(joined, "avatarUrl") {
+		t.Fatalf("gh pr list --json rejects avatarUrl: %v", prListFields)
+	}
 	for _, banned := range []string{
 		"body", "statusCheckRollup", "latestReviews", "reviews",
 		"mergeStateStatus", "mergeable", "additions", "deletions",
@@ -141,6 +146,16 @@ func TestFetchWithGroupsChainFromGhJSON(t *testing.T) {
 }
 
 func TestFetchMapsLabelsAndAuthor(t *testing.T) {
+	pngBytes := solidPNG(t, 200, 40, 40)
+	old := getURL
+	getURL = func(raw string) ([]byte, error) {
+		if raw != "https://avatars.example/gm.png" {
+			t.Fatalf("avatar url %q", raw)
+		}
+		return pngBytes, nil
+	}
+	t.Cleanup(func() { getURL = old })
+
 	run := ghOK(map[string][]byte{
 		"pr list": []byte(`[
 			{"number":1,"title":"bottom","url":"https://github.com/owner/demo/pull/1","headRefName":"a","baseRefName":"main","author":{"login":"gm","avatarUrl":"https://avatars.example/gm.png"},"labels":[{"name":"bug","color":"d73a4a"},{"name":"auth","color":"0e8a16"}],"isDraft":false,"state":"OPEN"}
@@ -157,11 +172,11 @@ func TestFetchMapsLabelsAndAuthor(t *testing.T) {
 	if pr.Labels[1].Name != "auth" || pr.Labels[1].Color != "#0e8a16" {
 		t.Fatalf("labels %+v", pr.Labels)
 	}
-	if pr.Author != "gm" {
+	if pr.Author != "gm" || pr.AvatarURL != "https://avatars.example/gm.png" {
 		t.Fatalf("author %+v", pr)
 	}
-	if pr.AuthorColor != domain.LoginColor("gm") {
-		t.Fatalf("author ● is login-stable, got %q want %q", pr.AuthorColor, domain.LoginColor("gm"))
+	if pr.AuthorColor != "#c82828" {
+		t.Fatalf("sampled avatar color %q", pr.AuthorColor)
 	}
 	if domain.IsLowChromaHex(pr.AuthorColor) {
 		t.Fatalf("author ● must stay chromatic: %s", pr.AuthorColor)
