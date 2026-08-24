@@ -1,0 +1,147 @@
+# CI publishes coverage and real mutation numbers. It does not gate on them yet.
+#
+# Fail the job: `go test ./...` if any test fails.
+# Do not fail the job: coverage % or gremlins score (thresholds stay unset / 0).
+# Tomorrow: add a min coverage % and/or gremlins --threshold-efficacy / --threshold-mcover.
+#
+# Mutation is gremlins (https://github.com/go-gremlins/gremlins), not `make mutate`.
+# `make mutate` only runs hand-written Mutant_* tests; those are ordinary tests.
+#
+# Scope: ./internal (app, cli, data, domain, live, summary, tui).
+# testdata/ is not a Go package. cmd/dango has no tests (all mutants would be
+# NOT COVERED), so it is skipped. Full ./internal finishes in a few minutes.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Test and coverage
+        # This step fails the job if tests fail. Coverage is report-only:
+        # no minimum percentage is enforced.
+        run: |
+          set -euo pipefail
+          go test -coverprofile=coverage.out ./...
+          echo "===== go tool cover -func ====="
+          go tool cover -func=coverage.out
+          total="$(go tool cover -func=coverage.out | awk '/^total:/ {print $NF}')"
+          echo "Coverage total: ${total}"
+          {
+            echo "## Coverage"
+            echo
+            echo "Total: **${total}**"
+            echo
+            echo "Report-only. No coverage threshold is enforced yet (gate tomorrow)."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload coverage.out
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage.out
+          path: coverage.out
+          if-no-files-found: warn
+
+      - name: Binary size
+        run: |
+          set -euo pipefail
+          make build
+          bytes="$(wc -c < dango)"
+          echo "dango stripped binary: ${bytes} bytes"
+          echo >> "${GITHUB_STEP_SUMMARY}"
+          echo "Stripped \`dango\` binary: **${bytes}** bytes (\`make build\` / \`wc -c\`)." >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Install gremlins
+        env:
+          GREMLINS_VERSION: v0.6.0
+        run: |
+          set -euo pipefail
+          ver="${GREMLINS_VERSION#v}"
+          curl -fsSL -o /tmp/gremlins.tar.gz \
+            "https://github.com/go-gremlins/gremlins/releases/download/${GREMLINS_VERSION}/gremlins_${ver}_linux_amd64.tar.gz"
+          tar -xzf /tmp/gremlins.tar.gz -C /tmp gremlins
+          sudo install -m 0755 /tmp/gremlins /usr/local/bin/gremlins
+          gremlins -v
+
+      - name: Mutation (report only)
+        # Real mutator. Thresholds stay 0 so a low score does not fail the job.
+        run: make mutation
+
+      - name: Publish mutation numbers
+        if: always()
+        run: |
+          python3 <<'PY'
+          import json
+          import os
+          import sys
+          from collections import Counter
+
+          path = "gremlins.json"
+          if not os.path.exists(path):
+              print("gremlins.json missing; mutation did not produce a report", file=sys.stderr)
+              sys.exit(0)
+
+          data = json.load(open(path))
+          statuses = Counter()
+          for entry in data.get("files", []):
+              for mutant in entry.get("mutations", []):
+                  statuses[mutant.get("status", "?")] += 1
+
+          killed = int(data.get("mutants_killed", statuses.get("KILLED", 0)))
+          survived = int(data.get("mutants_lived", statuses.get("LIVED", 0)))
+          timed_out = int(statuses.get("TIMED OUT", 0))
+          not_covered = int(data.get("mutants_not_covered", statuses.get("NOT COVERED", 0)))
+          score = float(data.get("test_efficacy", 0))
+          mcover = float(data.get("mutations_coverage", 0))
+
+          lines = [
+              f"Killed: {killed}",
+              f"Survived (lived): {survived}",
+              f"Timed out: {timed_out}",
+              f"Not covered: {not_covered}",
+              f"Score (test efficacy): {score:.2f}%",
+              f"Mutator coverage: {mcover:.2f}%",
+          ]
+          print("\n".join(lines))
+
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary:
+              with open(summary, "a", encoding="utf-8") as fh:
+                  fh.write("## Mutation (gremlins)\n\n")
+                  fh.write("| Metric | Value |\n| --- | --- |\n")
+                  fh.write(f"| Killed | {killed} |\n")
+                  fh.write(f"| Survived (lived) | {survived} |\n")
+                  fh.write(f"| Timed out | {timed_out} |\n")
+                  fh.write(f"| Not covered | {not_covered} |\n")
+                  fh.write(f"| Score (test efficacy) | {score:.2f}% |\n")
+                  fh.write(f"| Mutator coverage | {mcover:.2f}% |\n\n")
+                  fh.write("Real mutator: gremlins v0.6.0 on `./internal`. ")
+                  fh.write("Report-only. No mutation-score threshold is enforced yet (gate tomorrow).\n")
+          PY
+
+      - name: Upload gremlins report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gremlins-report
+          path: gremlins.json
+          if-no-files-found: warn
