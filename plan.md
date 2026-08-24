@@ -4,12 +4,12 @@ Shipping order (Cassandra / Gianmarco). Do not skip ahead.
 
 ## Now (this PR)
 
-Size / speed. #6 shipped (live titles/descriptions, two-line inspector slot, no `Covers` wrapper).
+Size / speed + mutation. Main is usable (#6 shipped: titles/descriptions, two-line inspector slot, no `Covers`).
 
-- Smaller stripped linux binary (`CGO_ENABLED=0 -ldflags='-s -w'`).
-- Faster first paint / live `gh` fetch / TUI render.
+- Smaller stripped linux/amd64 binary (`CGO_ENABLED=0 -ldflags='-s -w'`).
+- Faster first paint / live `gh` fetch / TUI render. No UI/chrome work.
+- Deterministic mutation tests only. No `math/rand`, no flake, no shuffled fixtures. `make mutate` runs `-run Mutant`.
 - Product path unchanged: no-flag = cwd remote, `--repo owner/name` live `gh`, `--repo *.json` file, `.` copy, two-line inspector, no Covers, no picker.
-- Tests 100% deterministic. No `math/rand`, no shuffled fixtures, no chaos story.
 
 ## Later
 
