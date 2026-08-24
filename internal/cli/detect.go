@@ -96,10 +96,10 @@ func configRoots(dir string) []string {
 		seen[path] = true
 		roots = append(roots, path)
 	}
+	add(dir)
 	if found, err := GitRoot(dir); err == nil && found != "" {
 		add(found)
 	}
-	add(dir)
 	return roots
 }
 
@@ -147,8 +147,9 @@ func parseDangoConfig(name string, raw []byte) (Config, error) {
 	}
 }
 
-// ReadDangoConfig loads provider config from dango.json, dango.yml, or
-// dango.yaml. Looks in the git root, then cwd. Missing file is empty.
+// ReadDangoConfig loads provider / describe from dango.json, dango.yml,
+// or dango.yaml. Looks in dir (launch cwd), then the git root of dir.
+// --repo owner/name is not a remote file. Missing file is empty.
 func ReadDangoConfig(dir string) (Config, error) {
 	for _, root := range configRoots(dir) {
 		for _, name := range configNames {
@@ -181,10 +182,11 @@ func ReadDangoJSON(dir string) (Config, error) {
 var ErrNoRemote = fmt.Errorf("no GitHub remote in this directory. Pass --repo archetype-labs/app or --repo testdata/test.json")
 
 // Resolve fills repo from the cwd git remote when --repo is omitted, and
-// provider / describe from dango.json / dango.yml / dango.yaml when those
-// flags are omitted. --repo, --provider, and --describe win.
-// Story is a test/dev hook and skips detect. Detect failure is ErrNoRemote
-// — never a silent examples fallback.
+// provider / describe from dango.json / dango.yml / dango.yaml in dir
+// (then that dir's git root). --repo owner/name is live gh, not a
+// remote config file. --provider overrides the title hook. describe
+// comes only from the config file. Story is a test/dev hook and skips
+// detect. Detect failure is ErrNoRemote — never a silent examples fallback.
 func Resolve(args Args, dir string) (Args, error) {
 	if args.Story != "" {
 		return args, nil
@@ -196,14 +198,13 @@ func Resolve(args Args, dir string) (Args, error) {
 		}
 		args.Repo = repo
 	}
+	args.Describe = ""
 	cfg, err := ReadDangoConfig(dir)
 	if err == nil {
 		if args.Provider.Empty() && cfg.Provider != "" {
 			args.Provider = ParseProvider(cfg.Provider)
 		}
-		if args.Describe == "" && cfg.Describe != "" {
-			args.Describe = cfg.Describe
-		}
+		args.Describe = cfg.Describe
 	}
 	return args, nil
 }

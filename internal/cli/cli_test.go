@@ -95,16 +95,10 @@ func TestParseRepoDoesNotRequireProvider(t *testing.T) {
 	}
 }
 
-func TestParseDescribeFlag(t *testing.T) {
-	args, err := Parse([]string{"--repo", "archetype-labs/app", "--describe", "bin/describe-stack"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if args.Describe != "bin/describe-stack" {
-		t.Fatalf("describe %q", args.Describe)
-	}
-	if args.Provider.Raw != "" {
-		t.Fatalf("describe is not provider: %+v", args.Provider)
+func TestParseRejectsDescribeFlag(t *testing.T) {
+	_, err := Parse([]string{"--repo", "archetype-labs/app", "--describe", "bin/describe-stack"})
+	if err == nil {
+		t.Fatal("--describe is not product chrome")
 	}
 }
 
@@ -144,6 +138,9 @@ func TestParseHelp(t *testing.T) {
 	if !strings.Contains(got, "stack dump") {
 		t.Fatalf("json dump path:\n%s", got)
 	}
+	if strings.Contains(got, "--describe") {
+		t.Fatalf("must not advertise --describe:\n%s", got)
+	}
 }
 
 func TestUsageDoesNotAdvertiseStory(t *testing.T) {
@@ -162,5 +159,8 @@ func TestUsageDoesNotAdvertiseStory(t *testing.T) {
 	}
 	if strings.Contains(got, ",") && strings.Contains(got, "copy") {
 		t.Fatalf("usage must not sell comma copy:\n%s", got)
+	}
+	if strings.Contains(got, "--describe") {
+		t.Fatalf("usage must not sell --describe:\n%s", got)
 	}
 }

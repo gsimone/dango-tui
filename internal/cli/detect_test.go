@@ -165,25 +165,25 @@ func TestReadDangoJSONWinsOverYAML(t *testing.T) {
 	}
 }
 
-func TestReadDangoConfigPrefersRepoOverCwd(t *testing.T) {
+func TestReadDangoConfigPrefersCwdOverGitRoot(t *testing.T) {
 	dir := t.TempDir()
 	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")
-	if err := os.WriteFile(filepath.Join(dir, "dango.yml"), []byte("provider: from-repo\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "dango.yml"), []byte("provider: from-root\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	child := filepath.Join(dir, "pkg")
 	if err := os.Mkdir(child, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(child, "dango.yaml"), []byte("provider: from-cwd\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(child, "dango.yaml"), []byte("provider: from-cwd\ndescribe: bin/describe-stack\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := ReadDangoConfig(child)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Provider != "from-repo" {
-		t.Fatalf("repo file wins over cwd, got %+v", cfg)
+	if cfg.Provider != "from-cwd" || cfg.Describe != "bin/describe-stack" {
+		t.Fatalf("launch dir wins over git root, got %+v", cfg)
 	}
 }
 
@@ -247,19 +247,19 @@ func TestResolveMissingJSONHasNoProvider(t *testing.T) {
 	}
 }
 
-func TestResolveDescribeFromJSONAndFlagWins(t *testing.T) {
+func TestResolveDescribeFromConfigFileOnly(t *testing.T) {
 	dir := t.TempDir()
 	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")
-	if err := os.WriteFile(filepath.Join(dir, "dango.json"), []byte(`{"describe":"scripts/from-json"}`), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "dango.json"), []byte(`{"describe":"bin/from-json"}`), 0644); err != nil {
 		t.Fatal(err)
 	}
 	fromFile := mustResolve(t, Args{}, dir)
-	if fromFile.Describe != "scripts/from-json" {
+	if fromFile.Describe != "bin/from-json" {
 		t.Fatalf("json describe: %q", fromFile.Describe)
 	}
-	fromFlag := mustResolve(t, Args{Describe: "scripts/from-flag"}, dir)
-	if fromFlag.Describe != "scripts/from-flag" {
-		t.Fatalf("--describe wins: %q", fromFlag.Describe)
+	ignored := mustResolve(t, Args{Describe: "bin/from-flag"}, dir)
+	if ignored.Describe != "bin/from-json" {
+		t.Fatalf("describe comes only from the config file: %q", ignored.Describe)
 	}
 }
 

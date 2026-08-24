@@ -45,9 +45,8 @@ func Usage() string {
 		"No GitHub remote: pass --repo archetype-labs/app or --repo testdata/test.json.\n" +
 		"--repo archetype-labs/app fetches via gh. --repo path.json is a stack dump, not live gh.\n" +
 		"dango.json / dango.yml / dango.yaml may set provider and describe.\n" +
-		"Missing config file = no generated title. --provider overrides the title hook.\n" +
-		"--describe / describe names the script that writes inspector lines after first paint.\n" +
-		"No picker.\n"
+		"Missing config file = no generated title. Missing describe = empty inspector pane.\n" +
+		"--provider overrides the title hook. No picker.\n"
 }
 
 func Parse(args []string) (Args, error) {
@@ -61,7 +60,6 @@ func parse(args []string, usage io.Writer) (Args, error) {
 	story := fs.String("story", "", "")
 	repo := fs.String("repo", "", "archetype-labs/app (live gh) or a JSON file of authored stacks")
 	provider := fs.String("provider", "", "stack title summarizer (e.g. name@model); optional, does not block fetch")
-	describe := fs.String("describe", "", "script that writes inspector description lines after first paint")
 	fs.Usage = func() {
 		fmt.Fprint(usage, Usage())
 	}
@@ -73,7 +71,6 @@ func parse(args []string, usage io.Writer) (Args, error) {
 		Frame:    strings.TrimSpace(*frame),
 		Story:    strings.TrimSpace(*story),
 		Provider: ParseProvider(*provider),
-		Describe: strings.TrimSpace(*describe),
 	}
 	if out.Story != "" {
 		return out, nil
