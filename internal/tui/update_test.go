@@ -45,7 +45,7 @@ func TestSummariesAreAsyncAndLandInPlace(t *testing.T) {
 		}}, nil
 	}
 	m := New(Options{
-		Repo:     "owner/name",
+		Repo:     "archetype-labs/app",
 		Provider: summary.ParseProvider("codex@luna.medium"),
 		Width:    80,
 		Height:   24,
@@ -54,7 +54,7 @@ func TestSummariesAreAsyncAndLandInPlace(t *testing.T) {
 	if len(m.stacks) != 0 {
 		t.Fatal("constructor must not wait on gh")
 	}
-	if !strings.Contains(stripANSI(m.View()), "fetching owner/name") {
+	if !strings.Contains(stripANSI(m.View()), "fetching archetype-labs/app") {
 		t.Fatalf("first frame before gh:\n%s", stripANSI(m.View()))
 	}
 	var sumCmd tea.Cmd
@@ -75,7 +75,7 @@ func TestSummariesAreAsyncAndLandInPlace(t *testing.T) {
 	if m.Fetching || strings.Contains(stripANSI(m.View()), "⠋") {
 		t.Fatal("title wait must not be a spinner")
 	}
-	_, extra := applyFetch(New(Options{Repo: "owner/name", Width: 80, Height: 24, Fetch: fetch}))
+	_, extra := applyFetch(New(Options{Repo: "archetype-labs/app", Width: 80, Height: 24, Fetch: fetch}))
 	if extra != nil {
 		t.Fatal("missing provider must not start summaries")
 	}
@@ -427,35 +427,38 @@ func TestInspectorStatusInkIsValueOnly(t *testing.T) {
 }
 
 func TestDotCopiesFetchError(t *testing.T) {
-	err404 := errors.New("gh pr list --repo owner/private --state open --limit 100: gh: Not Found (HTTP 404)")
+	err502 := errors.New("gh pr list --repo archetype-labs/app --state open --limit 100 --json number,title,url,headRefName,baseRefName,author,labels,isDraft,state: HTTP 502: Bad Gateway")
 	var copied string
 	old := copyText
 	copyText = func(s string) { copied = s }
 	t.Cleanup(func() { copyText = old })
 
 	m := New(Options{
-		Repo:   "owner/private",
+		Repo:   "archetype-labs/app",
 		Width:  80,
 		Height: 24,
-		Fetch:  func(string) ([]domain.Stack, error) { return nil, err404 },
+		Fetch:  func(string) ([]domain.Stack, error) { return nil, err502 },
 	})
-	if !strings.Contains(stripANSI(m.View()), "fetching owner/private") {
+	if !strings.Contains(stripANSI(m.View()), "fetching archetype-labs/app") {
 		t.Fatalf("first frame before gh:\n%s", stripANSI(m.View()))
 	}
-	m, _ = applyFetch(m)
+	m, extra := applyFetch(m)
+	if extra != nil {
+		t.Fatal("failed fetch must not quit")
+	}
 	frame := stripANSI(m.View())
-	if !strings.Contains(frame, "Could not fetch pull requests.") {
-		t.Fatalf("paper sentence:\n%s", frame)
+	if strings.Contains(frame, "Could not fetch pull requests.") || strings.Contains(frame, "No open stacks") {
+		t.Fatalf("stay on splash, no empty-list error:\n%s", frame)
 	}
-	if !strings.Contains(frame, "404") {
-		t.Fatalf("error block missing 404:\n%s", frame)
+	if !strings.Contains(frame, "502") {
+		t.Fatalf("loading line becomes the error:\n%s", frame)
 	}
-	if !strings.Contains(frame, "pr list") || !strings.Contains(frame, "owner/private") {
-		t.Fatalf("error block missing pr list path:\n%s", frame)
+	if !strings.Contains(frame, "pr list") || !strings.Contains(frame, "archetype-labs/app") {
+		t.Fatalf("error block missing exact argv:\n%s", frame)
 	}
 	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(".")})
 	m = next.(Model)
-	if copied != err404.Error() {
+	if copied != err502.Error() {
 		t.Fatalf("dot copies the error, got %q", copied)
 	}
 	if cmd == nil {

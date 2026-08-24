@@ -232,7 +232,7 @@ func TestResolveDetectFailureIsLoudError(t *testing.T) {
 		t.Fatalf("failed resolve must not invent a repo, got %q", got.Repo)
 	}
 	msg := err.Error()
-	if !strings.Contains(msg, "--repo owner/name") || !strings.Contains(msg, "--repo testdata/test.json") {
+	if !strings.Contains(msg, "--repo archetype-labs/app") || !strings.Contains(msg, "--repo testdata/test.json") {
 		t.Fatalf("error must name both --repo forms: %v", err)
 	}
 	if strings.Contains(msg, "example") || strings.Contains(msg, "fixture") {

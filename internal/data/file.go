@@ -57,7 +57,7 @@ func IsStackFile(raw string) bool {
 func LoadStacks(path string) (string, []domain.Stack, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
-		return "", nil, fmt.Errorf("pass --repo owner/name or a JSON stack file")
+		return "", nil, fmt.Errorf("pass --repo archetype-labs/app or a JSON stack file")
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {

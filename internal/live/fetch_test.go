@@ -34,10 +34,12 @@ func flagValue(args []string, name string) string {
 }
 
 func TestFetchUsesPRListNotREST(t *testing.T) {
-	var calls []string
+	want := prListArgs("archetype-labs/app")
+	var calls [][]string
 	run := func(args ...string) ([]byte, error) {
+		cp := append([]string(nil), args...)
+		calls = append(calls, cp)
 		joined := strings.Join(args, " ")
-		calls = append(calls, joined)
 		if args[0] == "api" || strings.Contains(joined, "/pulls") {
 			t.Fatalf("must not call gh api …/pulls: %v", args)
 		}
@@ -47,33 +49,43 @@ func TestFetchUsesPRListNotREST(t *testing.T) {
 		if strings.Contains(joined, "stacks") {
 			t.Fatalf("must not call /stacks: %v", args)
 		}
-		if len(args) < 2 || args[0] != "pr" || args[1] != "list" {
-			t.Fatalf("first list must be gh pr list, got %v", args)
+		if len(args) != len(want) {
+			t.Fatalf("exact argv length %d, want %d: %v", len(args), len(want), args)
 		}
-		if flagValue(args, "--repo") != "owner/demo" {
-			t.Fatalf("--repo: %v", args)
-		}
-		if flagValue(args, "--state") != "open" {
-			t.Fatalf("--state: %v", args)
-		}
-		if flagValue(args, "--limit") != "100" {
-			t.Fatalf("--limit: %v", args)
-		}
-		fields := flagValue(args, "--json")
-		if fields == "" {
-			t.Fatalf("missing --json: %v", args)
-		}
-		want := strings.Join(prListFields, ",")
-		if fields != want {
-			t.Fatalf("slim --json %q, want %q", fields, want)
+		for i := range want {
+			if args[i] != want[i] {
+				t.Fatalf("argv[%d]=%q, want %q (full %v)", i, args[i], want[i], args)
+			}
 		}
 		return []byte(`[]`), nil
 	}
-	if _, err := fetchWith(run, "owner/demo"); err != nil {
+	if _, err := fetchWith(run, "archetype-labs/app"); err != nil {
 		t.Fatal(err)
 	}
 	if len(calls) != 1 {
 		t.Fatalf("open is one pr list, got %v", calls)
+	}
+	if FormatGHArgv(LastGHArgv) != FormatGHArgv(want) {
+		t.Fatalf("logged argv %q, want %q", FormatGHArgv(LastGHArgv), FormatGHArgv(want))
+	}
+}
+
+func TestFetchErrorIncludesExactArgv(t *testing.T) {
+	want := FormatGHArgv(prListArgs("archetype-labs/app"))
+	_, err := fetchWith(func(args ...string) ([]byte, error) {
+		return nil, fmt.Errorf("HTTP 502: Bad Gateway")
+	}, "archetype-labs/app")
+	if err == nil {
+		t.Fatal("expected 502")
+	}
+	if !strings.Contains(err.Error(), want) {
+		t.Fatalf("error must print exact argv %q, got %v", want, err)
+	}
+	if !strings.Contains(err.Error(), "--json") || !strings.Contains(err.Error(), "isDraft") {
+		t.Fatalf("do not truncate argv: %v", err)
+	}
+	if strings.Contains(err.Error(), "/pulls") || strings.Contains(err.Error(), "repo view") {
+		t.Fatalf("must stay on pr list: %v", err)
 	}
 }
 
@@ -171,7 +183,7 @@ func TestFetchLookPathMissing(t *testing.T) {
 	lookPath = func(string) (string, error) { return "", exec.ErrNotFound }
 	t.Cleanup(func() { lookPath = old })
 
-	_, err := Fetch("owner/name")
+	_, err := Fetch("archetype-labs/app")
 	if !errors.Is(err, ErrGHMissing) {
 		t.Fatalf("LookPath miss: %v", err)
 	}
@@ -185,7 +197,7 @@ func TestFetchWithMissingBinary(t *testing.T) {
 	_, err := fetchWith(func(args ...string) ([]byte, error) {
 		calls.Add(1)
 		return nil, &exec.Error{Name: "gh", Err: exec.ErrNotFound}
-	}, "owner/name")
+	}, "archetype-labs/app")
 	if calls.Load() == 0 {
 		t.Fatal("injected run must be used")
 	}
@@ -213,7 +225,7 @@ func TestFetchDoesNotCallStacksOrRepoView(t *testing.T) {
 		}
 		return []byte(`[]`), nil
 	}
-	if _, err := fetchWith(run, "owner/demo"); err != nil {
+	if _, err := fetchWith(run, "archetype-labs/app"); err != nil {
 		t.Fatal(err)
 	}
 	if len(calls) != 1 {
@@ -237,7 +249,7 @@ func TestFetchRetries502OnceThenSucceeds(t *testing.T) {
 		}
 		return []byte(`[]`), nil
 	}
-	if _, err := fetchWith(run, "owner/demo"); err != nil {
+	if _, err := fetchWith(run, "archetype-labs/app"); err != nil {
 		t.Fatalf("one 502 retry should succeed: %v", err)
 	}
 	if listCalls.Load() != 2 {
@@ -256,7 +268,7 @@ func TestFetch502ThenErrorScreen(t *testing.T) {
 	_, err := fetchWith(func(args ...string) ([]byte, error) {
 		calls.Add(1)
 		return nil, fmt.Errorf("HTTP 502: Bad Gateway (https://api.github.com/graphql)")
-	}, "owner/demo")
+	}, "archetype-labs/app")
 	if err == nil {
 		t.Fatal("two 502s must fail")
 	}
@@ -279,7 +291,7 @@ func TestFetch503RetriesOnce(t *testing.T) {
 	_, err := fetchWith(func(args ...string) ([]byte, error) {
 		calls.Add(1)
 		return nil, fmt.Errorf("HTTP 503: Service Unavailable")
-	}, "owner/demo")
+	}, "archetype-labs/app")
 	if err == nil {
 		t.Fatal("two 503s must fail")
 	}
@@ -298,8 +310,8 @@ func TestFetch404IsNotRetried(t *testing.T) {
 	var calls atomic.Int32
 	_, err := fetchWith(func(args ...string) ([]byte, error) {
 		calls.Add(1)
-		return nil, fmt.Errorf("gh pr list --repo owner/private --state open --limit 100: gh: Not Found (HTTP 404)")
-	}, "owner/private")
+		return nil, fmt.Errorf("gh pr list --repo archetype-labs/app --state open --limit 100: gh: Not Found (HTTP 404)")
+	}, "archetype-labs/app")
 	if err == nil {
 		t.Fatal("404 must paper")
 	}
@@ -322,7 +334,7 @@ func TestFetchAuthIsNotA502(t *testing.T) {
 	_, err := fetchWith(func(args ...string) ([]byte, error) {
 		calls.Add(1)
 		return nil, fmt.Errorf("gh pr list: HTTP 401: Bad credentials")
-	}, "owner/demo")
+	}, "archetype-labs/app")
 	if !errors.Is(err, ErrGHAuth) {
 		t.Fatalf("auth: %v", err)
 	}
@@ -338,7 +350,7 @@ func TestFetchAuthIsNotA502(t *testing.T) {
 }
 
 func TestGHCommandInheritsEnv(t *testing.T) {
-	cmd := ghCommand("pr", "list", "--repo", "owner/name", "--state", "open", "--limit", "100")
+	cmd := ghCommand(prListArgs("archetype-labs/app")...)
 	if cmd.Env != nil {
 		t.Fatalf("cmd.Env must stay nil so GH_TOKEN/GH_HOST inherit, got %v", cmd.Env)
 	}

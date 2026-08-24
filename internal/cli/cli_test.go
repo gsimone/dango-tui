@@ -116,11 +116,14 @@ func TestParseHelp(t *testing.T) {
 	if strings.Contains(got, "-story") || strings.Contains(got, "dango -story") {
 		t.Fatalf("must not advertise -story:\n%s", got)
 	}
-	if !strings.Contains(got, "detect owner/name from the cwd git remote") {
+	if !strings.Contains(got, "detect the GitHub remote from cwd") {
 		t.Fatalf("advertised path:\n%s", got)
 	}
-	if !strings.Contains(got, "--repo owner/name") {
+	if !strings.Contains(got, "--repo archetype-labs/app") {
 		t.Fatalf("live path:\n%s", got)
+	}
+	if strings.Contains(got, "--repo owner/name") || strings.Contains(got, "owner/private") {
+		t.Fatalf("examples must use archetype-labs/app:\n%s", got)
 	}
 	if !strings.Contains(got, "stack dump") {
 		t.Fatalf("json dump path:\n%s", got)
@@ -132,8 +135,11 @@ func TestUsageDoesNotAdvertiseStory(t *testing.T) {
 	if strings.Contains(got, "-story") || strings.Contains(got, "story") {
 		t.Fatalf("usage must not sell -story:\n%s", got)
 	}
-	if !strings.Contains(got, "detect owner/name from the cwd git remote") {
+	if !strings.Contains(got, "detect the GitHub remote from cwd") {
 		t.Fatalf("no --repo is live detect:\n%s", got)
+	}
+	if !strings.Contains(got, "--repo archetype-labs/app") {
+		t.Fatalf("examples must use archetype-labs/app:\n%s", got)
 	}
 	if !strings.Contains(got, "--repo testdata/test.json") {
 		t.Fatalf("must name the file way out:\n%s", got)

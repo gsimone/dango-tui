@@ -57,10 +57,10 @@ func New(opts Options) Model {
 		height = 24
 	}
 	m := Model{
-		Width:    width,
-		Height:   height,
-		State:    app.InitialState(),
-		LogoDots: domain.ProcessLogoDots(),
+		Width:     width,
+		Height:    height,
+		State:     app.InitialState(),
+		LogoDots:  domain.ProcessLogoDots(),
 		Provider:  opts.Provider,
 		fetch:     opts.Fetch,
 		summarize: opts.Summarize,
@@ -313,11 +313,11 @@ func (m Model) emptyMessage() string {
 	if strings.TrimSpace(m.State.Query) != "" {
 		return "No match."
 	}
-	if m.waiting() {
+	if m.waiting() || m.splash() {
 		return ""
 	}
 	if m.fetchErr != nil {
-		return m.fetchErr.Error()
+		return ""
 	}
 	if m.cacheState == data.CacheError || m.Story().CacheState == data.CacheError {
 		return "Refresh failed. No stacks are available."

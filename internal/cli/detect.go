@@ -170,7 +170,7 @@ func ReadDangoJSON(dir string) (Config, error) {
 
 // ErrNoRemote is the loud failure when no --repo is set and cwd has no
 // GitHub owner/name remote. It names the two ways out.
-var ErrNoRemote = fmt.Errorf("no GitHub owner/name remote in this directory. Pass --repo owner/name or --repo testdata/test.json")
+var ErrNoRemote = fmt.Errorf("no GitHub remote in this directory. Pass --repo archetype-labs/app or --repo testdata/test.json")
 
 // Resolve fills repo from the cwd git remote when --repo is omitted, and
 // provider from dango.json / dango.yml / dango.yaml when --provider is

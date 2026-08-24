@@ -24,12 +24,12 @@ go run ./cmd/dango
 ```
 
 - `go run ./cmd/dango`: always the cwd git remote (origin, else first remote). Live `gh`. No silent examples.
-- No GitHub owner/name remote: the process dies. Pass `--repo owner/name` or `--repo testdata/test.json`.
-- `--repo owner/name`: live `gh`. `--repo` wins over detect.
+- No GitHub remote: the process dies. Pass `--repo archetype-labs/app` or `--repo testdata/test.json`.
+- `--repo archetype-labs/app`: live `gh`. `--repo` wins over detect.
 - `--repo testdata/test.json`: JSON dump of authored stacks. Never sent to `gh`. Examples exist only this way.
 
 ```bash
-go run ./cmd/dango --repo owner/name
+go run ./cmd/dango --repo archetype-labs/app
 go run ./cmd/dango --repo testdata/test.json
 go run ./cmd/dango --frame 80x24      # print one frame and exit
 ```
@@ -50,6 +50,12 @@ Provider comes from `dango.json` / `dango.yml` / `dango.yaml`. `--provider` over
 The header mark is `●-●-● DANGO` over the repo slug and counts. Type is paper
 `#f2ebe0` or meta `#9a8f82`. Two-col list: name + ball chain. Inspector is the
 right pane on the same field.
+
+A live repo paints a 3-row ░▒▓█ DANGO, then `●-●-●`, then
+`fetching archetype-labs/app` in meta before `gh` returns. The splash dies
+once the list exists. A failed fetch stays on the splash and turns the
+loading line into the error (`[ . ]` copies the whole block, including the
+exact `gh` argv). `--frame` on a live `--repo` is that first frame.
 
 ## Controls
 
@@ -95,7 +101,8 @@ CI on pull requests and pushes to `main` publishes coverage (total %) and real g
 
 ## Layout
 
-- Header: `●-●-● DANGO`, then `owner/name  •  N stacks / M layers` (examples use `org/reponame`)
+- Live first frame: 3-row ░▒▓█ DANGO, then `●-●-●`, then `fetching archetype-labs/app` (meta). Dies when the list exists. A failed fetch stays here.
+- Header: `●-●-● DANGO`, then `archetype-labs/app  •  N stacks / M layers` (fixtures use `org/reponame`)
 - 2-column side pad, 1 blank row at the top
 - Stack list on the left; one `│` rule; inspector pane on the right
 - Inspector facts include status (status ink on the value only), labels in their GitHub hex, and author (`●` + login)

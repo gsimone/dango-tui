@@ -18,7 +18,7 @@ func IsStackFile(raw string) bool {
 
 // Args is the flag-driven launch config. No --repo detects the cwd git
 // remote and fetches live gh. Detect failure is an error, not examples.
-// --repo owner/name is live gh. --repo path.json is a stack dump.
+// --repo archetype-labs/app is live gh. --repo path.json is a stack dump.
 type Args struct {
 	Frame    string
 	Story    string // test/dev hook only; not advertised
@@ -37,12 +37,12 @@ func ParseProvider(raw string) Provider {
 // must not appear here.
 func Usage() string {
 	return "Usage: dango\n" +
-		"       dango --repo owner/name [--provider name@model]\n" +
+		"       dango --repo archetype-labs/app [--provider name@model]\n" +
 		"       dango --repo testdata/test.json\n" +
 		"\n" +
-		"No --repo: detect owner/name from the cwd git remote and fetch via gh.\n" +
-		"No GitHub remote: pass --repo owner/name or --repo testdata/test.json.\n" +
-		"--repo owner/name fetches via gh. --repo path.json is a stack dump, not live gh.\n" +
+		"No --repo: detect the GitHub remote from cwd and fetch via gh.\n" +
+		"No GitHub remote: pass --repo archetype-labs/app or --repo testdata/test.json.\n" +
+		"--repo archetype-labs/app fetches via gh. --repo path.json is a stack dump, not live gh.\n" +
 		"dango.json / dango.yml / dango.yaml sets the title provider.\n" +
 		"Missing config file = no generated title. --provider overrides.\n" +
 		"A set provider writes a short stack title and an inspector description after first paint.\n" +
@@ -58,7 +58,7 @@ func parse(args []string, usage io.Writer) (Args, error) {
 	fs.SetOutput(usage)
 	frame := fs.String("frame", "", "print one frame (WxH, e.g. 80x24) and exit")
 	story := fs.String("story", "", "")
-	repo := fs.String("repo", "", "owner/name (live gh) or a JSON file of authored stacks")
+	repo := fs.String("repo", "", "archetype-labs/app (live gh) or a JSON file of authored stacks")
 	provider := fs.String("provider", "", "stack title summarizer (e.g. codex@luna.medium); optional, does not block fetch")
 	fs.Usage = func() {
 		fmt.Fprint(usage, Usage())
@@ -94,7 +94,7 @@ func parse(args []string, usage io.Writer) (Args, error) {
 func NormalizeRepo(raw string) (string, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return "", fmt.Errorf("pass --repo owner/name")
+		return "", fmt.Errorf("pass --repo archetype-labs/app")
 	}
 	if strings.Contains(raw, "://") {
 		u, err := url.Parse(raw)

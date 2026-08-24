@@ -49,6 +49,22 @@ func isGHNotFound(err error) bool {
 	return errors.As(err, &pathErr) && errors.Is(pathErr.Err, exec.ErrNotFound)
 }
 
+// LastGHArgv is the exact argv of the last gh invocation (no implicit extras).
+// The paper error prints this so a 502 can be compared to the CLI one-liner.
+var LastGHArgv []string
+
+// FormatGHArgv is the exact command line dango runs.
+func FormatGHArgv(args []string) string {
+	if len(args) == 0 {
+		return "gh"
+	}
+	return "gh " + strings.Join(args, " ")
+}
+
+func recordGHArgv(args []string) {
+	LastGHArgv = append([]string(nil), args...)
+}
+
 func mapGHError(err error, stderr string, args []string) error {
 	if err == nil {
 		return nil
@@ -63,8 +79,7 @@ func mapGHError(err error, stderr string, args []string) error {
 	if isAuthMessage(msg) {
 		return fmt.Errorf("%w %s", ErrGHAuth, msg)
 	}
-	n := min(len(args), 4)
-	return fmt.Errorf("gh %s: %s", strings.Join(args[:n], " "), msg)
+	return fmt.Errorf("%s: %s", FormatGHArgv(args), msg)
 }
 
 func classifyGHError(err error, args []string) error {
@@ -162,6 +177,7 @@ func ghCommand(args ...string) *exec.Cmd {
 }
 
 func runGH(args ...string) ([]byte, error) {
+	recordGHArgv(args)
 	cmd := ghCommand(args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -170,6 +186,11 @@ func runGH(args ...string) ([]byte, error) {
 		return nil, mapGHError(err, stderr.String(), args)
 	}
 	return out, nil
+}
+
+func prListArgs(repo string) []string {
+	return []string{"pr", "list", "--repo", repo, "--state", "open", "--limit", "100",
+		"--json", strings.Join(prListFields, ",")}
 }
 
 // Fetch loads open PRs for repo via gh and groups them into stacks.
@@ -183,17 +204,22 @@ func Fetch(repo string) ([]domain.Stack, error) {
 func fetchWith(run runner, repo string) ([]domain.Stack, error) {
 	repo = strings.TrimSpace(repo)
 	if repo == "" || !strings.Contains(repo, "/") {
-		return nil, fmt.Errorf("pass --repo owner/name")
+		return nil, fmt.Errorf("pass --repo archetype-labs/app")
+	}
+	inner := run
+	run = func(args ...string) ([]byte, error) {
+		recordGHArgv(args)
+		return inner(args...)
 	}
 	run = withRetry(run)
 
-	raw, err := run("pr", "list", "--repo", repo, "--state", "open", "--limit", "100",
-		"--json", strings.Join(prListFields, ","))
+	args := prListArgs(repo)
+	raw, err := run(args...)
 	if isGHNotFound(err) {
 		return nil, ErrGHMissing
 	}
 	if err != nil {
-		return nil, classifyGHError(err, []string{"pr", "list"})
+		return nil, classifyGHError(err, args)
 	}
 	var listed []ghPR
 	if decErr := json.Unmarshal(raw, &listed); decErr != nil {
