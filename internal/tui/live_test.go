@@ -564,13 +564,15 @@ func TestLiveCIEnrichPaintsFailAfterList(t *testing.T) {
 	}
 }
 
-func TestLiveLunaDescriptionWithoutProvider(t *testing.T) {
+func TestLiveDescribeScriptWithoutProvider(t *testing.T) {
 	title := "LEV-182: Bound hosts to the session so undo does not wedge"
-	luna := "luna pinned hosts to the worker so undo cannot widen scope"
+	scripted := "script pinned hosts to the worker so undo cannot widen scope"
+	var jobs []summary.Job
 	m := tui.New(tui.Options{
-		Repo:   "archetype-labs/app",
-		Width:  120,
-		Height: 30,
+		Repo:     "archetype-labs/app",
+		Describe: "scripts/dango-describe",
+		Width:    120,
+		Height:   30,
 		Fetch: func(string) ([]domain.Stack, error) {
 			return []domain.Stack{{
 				ID: "s",
@@ -581,47 +583,101 @@ func TestLiveLunaDescriptionWithoutProvider(t *testing.T) {
 			}}, nil
 		},
 		Summarize: func(job summary.Job) summary.Result {
+			jobs = append(jobs, job)
 			if job.Provider.Raw != "" {
 				t.Fatalf("no provider: %+v", job.Provider)
 			}
-			return summary.Result{ID: job.ID, Description: luna}
+			if job.Describe != "scripts/dango-describe" {
+				t.Fatalf("describe command: %q", job.Describe)
+			}
+			return summary.Result{ID: job.ID, Description: scripted}
 		},
 	})
 	m, extra := applyLiveFetch(m)
 	if extra == nil {
-		t.Fatal("luna must start after first paint, not block fetch")
+		t.Fatal("describe must start after first paint, not block fetch")
 	}
 	first := frameOf(m)
 	list := strings.Join(listRows(first), "\n")
 	if !strings.Contains(list, "LEV-182") {
 		t.Fatalf("first paint keeps the short list title:\n%s", first)
 	}
-	if strings.Contains(first, luna) {
-		t.Fatalf("luna must not block first paint:\n%s", first)
+	if strings.Contains(first, scripted) {
+		t.Fatalf("describe must not block first paint:\n%s", first)
 	}
 	local := summary.Describe(m.Stacks()[0])
 	m = applyLiveCmds(m, extra)
+	if len(jobs) != 1 {
+		t.Fatalf("one process for the selected stack, got %d", len(jobs))
+	}
 	if m.Stacks()[0].Name != "LEV-182" {
 		t.Fatalf("list title unchanged, got %q", m.Stacks()[0].Name)
 	}
-	if m.Stacks()[0].Description != luna {
-		t.Fatalf("luna description: %q", m.Stacks()[0].Description)
+	if m.Stacks()[0].Description != scripted {
+		t.Fatalf("script description: %q", m.Stacks()[0].Description)
 	}
 	if m.Stacks()[0].Description == local {
 		t.Fatal("Describe() is fallback only")
 	}
 	frame := frameOf(m)
-	if strings.Contains(strings.Join(listRows(frame), "\n"), luna) {
+	if strings.Contains(strings.Join(listRows(frame), "\n"), scripted) {
 		t.Fatalf("description belongs in the pane:\n%s", frame)
 	}
-	if !strings.Contains(frame, "luna pinned hosts") {
-		t.Fatalf("pane must show luna:\n%s", frame)
+	if !strings.Contains(frame, "script pinned hosts") {
+		t.Fatalf("pane must show script:\n%s", frame)
+	}
+}
+
+func TestLiveDescribeSelectedStackFirst(t *testing.T) {
+	var ids []string
+	m := tui.New(tui.Options{
+		Repo:     "archetype-labs/app",
+		Describe: "scripts/dango-describe",
+		Width:    120,
+		Height:   30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{
+				{ID: "a", PRs: []domain.PullRequest{{Number: 1, Title: "alpha base"}, {Number: 2, Title: "alpha head"}}},
+				{ID: "b", PRs: []domain.PullRequest{{Number: 3, Title: "beta base"}, {Number: 4, Title: "beta head"}}},
+				{ID: "c", PRs: []domain.PullRequest{{Number: 5, Title: "gamma base"}, {Number: 6, Title: "gamma head"}}},
+			}, nil
+		},
+		Summarize: func(job summary.Job) summary.Result {
+			ids = append(ids, job.ID)
+			return summary.Result{ID: job.ID, Description: "desc-" + job.ID}
+		},
+	})
+	m, extra := applyLiveFetch(m)
+	if extra == nil {
+		t.Fatal("selected describe starts after first paint")
+	}
+	m = applyLiveCmds(m, extra)
+	if strings.Join(ids, ",") != "a" {
+		t.Fatalf("selected first, one process: %v", ids)
+	}
+	if m.Stacks()[0].Description != "desc-a" {
+		t.Fatalf("selected landed: %+v", m.Stacks()[0])
+	}
+	if m.Stacks()[1].Description != "" || m.Stacks()[2].Description != "" {
+		t.Fatalf("must not spawn per row: %+v", m.Stacks())
+	}
+
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = applyLiveCmds(next.(tui.Model), cmd)
+	if strings.Join(ids, ",") != "a,b" {
+		t.Fatalf("next selected after first finishes: %v", ids)
+	}
+	if m.Stacks()[1].Description != "desc-b" {
+		t.Fatalf("second selected: %+v", m.Stacks()[1])
+	}
+	if m.Stacks()[2].Description != "" {
+		t.Fatalf("still not per-row: %+v", m.Stacks()[2])
 	}
 }
 
 func TestLiveFillsDescriptionWithoutProvider(t *testing.T) {
-	// No key → production Run() must land Describe(), not invent a
-	// model sentence. Luna success is TestLiveLunaDescriptionWithoutProvider.
+	// No describe script → production Run() must land Describe(), not
+	// invent a model sentence. Script success is TestLiveDescribeScriptWithoutProvider.
 	title := "LEV-182: Bound hosts to the session so undo does not wedge"
 	m := tui.New(tui.Options{
 		Repo:   "archetype-labs/app",

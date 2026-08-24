@@ -84,8 +84,36 @@ func TestReadDangoConfigMissingIsEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Provider != "" {
-		t.Fatalf("missing file must not invent a provider: %+v", cfg)
+	if cfg.Provider != "" || cfg.Describe != "" {
+		t.Fatalf("missing file must not invent provider/describe: %+v", cfg)
+	}
+}
+
+func TestReadDangoJSONDescribe(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "dango.json"), []byte(`{"describe":"scripts/dango-describe"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := ReadDangoConfig(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Describe != "scripts/dango-describe" || cfg.Provider != "" {
+		t.Fatalf("got %+v", cfg)
+	}
+}
+
+func TestReadDangoYAMLDescribe(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "dango.yml"), []byte("describe: scripts/dango-describe\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := ReadDangoConfig(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Describe != "scripts/dango-describe" {
+		t.Fatalf("got %+v", cfg)
 	}
 }
 
@@ -213,6 +241,25 @@ func TestResolveMissingJSONHasNoProvider(t *testing.T) {
 	}
 	if got.Provider.Raw != "" {
 		t.Fatalf("missing dango.json must not invent a provider: %+v", got.Provider)
+	}
+	if got.Describe != "" {
+		t.Fatalf("missing dango.json must not invent describe: %q", got.Describe)
+	}
+}
+
+func TestResolveDescribeFromJSONAndFlagWins(t *testing.T) {
+	dir := t.TempDir()
+	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")
+	if err := os.WriteFile(filepath.Join(dir, "dango.json"), []byte(`{"describe":"scripts/from-json"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	fromFile := mustResolve(t, Args{}, dir)
+	if fromFile.Describe != "scripts/from-json" {
+		t.Fatalf("json describe: %q", fromFile.Describe)
+	}
+	fromFlag := mustResolve(t, Args{Describe: "scripts/from-flag"}, dir)
+	if fromFlag.Describe != "scripts/from-flag" {
+		t.Fatalf("--describe wins: %q", fromFlag.Describe)
 	}
 }
 

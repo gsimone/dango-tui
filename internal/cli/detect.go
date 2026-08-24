@@ -13,6 +13,7 @@ import (
 // Config is dango.json / dango.yml / dango.yaml. Missing file means no generated title.
 type Config struct {
 	Provider string `json:"provider"`
+	Describe string `json:"describe"`
 }
 
 var configNames = []string{"dango.json", "dango.yml", "dango.yaml"}
@@ -110,15 +111,21 @@ func parseDangoYAML(raw []byte) (Config, error) {
 			continue
 		}
 		key, val, ok := strings.Cut(line, ":")
-		if !ok || strings.TrimSpace(key) != "provider" {
+		if !ok {
 			continue
 		}
+		key = strings.TrimSpace(key)
 		val = strings.TrimSpace(val)
 		if i := strings.Index(val, " #"); i >= 0 {
 			val = strings.TrimSpace(val[:i])
 		}
 		val = strings.Trim(val, `"'`)
-		cfg.Provider = val
+		switch key {
+		case "provider":
+			cfg.Provider = val
+		case "describe":
+			cfg.Describe = val
+		}
 	}
 	return cfg, nil
 }
@@ -157,6 +164,7 @@ func ReadDangoConfig(dir string) (Config, error) {
 				return Config{}, err
 			}
 			cfg.Provider = strings.TrimSpace(cfg.Provider)
+			cfg.Describe = strings.TrimSpace(cfg.Describe)
 			return cfg, nil
 		}
 	}
@@ -173,8 +181,8 @@ func ReadDangoJSON(dir string) (Config, error) {
 var ErrNoRemote = fmt.Errorf("no GitHub remote in this directory. Pass --repo archetype-labs/app or --repo testdata/test.json")
 
 // Resolve fills repo from the cwd git remote when --repo is omitted, and
-// provider from dango.json / dango.yml / dango.yaml when --provider is
-// omitted. --repo (owner/name or a stack file) and --provider win.
+// provider / describe from dango.json / dango.yml / dango.yaml when those
+// flags are omitted. --repo, --provider, and --describe win.
 // Story is a test/dev hook and skips detect. Detect failure is ErrNoRemote
 // — never a silent examples fallback.
 func Resolve(args Args, dir string) (Args, error) {
@@ -188,9 +196,13 @@ func Resolve(args Args, dir string) (Args, error) {
 		}
 		args.Repo = repo
 	}
-	if args.Provider.Empty() {
-		if cfg, err := ReadDangoConfig(dir); err == nil && cfg.Provider != "" {
+	cfg, err := ReadDangoConfig(dir)
+	if err == nil {
+		if args.Provider.Empty() && cfg.Provider != "" {
 			args.Provider = ParseProvider(cfg.Provider)
+		}
+		if args.Describe == "" && cfg.Describe != "" {
+			args.Describe = cfg.Describe
 		}
 	}
 	return args, nil

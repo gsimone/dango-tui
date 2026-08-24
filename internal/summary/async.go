@@ -10,6 +10,7 @@ import (
 // Job is one stack-title request. Fetch does not wait on it.
 type Job struct {
 	Provider Provider
+	Describe string
 	Stack    domain.Stack
 	ID       string
 }
@@ -25,17 +26,18 @@ type Result struct {
 type Func func(Job) Result
 
 // Run fills the inspector description after first paint. The product
-// sentence is gpt-5.6 luna. Local Describe() is the fallback when the
-// model is missing, errors, or has no key. A title is written only
-// when a provider is set, so the list keeps the gh / short name.
-// Fetch and first paint do not call this.
+// sentence comes from the configured describe script (dango.json
+// `describe` / --describe). Local Describe() is the fallback when the
+// script is missing, non-zero, times out, or returns mush. A title is
+// written only when a provider is set, so the list keeps the gh /
+// short name. Fetch and first paint do not call this.
 func Run(job Job) Result {
 	id := job.ID
 	if id == "" {
 		id = job.Stack.ID
 	}
 	res := Result{ID: id}
-	if desc, err := describeRemote(job.Stack); err == nil && strings.TrimSpace(desc) != "" {
+	if desc, err := describeScript(job); err == nil && strings.TrimSpace(desc) != "" {
 		res.Description = strings.TrimSpace(desc)
 	} else {
 		res.Description = Describe(job.Stack)

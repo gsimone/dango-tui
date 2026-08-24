@@ -44,7 +44,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case tea.MouseMsg:
-		return m.handleMouse(msg), nil
+		return m.handleMouse(msg)
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	case fetchDoneMsg:
@@ -88,8 +88,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case summaryDoneMsg:
-		m.applySummary(msg)
-		return m, nil
+		return m, m.applySummary(msg)
 	case ciDoneMsg:
 		if msg.token != m.fetchSeq {
 			return m, nil
@@ -140,16 +139,20 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "up":
 		m.choose(app.MoveSelection(m.State.Selection, m.Stacks(), app.DirUp), true)
+		return m, m.startSelectedSummary()
 	case "down":
 		m.choose(app.MoveSelection(m.State.Selection, m.Stacks(), app.DirDown), true)
+		return m, m.startSelectedSummary()
 	case "left":
 		m.choose(app.MoveSelection(m.State.Selection, m.Stacks(), app.DirLeft), true)
 	case "right":
 		m.choose(app.MoveSelection(m.State.Selection, m.Stacks(), app.DirRight), true)
 	case "home":
 		m.choose(app.MoveSelection(m.State.Selection, m.Stacks(), app.DirHome), true)
+		return m, m.startSelectedSummary()
 	case "end":
 		m.choose(app.MoveSelection(m.State.Selection, m.Stacks(), app.DirEnd), true)
+		return m, m.startSelectedSummary()
 	case "o":
 		if pr, ok := m.SelectedPR(); ok {
 			return m, m.open(pr)
@@ -194,28 +197,33 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *Model) applySummary(msg summaryDoneMsg) {
+func (m *Model) applySummary(msg summaryDoneMsg) tea.Cmd {
 	if msg.token != m.fetchSeq {
-		return
+		return nil
 	}
+	m.summaryBusy = false
+	if m.summaryDone == nil {
+		m.summaryDone = map[string]bool{}
+	}
+	m.summaryDone[msg.id] = true
 	title := strings.TrimSpace(msg.title)
 	desc := strings.TrimSpace(msg.description)
-	if title == "" && desc == "" {
-		return
+	if title != "" || desc != "" {
+		for i := range m.stacks {
+			if m.stacks[i].ID != msg.id {
+				continue
+			}
+			if title != "" {
+				m.stacks[i].Name = title
+				m.stacks[i].Summary = title
+			}
+			if desc != "" {
+				m.stacks[i].Description = desc
+			}
+			break
+		}
 	}
-	for i := range m.stacks {
-		if m.stacks[i].ID != msg.id {
-			continue
-		}
-		if title != "" {
-			m.stacks[i].Name = title
-			m.stacks[i].Summary = title
-		}
-		if desc != "" {
-			m.stacks[i].Description = desc
-		}
-		return
-	}
+	return m.startSelectedSummary()
 }
 
 func (m Model) refresh() (tea.Model, tea.Cmd) {
@@ -232,11 +240,13 @@ func (m Model) refresh() (tea.Model, tea.Cmd) {
 		return m, tea.Tick(400*time.Millisecond, func(time.Time) tea.Msg { return fetchDoneMsg{} })
 	}
 	m.fetchSeq++
+	m.summaryBusy = false
+	m.summaryDone = nil
 	token := m.fetchSeq
 	return m, m.fetchCmd(token)
 }
 
-func (m Model) handleMouse(msg tea.MouseMsg) Model {
+func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	x, y := mouseXY(msg)
 	action := mouseAction(msg)
 	stackIndex, prIndex, hit := m.ballHit(x, y)
@@ -244,13 +254,14 @@ func (m Model) handleMouse(msg tea.MouseMsg) Model {
 	case mousePress:
 		if hit {
 			m.choose(app.Selection{StackIndex: stackIndex, PRIndex: prIndex}, true)
+			return m, m.startSelectedSummary()
 		}
 	case mouseMotion:
 		if hit {
 			m.choose(app.Selection{StackIndex: stackIndex, PRIndex: prIndex}, true)
-		} else {
-			m.State.CardVisible = false
+			return m, m.startSelectedSummary()
 		}
+		m.State.CardVisible = false
 	}
-	return m
+	return m, nil
 }

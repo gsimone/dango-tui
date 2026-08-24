@@ -69,7 +69,10 @@ func LoadStacks(path string) (string, []domain.Stack, error) {
 	}
 	if _, hasStacks := probe["stacks"]; !hasStacks {
 		if _, hasProvider := probe["provider"]; hasProvider {
-			return "", nil, fmt.Errorf("%s is provider config, not a stack dump", filepath.Base(path))
+			return "", nil, fmt.Errorf("%s is dango config, not a stack dump", filepath.Base(path))
+		}
+		if _, hasDescribe := probe["describe"]; hasDescribe {
+			return "", nil, fmt.Errorf("%s is dango config, not a stack dump", filepath.Base(path))
 		}
 		return "", nil, fmt.Errorf("%s: missing stacks", filepath.Base(path))
 	}

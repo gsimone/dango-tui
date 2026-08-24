@@ -86,7 +86,7 @@ func TestLoadStacksRejectsProviderConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _, err := data.LoadStacks(path)
-	if err == nil || !strings.Contains(err.Error(), "provider config") {
+	if err == nil || !strings.Contains(err.Error(), "dango config") {
 		t.Fatalf("dango.json is not a stack dump: %v", err)
 	}
 }

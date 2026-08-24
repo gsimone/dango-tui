@@ -33,6 +33,7 @@ func main() {
 		StoryID:  args.Story,
 		Repo:     args.Repo,
 		Provider: args.Provider,
+		Describe: args.Describe,
 	})
 
 	if args.Frame != "" {

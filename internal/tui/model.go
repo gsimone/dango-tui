@@ -16,6 +16,7 @@ type Options struct {
 	StoryID  string
 	Repo     string
 	Provider summary.Provider
+	Describe string
 	Width    int
 	Height   int
 	Fetch    live.FetchFunc
@@ -40,6 +41,7 @@ type Model struct {
 	LogoDots    [3]string
 	Repo        string
 	Provider    summary.Provider
+	Describe    string
 	Live        bool
 	File        bool
 	file        string
@@ -50,6 +52,8 @@ type Model struct {
 	fetch       live.FetchFunc
 	enrichCI    live.EnrichCIFunc
 	summarize   summary.Func
+	summaryBusy bool
+	summaryDone map[string]bool
 	splashKeep  string
 }
 
@@ -67,6 +71,7 @@ func New(opts Options) Model {
 		State:     app.InitialState(),
 		LogoDots:  domain.ProcessLogoDots(),
 		Provider:  opts.Provider,
+		Describe:  strings.TrimSpace(opts.Describe),
 		fetch:     opts.Fetch,
 		enrichCI:  opts.EnrichCI,
 		summarize: opts.Summarize,
@@ -190,33 +195,37 @@ func (m Model) splashCopyText() string {
 	return body
 }
 
-func (m Model) startSummaries() tea.Cmd {
-	if !m.Live {
+func (m *Model) startSummaries() tea.Cmd {
+	return m.startSelectedSummary()
+}
+
+func (m *Model) startSelectedSummary() tea.Cmd {
+	if !m.Live || m.summaryBusy {
 		return nil
 	}
+	stack, ok := m.SelectedStack()
+	if !ok || stack.ID == "" {
+		return nil
+	}
+	if strings.TrimSpace(stack.Description) != "" || m.summaryDone[stack.ID] {
+		return nil
+	}
+	if m.summaryDone == nil {
+		m.summaryDone = map[string]bool{}
+	}
+	m.summaryBusy = true
 	token := m.fetchSeq
-	var cmds []tea.Cmd
-	for _, stack := range m.stacks {
-		id := stack.ID
-		if id == "" {
-			continue
+	job := summary.Job{Provider: m.Provider, Describe: m.Describe, Stack: stack, ID: stack.ID}
+	run := m.summarize
+	return func() tea.Msg {
+		res := run(job)
+		return summaryDoneMsg{
+			token:       token,
+			id:          res.ID,
+			title:       res.Title,
+			description: res.Description,
 		}
-		job := summary.Job{Provider: m.Provider, Stack: stack, ID: id}
-		run := m.summarize
-		cmds = append(cmds, func() tea.Msg {
-			res := run(job)
-			return summaryDoneMsg{
-				token:       token,
-				id:          res.ID,
-				title:       res.Title,
-				description: res.Description,
-			}
-		})
 	}
-	if len(cmds) == 0 {
-		return nil
-	}
-	return tea.Batch(cmds...)
 }
 
 func (m Model) startCIEnrich() tea.Cmd {
@@ -235,7 +244,7 @@ func (m Model) startCIEnrich() tea.Cmd {
 	}
 }
 
-func (m Model) afterFetch() tea.Cmd {
+func (m *Model) afterFetch() tea.Cmd {
 	return tea.Batch(m.startSummaries(), m.startCIEnrich())
 }
 

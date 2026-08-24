@@ -90,6 +90,22 @@ func TestParseRepoDoesNotRequireProvider(t *testing.T) {
 	if args.Provider.Raw != "" {
 		t.Fatalf("provider must stay optional, got %+v", args.Provider)
 	}
+	if args.Describe != "" {
+		t.Fatalf("describe must stay optional, got %q", args.Describe)
+	}
+}
+
+func TestParseDescribeFlag(t *testing.T) {
+	args, err := Parse([]string{"--repo", "archetype-labs/app", "--describe", "scripts/dango-describe"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if args.Describe != "scripts/dango-describe" {
+		t.Fatalf("describe %q", args.Describe)
+	}
+	if args.Provider.Raw != "" {
+		t.Fatalf("describe is not provider: %+v", args.Provider)
+	}
 }
 
 func TestParseRejectsBareName(t *testing.T) {

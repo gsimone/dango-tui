@@ -65,17 +65,17 @@ func TestMutantRunKeepsDescribeAsFallback(t *testing.T) {
 		t.Fatalf("no provider must not retitle: %+v", res)
 	}
 	if res.Description != summary.Describe(stack) {
-		t.Fatalf("no key uses Describe(), not a model sentence: got %q want %q", res.Description, summary.Describe(stack))
+		t.Fatalf("missing describe script uses Describe(), not a model sentence: got %q want %q", res.Description, summary.Describe(stack))
 	}
 	alwaysLocal := func(job summary.Job) summary.Result {
 		return summary.Result{ID: job.ID, Description: summary.Describe(job.Stack)}
 	}
-	luna := "luna wrote the pane"
-	if alwaysLocal(summary.Job{Stack: stack, ID: "s"}).Description == luna {
-		t.Fatal("always-local mutant would ignore luna")
+	scripted := "describe script wrote the pane"
+	if alwaysLocal(summary.Job{Stack: stack, ID: "s"}).Description == scripted {
+		t.Fatal("always-local mutant would ignore the script")
 	}
-	if res.Description == luna {
-		t.Fatal("failed/missing luna must not invent a model sentence")
+	if res.Description == scripted {
+		t.Fatal("failed/missing script must not invent a model sentence")
 	}
 }
 
