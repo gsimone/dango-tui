@@ -7,9 +7,17 @@ A small native terminal UI for reading a GitHub pull-request stack at a glance.
 The product path is a Go binary (Go 1.24+) built with
 [Bubble Tea](https://github.com/charmbracelet/bubbletea). No Bubbles restyle. No picker.
 
+## Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gsimone/dango-tui/main/install.sh | bash
+```
+
+That installs `dango` into `~/.local/bin` from the rolling `nightly` prerelease (linux/amd64 or darwin/arm64). Not a versioned 0.1.0. Other platforms are refused.
+
 ## Run
 
-From this branch:
+Dev, from this branch:
 
 ```bash
 go run ./cmd/dango
