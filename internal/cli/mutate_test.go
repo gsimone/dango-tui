@@ -46,8 +46,8 @@ func TestMutantRepoParse(t *testing.T) {
 }
 
 func TestMutantDetectFailureIsLoud(t *testing.T) {
-	if ErrNoRemote == nil || !strings.Contains(ErrNoRemote.Error(), "--repo owner/name") {
-		t.Fatal("real detect error names --repo owner/name")
+	if ErrNoRemote == nil || !strings.Contains(ErrNoRemote.Error(), "--repo archetype-labs/app") {
+		t.Fatal("real detect error names --repo archetype-labs/app")
 	}
 	if !strings.Contains(ErrNoRemote.Error(), "--repo testdata/test.json") {
 		t.Fatal("real detect error names the json dump")

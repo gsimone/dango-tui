@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"strconv"
 	"strings"
 	"time"
 
@@ -29,10 +28,9 @@ var lookPath = exec.LookPath
 // sleep is the backoff wait. Tests replace this.
 var sleep = time.Sleep
 
-// retryLimit is first try + one quick retry. Four GraphQL retries were the stall.
-const retryLimit = 2
-
-var pullsPerPage = 100
+// retryLimit is three tries inside Fetch (502/503 flake). The splash
+// stays on fetching until Fetch returns.
+const retryLimit = 3
 
 func requireGH() error {
 	if _, err := lookPath("gh"); err != nil {
@@ -52,6 +50,22 @@ func isGHNotFound(err error) bool {
 	return errors.As(err, &pathErr) && errors.Is(pathErr.Err, exec.ErrNotFound)
 }
 
+// LastGHArgv is the exact argv of the last gh invocation (no implicit extras).
+// The paper error prints this so a 502 can be compared to the CLI one-liner.
+var LastGHArgv []string
+
+// FormatGHArgv is the exact command line dango runs.
+func FormatGHArgv(args []string) string {
+	if len(args) == 0 {
+		return "gh"
+	}
+	return "gh " + strings.Join(args, " ")
+}
+
+func recordGHArgv(args []string) {
+	LastGHArgv = append([]string(nil), args...)
+}
+
 func mapGHError(err error, stderr string, args []string) error {
 	if err == nil {
 		return nil
@@ -66,8 +80,7 @@ func mapGHError(err error, stderr string, args []string) error {
 	if isAuthMessage(msg) {
 		return fmt.Errorf("%w %s", ErrGHAuth, msg)
 	}
-	n := min(len(args), 4)
-	return fmt.Errorf("gh %s: %s", strings.Join(args[:n], " "), msg)
+	return fmt.Errorf("%s: %s", FormatGHArgv(args), msg)
 }
 
 func classifyGHError(err error, args []string) error {
@@ -165,6 +178,7 @@ func ghCommand(args ...string) *exec.Cmd {
 }
 
 func runGH(args ...string) ([]byte, error) {
+	recordGHArgv(args)
 	cmd := ghCommand(args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -173,6 +187,19 @@ func runGH(args ...string) ([]byte, error) {
 		return nil, mapGHError(err, stderr.String(), args)
 	}
 	return out, nil
+}
+
+func prListArgs(repo string) []string {
+	return PRListArgs(repo)
+}
+
+// PRListArgs is the exact gh argv Fetch runs for a repo.
+func PRListArgs(repo string) []string {
+	if strings.TrimSpace(repo) == "" {
+		repo = "archetype-labs/app"
+	}
+	return []string{"pr", "list", "--repo", repo, "--state", "open", "--limit", "100",
+		"--json", strings.Join(prListFields, ",")}
 }
 
 // Fetch loads open PRs for repo via gh and groups them into stacks.
@@ -186,14 +213,28 @@ func Fetch(repo string) ([]domain.Stack, error) {
 func fetchWith(run runner, repo string) ([]domain.Stack, error) {
 	repo = strings.TrimSpace(repo)
 	if repo == "" || !strings.Contains(repo, "/") {
-		return nil, fmt.Errorf("pass --repo owner/name")
+		return nil, fmt.Errorf("pass --repo archetype-labs/app")
+	}
+	inner := run
+	run = func(args ...string) ([]byte, error) {
+		recordGHArgv(args)
+		return inner(args...)
 	}
 	run = withRetry(run)
 
-	listed, err := listOpenPulls(run, repo)
-	if err != nil {
-		return nil, err
+	args := prListArgs(repo)
+	raw, err := run(args...)
+	if isGHNotFound(err) {
+		return nil, ErrGHMissing
 	}
+	if err != nil {
+		return nil, classifyGHError(err, args)
+	}
+	var listed []ghPR
+	if decErr := json.Unmarshal(raw, &listed); decErr != nil {
+		return nil, fmt.Errorf("decode gh pr list: %w", decErr)
+	}
+
 	prs := make([]RemotePR, 0, len(listed))
 	for _, item := range listed {
 		prs = append(prs, item.toRemote())
@@ -202,77 +243,11 @@ func fetchWith(run runner, repo string) ([]domain.Stack, error) {
 	return GroupStacks(prs, "main"), nil
 }
 
-func pullsAPIPath(repo string, page int) string {
-	path := "repos/" + repo + "/pulls?state=open&per_page=" + strconv.Itoa(pullsPerPage)
-	if page > 1 {
-		path += "&page=" + strconv.Itoa(page)
-	}
-	return path
-}
-
-func listOpenPulls(run runner, repo string) ([]restPR, error) {
-	var all []restPR
-	for page := 1; ; page++ {
-		path := pullsAPIPath(repo, page)
-		raw, err := run("api", path)
-		if isGHNotFound(err) {
-			return nil, ErrGHMissing
-		}
-		if err != nil {
-			return nil, classifyGHError(err, []string{"api", path})
-		}
-		var listed []restPR
-		if decErr := json.Unmarshal(raw, &listed); decErr != nil {
-			return nil, fmt.Errorf("decode gh api %s: %w", path, decErr)
-		}
-		all = append(all, listed...)
-		if len(listed) < pullsPerPage {
-			return all, nil
-		}
-		if page > 50 {
-			return all, fmt.Errorf("too many pull pages")
-		}
-	}
-}
-
-type restPR struct {
-	Number  int    `json:"number"`
-	Title   string `json:"title"`
-	HTMLURL string `json:"html_url"`
-	Head    struct {
-		Ref string `json:"ref"`
-	} `json:"head"`
-	Base struct {
-		Ref string `json:"ref"`
-	} `json:"base"`
-	User struct {
-		Login string `json:"login"`
-	} `json:"user"`
-	Labels []ghLabel `json:"labels"`
-	Draft  bool      `json:"draft"`
-	State  string    `json:"state"`
-}
-
-func (p restPR) toRemote() RemotePR {
-	labels := make([]domain.Label, 0, len(p.Labels))
-	for _, lab := range p.Labels {
-		name := strings.TrimSpace(lab.Name)
-		if name == "" {
-			continue
-		}
-		labels = append(labels, domain.Label{Name: name, Color: domain.NormalizeHex(lab.Color)})
-	}
-	return RemotePR{
-		Number:      p.Number,
-		Title:       p.Title,
-		URL:         p.HTMLURL,
-		HeadRefName: p.Head.Ref,
-		BaseRefName: p.Base.Ref,
-		Author:      p.User.Login,
-		Labels:      labels,
-		Draft:       p.Draft,
-		Merged:      false,
-	}
+// prListFields is the first-paint grouping set. No body, no check rollup,
+// no review history — those 502 GraphQL on a normal private repo.
+var prListFields = []string{
+	"number", "title", "url", "headRefName", "baseRefName",
+	"author", "labels", "isDraft", "state",
 }
 
 type ghRepo struct {

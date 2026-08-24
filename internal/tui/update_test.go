@@ -45,7 +45,7 @@ func TestSummariesAreAsyncAndLandInPlace(t *testing.T) {
 		}}, nil
 	}
 	m := New(Options{
-		Repo:     "owner/name",
+		Repo:     "archetype-labs/app",
 		Provider: summary.ParseProvider("codex@luna.medium"),
 		Width:    80,
 		Height:   24,
@@ -54,7 +54,7 @@ func TestSummariesAreAsyncAndLandInPlace(t *testing.T) {
 	if len(m.stacks) != 0 {
 		t.Fatal("constructor must not wait on gh")
 	}
-	if !strings.Contains(stripANSI(m.View()), "fetching owner/name") {
+	if !strings.Contains(stripANSI(m.View()), "fetching archetype-labs/app") {
 		t.Fatalf("first frame before gh:\n%s", stripANSI(m.View()))
 	}
 	var sumCmd tea.Cmd
@@ -75,7 +75,7 @@ func TestSummariesAreAsyncAndLandInPlace(t *testing.T) {
 	if m.Fetching || strings.Contains(stripANSI(m.View()), "⠋") {
 		t.Fatal("title wait must not be a spinner")
 	}
-	_, extra := applyFetch(New(Options{Repo: "owner/name", Width: 80, Height: 24, Fetch: fetch}))
+	_, extra := applyFetch(New(Options{Repo: "archetype-labs/app", Width: 80, Height: 24, Fetch: fetch}))
 	if extra != nil {
 		t.Fatal("missing provider must not start summaries")
 	}
@@ -427,39 +427,47 @@ func TestInspectorStatusInkIsValueOnly(t *testing.T) {
 }
 
 func TestDotCopiesFetchError(t *testing.T) {
-	err502 := errors.New("gh api repos/owner/private/pulls?state=open&per_page=100: HTTP 502: Bad Gateway (https://api.github.com/repos/owner/private/pulls)")
+	sha := "dddddddddddddddddddddddddddddddddddddddd"
+	withVCS(t, sha)
+	err502 := errors.New("gh pr list --repo archetype-labs/app --state open --limit 100 --json number,title,url,headRefName,baseRefName,author,labels,isDraft,state: HTTP 502: Bad Gateway")
 	var copied string
 	old := copyText
-	copyText = func(s string) { copied = s }
+	copyText = func(s string) error { copied = s; return nil }
 	t.Cleanup(func() { copyText = old })
 
 	m := New(Options{
-		Repo:   "owner/private",
+		Repo:   "archetype-labs/app",
 		Width:  80,
 		Height: 24,
 		Fetch:  func(string) ([]domain.Stack, error) { return nil, err502 },
 	})
-	if !strings.Contains(stripANSI(m.View()), "fetching owner/private") {
+	if !strings.Contains(stripANSI(m.View()), "fetching archetype-labs/app") {
 		t.Fatalf("first frame before gh:\n%s", stripANSI(m.View()))
 	}
-	m, _ = applyFetch(m)
+	m, extra := applyFetch(m)
+	if extra != nil {
+		t.Fatal("failed fetch must not quit")
+	}
 	frame := stripANSI(m.View())
-	if !strings.Contains(frame, "Could not fetch pull requests.") {
-		t.Fatalf("paper sentence:\n%s", frame)
+	if strings.Contains(frame, "Could not fetch pull requests.") || strings.Contains(frame, "No open stacks") {
+		t.Fatalf("stay on splash, no empty-list error:\n%s", frame)
 	}
 	if !strings.Contains(frame, "502") {
-		t.Fatalf("error block missing 502:\n%s", frame)
+		t.Fatalf("loading line becomes the error:\n%s", frame)
 	}
-	if !strings.Contains(frame, "owner/private/pulls") {
-		t.Fatalf("error block missing REST url:\n%s", frame)
+	if !strings.Contains(frame, "pr list") || !strings.Contains(frame, "archetype-labs/app") {
+		t.Fatalf("error block missing exact argv:\n%s", frame)
 	}
 	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(".")})
 	m = next.(Model)
-	if copied != err502.Error() {
-		t.Fatalf("dot copies the error, got %q", copied)
+	if !strings.Contains(copied, err502.Error()) || !strings.Contains(copied, sha) {
+		t.Fatalf("dot copies the error plus SHA, got %q", copied)
 	}
 	if cmd == nil {
 		t.Fatal("copy toast should clear")
+	}
+	if !strings.Contains(stripANSI(m.View()), "copied") {
+		t.Fatalf("footer must flash copied:\n%s", stripANSI(m.View()))
 	}
 	if m.View() == "" {
 		t.Fatal("error must not quit the process")
@@ -469,7 +477,7 @@ func TestDotCopiesFetchError(t *testing.T) {
 func TestDotCopiesBranchToast(t *testing.T) {
 	var copied string
 	old := copyText
-	copyText = func(s string) { copied = s }
+	copyText = func(s string) error { copied = s; return nil }
 	t.Cleanup(func() { copyText = old })
 
 	before := gitHEAD(t)
@@ -518,7 +526,7 @@ func TestDotCopiesBranchToast(t *testing.T) {
 func TestCommaDoesNotCopy(t *testing.T) {
 	var copied string
 	old := copyText
-	copyText = func(s string) { copied = s }
+	copyText = func(s string) error { copied = s; return nil }
 	t.Cleanup(func() { copyText = old })
 
 	m := New(Options{StoryID: "mixed", Width: 80, Height: 24})

@@ -144,6 +144,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.open(pr)
 		}
 	case ".":
+		if m.splash() {
+			return m, m.copySplash()
+		}
 		if m.showError() {
 			return m, m.copyError()
 		}

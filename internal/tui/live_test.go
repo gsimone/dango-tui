@@ -119,7 +119,7 @@ func TestNoFlagNoRemoteErrorsLoud(t *testing.T) {
 		t.Fatalf("failed resolve invented %q", got.Repo)
 	}
 	msg := err.Error()
-	if !strings.Contains(msg, "--repo owner/name") || !strings.Contains(msg, "--repo testdata/test.json") {
+	if !strings.Contains(msg, "--repo archetype-labs/app") || !strings.Contains(msg, "--repo testdata/test.json") {
 		t.Fatalf("must name both --repo forms: %v", err)
 	}
 	m := tui.New(tui.Options{
@@ -139,7 +139,7 @@ func TestNoFlagNoRemoteErrorsLoud(t *testing.T) {
 func TestLiveMissingGHShowsErrorNotFixtures(t *testing.T) {
 	fetches := 0
 	m := tui.New(tui.Options{
-		Repo:   "owner/name",
+		Repo:   "archetype-labs/app",
 		Width:  80,
 		Height: 24,
 		Fetch: func(string) ([]domain.Stack, error) {
@@ -150,14 +150,17 @@ func TestLiveMissingGHShowsErrorNotFixtures(t *testing.T) {
 	if fetches != 0 {
 		t.Fatalf("constructor must not fetch, got %d", fetches)
 	}
-	if !strings.Contains(frameOf(m), "fetching owner/name") {
+	if !strings.Contains(frameOf(m), "fetching archetype-labs/app") {
 		t.Fatalf("first frame before gh:\n%s", frameOf(m))
 	}
-	m, _ = applyLiveFetch(m)
+	m, extra := applyLiveFetch(m)
+	if extra != nil {
+		t.Fatal("failed fetch stays on the splash")
+	}
 	if fetches != 1 {
 		t.Fatalf("live --repo must fetch, got %d", fetches)
 	}
-	if !m.Live || m.Repo != "owner/name" {
+	if !m.Live || m.Repo != "archetype-labs/app" {
 		t.Fatalf("must stay live, got live=%v repo=%q", m.Live, m.Repo)
 	}
 	if n := len(m.Stacks()); n != 0 {
@@ -165,13 +168,19 @@ func TestLiveMissingGHShowsErrorNotFixtures(t *testing.T) {
 	}
 	frame := frameOf(m)
 	if !strings.Contains(frame, "gh CLI not found") || !strings.Contains(frame, "cli.github.com") {
-		t.Fatalf("error pane must show the loud gh sentence:\n%s", frame)
+		t.Fatalf("splash loading line becomes the error:\n%s", frame)
+	}
+	if strings.Contains(frame, "Could not fetch") || strings.Contains(frame, "No open stacks") {
+		t.Fatalf("no empty-list error state:\n%s", frame)
 	}
 	if strings.Contains(frame, "org/reponame") {
 		t.Fatalf("must not fall back to the fixture slug:\n%s", frame)
 	}
 	if strings.Contains(frame, "300 stacks") {
 		t.Fatalf("must not load chaos fixtures:\n%s", frame)
+	}
+	if strings.Contains(frame, "YOINKS") {
+		t.Fatalf("no joke words:\n%s", frame)
 	}
 }
 
@@ -243,8 +252,12 @@ func TestLiveRepoHeaderAndTwoColumns(t *testing.T) {
 	if fetches != 0 {
 		t.Fatalf("constructor must not fetch, got %d", fetches)
 	}
-	if !strings.Contains(frameOf(m), "●-●-● DANGO") || !strings.Contains(frameOf(m), "fetching gsimone/leva-2") {
-		t.Fatalf("first frame before gh:\n%s", frameOf(m))
+	first := frameOf(m)
+	if !strings.Contains(first, "fetching gsimone/leva-2") || !strings.Contains(first, "●-●-●") {
+		t.Fatalf("first frame is the splash:\n%s", first)
+	}
+	if strings.Contains(first, "●-●-● DANGO") {
+		t.Fatalf("splash is not the list header:\n%s", first)
 	}
 	m, _ = applyLiveFetch(m)
 	if fetches != 1 {

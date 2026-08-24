@@ -46,6 +46,7 @@ type Model struct {
 	fetchedAt   time.Time
 	fetch       live.FetchFunc
 	summarize   summary.Func
+	splashKeep  string
 }
 
 func New(opts Options) Model {
@@ -57,10 +58,10 @@ func New(opts Options) Model {
 		height = 24
 	}
 	m := Model{
-		Width:    width,
-		Height:   height,
-		State:    app.InitialState(),
-		LogoDots: domain.ProcessLogoDots(),
+		Width:     width,
+		Height:    height,
+		State:     app.InitialState(),
+		LogoDots:  domain.ProcessLogoDots(),
 		Provider:  opts.Provider,
 		fetch:     opts.Fetch,
 		summarize: opts.Summarize,
@@ -157,6 +158,28 @@ func (m Model) errorCopyText() string {
 		return ""
 	}
 	return strings.TrimSpace(m.fetchErr.Error())
+}
+
+func (m Model) splashCopyText() string {
+	body := ""
+	if text := m.errorCopyText(); text != "" {
+		body = text
+	} else if len(live.LastGHArgv) > 0 {
+		body = live.FormatGHArgv(live.LastGHArgv)
+	} else {
+		repo := m.Repo
+		if repo == "" {
+			repo = "archetype-labs/app"
+		}
+		body = live.FormatGHArgv(live.PRListArgs(repo))
+	}
+	if sha := m.splashSHA(); sha != "" {
+		if body != "" {
+			return body + "\n" + sha
+		}
+		return sha
+	}
+	return body
 }
 
 func (m Model) startSummaries() tea.Cmd {
@@ -277,12 +300,16 @@ func (m *Model) copyBranch(pr domain.PullRequest) tea.Cmd {
 }
 
 func (m *Model) copyError() tea.Cmd {
-	text := m.errorCopyText()
-	if text == "" {
-		return nil
-	}
-	copyText(text)
+	return m.copySplash()
+}
+
+func (m *Model) copySplash() tea.Cmd {
+	text := m.splashCopyText()
+	err := copyText(text)
 	m.State.Feedback = "copied"
+	if err != nil {
+		m.splashKeep = text
+	}
 	return m.clearFeedback()
 }
 
@@ -313,11 +340,11 @@ func (m Model) emptyMessage() string {
 	if strings.TrimSpace(m.State.Query) != "" {
 		return "No match."
 	}
-	if m.waiting() {
+	if m.waiting() || m.splash() {
 		return ""
 	}
 	if m.fetchErr != nil {
-		return m.fetchErr.Error()
+		return ""
 	}
 	if m.cacheState == data.CacheError || m.Story().CacheState == data.CacheError {
 		return "Refresh failed. No stacks are available."
