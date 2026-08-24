@@ -4,15 +4,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/gsimone/dango-tui/internal/domain"
-	"github.com/muesli/termenv"
 )
-
-func init() {
-	// Keep the OKLCH-derived palette even when stdout is not a TTY (tests, --frame).
-	lipgloss.SetColorProfile(termenv.TrueColor)
-}
 
 type cell struct {
 	r  rune
@@ -23,7 +16,7 @@ type cell struct {
 type canvas struct {
 	width  int
 	height int
-	cells  [][]cell
+	cells  []cell
 }
 
 func newCanvas(width, height int, bg string) *canvas {
@@ -33,15 +26,18 @@ func newCanvas(width, height int, bg string) *canvas {
 	if height < 1 {
 		height = 1
 	}
-	cells := make([][]cell, height)
-	for y := 0; y < height; y++ {
-		row := make([]cell, width)
-		for x := 0; x < width; x++ {
-			row[x] = cell{r: ' ', fg: domain.Color("text"), bg: bg}
-		}
-		cells[y] = row
+	n := width * height
+	cells := make([]cell, n)
+	text := domain.Color("text")
+	proto := cell{r: ' ', fg: text, bg: bg}
+	for i := range cells {
+		cells[i] = proto
 	}
 	return &canvas{width: width, height: height, cells: cells}
+}
+
+func (c *canvas) at(x, y int) *cell {
+	return &c.cells[y*c.width+x]
 }
 
 func (c *canvas) fill(x, y, w, h int, bg string) {
@@ -56,7 +52,7 @@ func (c *canvas) set(x, y int, r rune, fg, bg string) {
 	if x < 0 || y < 0 || x >= c.width || y >= c.height {
 		return
 	}
-	cell := c.cells[y][x]
+	cell := c.at(x, y)
 	if r != 0 {
 		cell.r = r
 	}
@@ -66,7 +62,6 @@ func (c *canvas) set(x, y int, r rune, fg, bg string) {
 	if bg != "" {
 		cell.bg = bg
 	}
-	c.cells[y][x] = cell
 }
 
 func (c *canvas) text(x, y int, value string, fg, bg string, maxWidth int) {
@@ -106,27 +101,76 @@ func (c *canvas) box(x, y, w, h int, border, fill, titleFg string) {
 
 func (c *canvas) render() string {
 	var b strings.Builder
+	b.Grow(c.width * c.height * 24)
 	for y := 0; y < c.height; y++ {
 		if y > 0 {
 			b.WriteByte('\n')
 		}
+		row := c.cells[y*c.width : (y+1)*c.width]
 		x := 0
 		for x < c.width {
-			cur := c.cells[y][x]
+			cur := row[x]
 			j := x + 1
-			for j < c.width && c.cells[y][j].fg == cur.fg && c.cells[y][j].bg == cur.bg {
+			for j < c.width && row[j].fg == cur.fg && row[j].bg == cur.bg {
 				j++
 			}
-			var text strings.Builder
+			writeTrueColor(&b, cur.fg, cur.bg)
 			for i := x; i < j; i++ {
-				text.WriteRune(c.cells[y][i].r)
+				b.WriteRune(row[i].r)
 			}
-			style := lipgloss.NewStyle().Foreground(lipgloss.Color(cur.fg)).Background(lipgloss.Color(cur.bg))
-			b.WriteString(style.Render(text.String()))
+			b.WriteString("\x1b[0m")
 			x = j
 		}
 	}
 	return b.String()
+}
+
+func writeTrueColor(b *strings.Builder, fg, bg string) {
+	fr, fgv, fb, okFG := domain.ParseRGB(fg)
+	br, bgv, bb, okBG := domain.ParseRGB(bg)
+	b.WriteString("\x1b[")
+	if okFG {
+		b.WriteString("38;2;")
+		writeUint(b, fr)
+		b.WriteByte(';')
+		writeUint(b, fgv)
+		b.WriteByte(';')
+		writeUint(b, fb)
+	}
+	if okBG {
+		if okFG {
+			b.WriteByte(';')
+		}
+		b.WriteString("48;2;")
+		writeUint(b, br)
+		b.WriteByte(';')
+		writeUint(b, bgv)
+		b.WriteByte(';')
+		writeUint(b, bb)
+	}
+	b.WriteByte('m')
+}
+
+func writeUint(b *strings.Builder, n int) {
+	if n < 0 {
+		n = 0
+	}
+	if n > 255 {
+		n = 255
+	}
+	if n >= 100 {
+		b.WriteByte(byte('0' + n/100))
+		n %= 100
+		b.WriteByte(byte('0' + n/10))
+		b.WriteByte(byte('0' + n%10))
+		return
+	}
+	if n >= 10 {
+		b.WriteByte(byte('0' + n/10))
+		b.WriteByte(byte('0' + n%10))
+		return
+	}
+	b.WriteByte(byte('0' + n))
 }
 
 func clip(value string, maxWidth int) string {

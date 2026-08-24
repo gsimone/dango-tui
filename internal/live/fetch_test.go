@@ -1,36 +1,38 @@
 package live
 
 import (
-	"bytes"
 	"errors"
-	"image"
-	"image/color"
-	"image/png"
+	"fmt"
 	"os/exec"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/gsimone/dango-tui/internal/domain"
 )
 
-func TestFetchWithGroupsChainFromGhJSON(t *testing.T) {
-	run := func(args ...string) ([]byte, error) {
+func ghOK(handlers map[string][]byte) runner {
+	return func(args ...string) ([]byte, error) {
 		joined := strings.Join(args, " ")
-		switch {
-		case strings.HasPrefix(joined, "repo view"):
-			return []byte(`{"nameWithOwner":"owner/demo","defaultBranchRef":{"name":"main"}}`), nil
-		case strings.HasPrefix(joined, "pr list"):
-			return []byte(`[
+		for prefix, raw := range handlers {
+			if strings.HasPrefix(joined, prefix) {
+				return raw, nil
+			}
+		}
+		return nil, fmt.Errorf("unexpected gh %s", joined)
+	}
+}
+
+func TestFetchWithGroupsChainFromGhJSON(t *testing.T) {
+	run := ghOK(map[string][]byte{
+		"repo view": []byte(`{"nameWithOwner":"owner/demo","defaultBranchRef":{"name":"main"}}`),
+		"pr list": []byte(`[
 				{"number":1,"title":"bottom","url":"https://github.com/owner/demo/pull/1","headRefName":"a","baseRefName":"main","headRefOid":"aaa","author":{"login":"gm"},"isDraft":false,"state":"OPEN","mergeable":"MERGEABLE","reviewDecision":"APPROVED","latestReviews":[{"state":"APPROVED"}],"additions":1,"deletions":0,"changedFiles":1,"body":"","statusCheckRollup":[{"state":"SUCCESS"}]},
 				{"number":2,"title":"top","url":"https://github.com/owner/demo/pull/2","headRefName":"b","baseRefName":"a","headRefOid":"bbb","author":{"login":"gm"},"isDraft":false,"state":"OPEN","mergeable":"MERGEABLE","reviewDecision":"","latestReviews":[],"additions":3,"deletions":1,"changedFiles":2,"body":"","statusCheckRollup":[{"state":"FAILURE"}]}
-			]`), nil
-		case strings.HasPrefix(joined, "api repos/"):
-			return []byte(`[]`), nil
-		default:
-			t.Fatalf("unexpected gh %s", joined)
-			return nil, nil
-		}
-	}
+			]`),
+		"api repos/": []byte(`[]`),
+	})
 	stacks, err := fetchWith(run, "owner/demo")
 	if err != nil {
 		t.Fatal(err)
@@ -53,32 +55,13 @@ func TestFetchWithGroupsChainFromGhJSON(t *testing.T) {
 }
 
 func TestFetchMapsLabelsAndAuthor(t *testing.T) {
-	pngBytes := solidPNG(t, 200, 40, 40)
-	old := getURL
-	getURL = func(raw string) ([]byte, error) {
-		if raw != "https://avatars.example/gm.png" {
-			t.Fatalf("avatar url %q", raw)
-		}
-		return pngBytes, nil
-	}
-	t.Cleanup(func() { getURL = old })
-
-	run := func(args ...string) ([]byte, error) {
-		joined := strings.Join(args, " ")
-		switch {
-		case strings.HasPrefix(joined, "repo view"):
-			return []byte(`{"nameWithOwner":"owner/demo","defaultBranchRef":{"name":"main"}}`), nil
-		case strings.HasPrefix(joined, "pr list"):
-			return []byte(`[
+	run := ghOK(map[string][]byte{
+		"repo view": []byte(`{"nameWithOwner":"owner/demo","defaultBranchRef":{"name":"main"}}`),
+		"pr list": []byte(`[
 				{"number":1,"title":"bottom","url":"https://github.com/owner/demo/pull/1","headRefName":"a","baseRefName":"main","headRefOid":"aaa","author":{"login":"gm","avatarUrl":"https://avatars.example/gm.png"},"labels":[{"name":"bug","color":"d73a4a"},{"name":"auth","color":"0e8a16"}],"isDraft":false,"state":"OPEN","mergeable":"MERGEABLE","reviewDecision":"APPROVED","latestReviews":[{"state":"APPROVED"}],"additions":1,"deletions":0,"changedFiles":1,"body":"","statusCheckRollup":[{"state":"SUCCESS"}]}
-			]`), nil
-		case strings.HasPrefix(joined, "api repos/"):
-			return []byte(`[]`), nil
-		default:
-			t.Fatalf("unexpected gh %s", joined)
-			return nil, nil
-		}
-	}
+			]`),
+		"api repos/": []byte(`[]`),
+	})
 	stacks, err := fetchWith(run, "owner/demo")
 	if err != nil {
 		t.Fatal(err)
@@ -93,75 +76,12 @@ func TestFetchMapsLabelsAndAuthor(t *testing.T) {
 	if pr.Author != "gm" || pr.AvatarURL != "https://avatars.example/gm.png" {
 		t.Fatalf("author %+v", pr)
 	}
-	if pr.AuthorColor != "#c82828" {
-		t.Fatalf("sampled avatar color %q", pr.AuthorColor)
+	if pr.AuthorColor != domain.LoginColor("gm") {
+		t.Fatalf("author ● is login-stable, got %q want %q", pr.AuthorColor, domain.LoginColor("gm"))
 	}
-}
-
-func TestDominantHexPrefersChromaticBucket(t *testing.T) {
-	img := image.NewRGBA(image.Rect(0, 0, 16, 16))
-	grey := color.RGBA{R: 140, G: 140, B: 142, A: 255}
-	red := color.RGBA{R: 200, G: 40, B: 40, A: 255}
-	for y := 0; y < 16; y++ {
-		for x := 0; x < 16; x++ {
-			img.Set(x, y, grey)
-		}
+	if domain.IsLowChromaHex(pr.AuthorColor) {
+		t.Fatalf("author ● must stay chromatic: %s", pr.AuthorColor)
 	}
-	for y := 0; y < 4; y++ {
-		for x := 0; x < 4; x++ {
-			img.Set(x, y, red)
-		}
-	}
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, img); err != nil {
-		t.Fatal(err)
-	}
-	hex, err := dominantHex(buf.Bytes())
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, g, b, ok := domain.ParseRGB(hex)
-	if !ok || r < 160 || g > 80 || b > 80 {
-		t.Fatalf("wanted the red patch, got %s", hex)
-	}
-
-	greyOnly := solidPNG(t, 140, 140, 142)
-	if _, err := dominantHex(greyOnly); err == nil {
-		t.Fatal("grey-only avatar must not invent a color")
-	}
-	old := getURL
-	getURL = func(string) ([]byte, error) { return greyOnly, nil }
-	t.Cleanup(func() { getURL = old })
-	if got := resolveAuthorColor("gm", "https://avatars.example/grey.png"); got != domain.LoginColor("gm") {
-		t.Fatalf("grey avatar falls back to login, got %s", got)
-	}
-}
-
-func TestAvatarFetchFailureFallsBackToLogin(t *testing.T) {
-	old := getURL
-	getURL = func(string) ([]byte, error) { return nil, errors.New("nope") }
-	t.Cleanup(func() { getURL = old })
-	if got := resolveAuthorColor("gm", "https://avatars.example/x.png"); got != domain.LoginColor("gm") {
-		t.Fatalf("fallback %q", got)
-	}
-	if got := resolveAuthorColor("gm", ""); got != domain.LoginColor("gm") {
-		t.Fatalf("empty url %q", got)
-	}
-}
-
-func solidPNG(t *testing.T, r, g, b uint8) []byte {
-	t.Helper()
-	img := image.NewRGBA(image.Rect(0, 0, 8, 8))
-	for y := 0; y < 8; y++ {
-		for x := 0; x < 8; x++ {
-			img.Set(x, y, color.RGBA{R: r, G: g, B: b, A: 255})
-		}
-	}
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, img); err != nil {
-		t.Fatal(err)
-	}
-	return buf.Bytes()
 }
 
 func TestFetchWithRejectsEmptyRepo(t *testing.T) {
@@ -189,12 +109,12 @@ func TestFetchLookPathMissing(t *testing.T) {
 }
 
 func TestFetchWithMissingBinary(t *testing.T) {
-	calls := 0
+	var calls atomic.Int32
 	_, err := fetchWith(func(args ...string) ([]byte, error) {
-		calls++
+		calls.Add(1)
 		return nil, &exec.Error{Name: "gh", Err: exec.ErrNotFound}
 	}, "owner/name")
-	if calls == 0 {
+	if calls.Load() == 0 {
 		t.Fatal("injected run must be used")
 	}
 	if !errors.Is(err, ErrGHMissing) {
@@ -202,6 +122,46 @@ func TestFetchWithMissingBinary(t *testing.T) {
 	}
 	if err.Error() != "dango: gh CLI not found. Install https://cli.github.com and retry." {
 		t.Fatalf("sentence %q", err)
+	}
+}
+
+func TestPRListFieldsSkipReviews(t *testing.T) {
+	hasLatest := false
+	for _, field := range prListFields {
+		if field == "reviews" {
+			t.Fatalf("full review history is dead weight on the live fetch: %v", prListFields)
+		}
+		if field == "latestReviews" {
+			hasLatest = true
+		}
+	}
+	if !hasLatest {
+		t.Fatal("keep latestReviews for approval counts")
+	}
+}
+
+func TestFetchIssuesRepoListAndStacks(t *testing.T) {
+	var mu sync.Mutex
+	seen := map[string]bool{}
+	run := func(args ...string) ([]byte, error) {
+		mu.Lock()
+		if len(args) > 0 {
+			seen[args[0]] = true
+		}
+		mu.Unlock()
+		return ghOK(map[string][]byte{
+			"repo view":  []byte(`{"nameWithOwner":"owner/demo","defaultBranchRef":{"name":"main"}}`),
+			"pr list":    []byte(`[]`),
+			"api repos/": []byte(`[]`),
+		})(args...)
+	}
+	if _, err := fetchWith(run, "owner/demo"); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"repo", "pr", "api"} {
+		if !seen[want] {
+			t.Fatalf("missing gh %s call: %v", want, seen)
+		}
 	}
 }
 

@@ -93,8 +93,11 @@ func (m Model) paintBrand(c *canvas, width int, surface, paper, meta, stick stri
 		x += 2
 	}
 	c.text(PadX+6, PadTop, "DANGO", paper, surface, displayWidth("DANGO"))
-	line2 := fmt.Sprintf("%s  •  %d stacks / %d layers", m.repoLabel(), m.stackCount(), m.layerCount())
-	c.text(PadX, PadTop+1, line2, meta, surface, innerWidth(width))
+	c.text(PadX, PadTop+1, repoCountLine(m.repoLabel(), m.stackCount(), m.layerCount()), meta, surface, innerWidth(width))
+}
+
+func repoCountLine(repo string, stacks, layers int) string {
+	return repo + "  •  " + itoa(stacks) + " stacks / " + itoa(layers) + " layers"
 }
 
 func stackListName(stack domain.Stack) string {

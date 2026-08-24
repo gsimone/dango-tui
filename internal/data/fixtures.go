@@ -1,8 +1,9 @@
 package data
 
 import (
+	"sync"
+
 	"github.com/gsimone/dango-tui/internal/domain"
-	"github.com/gsimone/dango-tui/internal/summary"
 )
 
 type PullRequestFixtureInput struct {
@@ -221,162 +222,97 @@ func pr(number int, title string, state domain.PrDisplayState, extra ...PullRequ
 	return PRFixture(input)
 }
 
-func strPtr(v string) *string { return &v }
-func intPtr(v int) *int       { return &v }
+func intPtr(v int) *int { return &v }
 
 func desc(v string) *string { return &v }
 
-var FixtureStories = []FixtureStory{
-	{
-		ID:    "mixed",
-		Label: "mixed health",
-		Stacks: []domain.Stack{
-			StackFixture(StackFixtureInput{Number: 1, Name: "auth cleanup", Description: desc("Simplify authentication boundaries"), PRs: []domain.PullRequest{
-				pr(184, "Split auth scope from session checks", domain.StateMerged, PullRequestFixtureInput{
-					Labels: []domain.Label{
-						{Name: "bug", Color: "#d73a4a"},
-						{Name: "auth", Color: "#0e8a16"},
-					},
-				}),
-				pr(185, "Keep service identity explicit", domain.StateReady),
-				pr(186, "Remove implicit session fallback", domain.StateCIFailure),
-			}}),
-			StackFixture(StackFixtureInput{Number: 2, Name: "composer tokens", Description: desc("Add ontology tokens to email"), PRs: []domain.PullRequest{
-				pr(211, "Add token catalogue", domain.StateReady),
-				pr(212, "Map entity fields into composer", domain.StateReviewBlocked),
-				pr(213, "Prepare token migration", domain.StateQueued),
-			}}),
-			StackFixture(StackFixtureInput{Number: 3, Name: "sync rewrite", Description: desc("Fix optimistic sync lifecycle"), PRs: []domain.PullRequest{
-				pr(241, "Mark syncing work clearly", domain.StateDraft),
-				pr(242, "Avoid duplicate invalidation", domain.StateOpen),
-			}}),
-		},
-	},
-	{
-		ID:    "all-ready",
-		Label: "all ready",
-		Stacks: []domain.Stack{
-			StackFixture(StackFixtureInput{Number: 4, Name: "profile editor", Description: desc("Ship the profile editing stack"), PRs: []domain.PullRequest{
-				pr(301, "Add profile capability", domain.StateReady),
-				pr(302, "Wire profile editor", domain.StateReady),
-				pr(303, "Polish confirmation copy", domain.StateReady),
-			}}),
-		},
-	},
-	{ID: "all-merged", Label: "empty repository", Stacks: []domain.Stack{}},
-	{
-		ID:         "draft",
-		Label:      "stale cache",
-		CacheState: CacheStale,
-		Stacks: []domain.Stack{
-			StackFixture(StackFixtureInput{Number: 6, Name: "release notes", Description: desc("Cached 18m ago · waiting to refresh"), PRs: []domain.PullRequest{
-				pr(321, "Draft release notes from merged work", domain.StateOpen, PullRequestFixtureInput{
-					CI: &domain.CISummary{State: domain.CIUnknown, Failed: 0, Pending: 0, Total: 0},
-				}),
-				pr(322, "Publish the rollout note", domain.StateReady),
-			}}),
-		},
-	},
-	{
-		ID:    "queued",
-		Label: "queued",
-		Stacks: []domain.Stack{
-			StackFixture(StackFixtureInput{Number: 7, Name: "release handoff", Description: desc("Waiting in merge queue"), PRs: []domain.PullRequest{
-				pr(331, "Queue after release freeze", domain.StateQueued),
-			}}),
-		},
-	},
-	{ID: "ci-failing", Label: "refresh error", CacheState: CacheError, Stacks: []domain.Stack{}},
-	{
-		ID:    "changes-requested",
-		Label: "changes requested",
-		Stacks: []domain.Stack{
-			StackFixture(StackFixtureInput{Number: 9, Name: "checkout safety", Description: desc("Needs one review follow-up"), PRs: []domain.PullRequest{
-				pr(351, "Protect local checkout action", domain.StateReviewBlocked, PullRequestFixtureInput{
-					Approvals:        intPtr(1),
-					ChangesRequested: boolPtr(true),
-				}),
-			}}),
-		},
-	},
-	{
-		ID:    "merge-conflict",
-		Label: "merge conflict",
-		Stacks: []domain.Stack{
-			StackFixture(StackFixtureInput{Number: 10, Name: "stack base", Description: desc("Conflict against main"), PRs: []domain.PullRequest{
-				pr(361, "Rework stack base references", domain.StateReviewBlocked, PullRequestFixtureInput{
-					Mergeable:        domain.MergeableFalse(),
-					ChangesRequested: boolPtr(false),
-					ReviewDecision:   strPtr(""),
-				}),
-			}}),
-		},
-	},
-	{
-		ID:    "pending-no-review",
-		Label: "pending, no review",
-		Stacks: []domain.Stack{
-			StackFixture(StackFixtureInput{Number: 11, Name: "first review", Description: desc("Awaiting CI and first review"), PRs: []domain.PullRequest{
-				pr(371, "Observe no review data", domain.StateOpen, PullRequestFixtureInput{
-					CI:             &domain.CISummary{State: domain.CIPending, Failed: 0, Pending: 4, Total: 9},
-					UnsetMergeable: true,
-					Author:         "lina",
-				}),
-			}}),
-		},
-	},
-	{
-		ID:    "long-title-branch",
-		Label: "long title + branch",
-		Stacks: []domain.Stack{
-			StackFixture(StackFixtureInput{Number: 12, Name: "terminal dignity", Description: desc("Ensure narrow terminals truncate with dignity"), PRs: []domain.PullRequest{
-				pr(381, "Refactor the very long composition pipeline so entity token expansion remains deterministic when a deeply nested relationship resolves to an empty value", domain.StateReady, PullRequestFixtureInput{
-					Branch: "gm/refactor-composer-token-expansion-for-deeply-nested-relationship-fallbacks",
-				}),
-				pr(382, "Document the branch naming experiment", domain.StateOpen, PullRequestFixtureInput{
-					Branch: "gm/this-branch-name-is-deliberately-absurdly-long-to-test-the-card",
-				}),
-			}}),
-		},
-	},
-	{
-		ID:    "large-stack",
-		Label: "large stack",
-		Stacks: []domain.Stack{
-			StackFixture(StackFixtureInput{Number: 13, Name: "migration train", Description: desc("Ten independent layers, still one readable line"), PRs: largeStackPRs()}),
-		},
-	},
-	{
-		ID:    "pair",
-		Label: "two layers",
-		Stacks: []domain.Stack{
-			StackFixture(StackFixtureInput{Number: 1, Name: "pair", Description: desc("Two reviewable cuts on the same checkout"), PRs: pairPRs()}),
-		},
-	},
-	{
-		ID:    "freight",
-		Label: "twenty layers",
-		Stacks: []domain.Stack{
-			StackFixture(StackFixtureInput{Number: 2, Name: "freight train", Description: desc("Authored cutover train: mixed CI and review"), PRs: twentyLayerPRs()}),
-		},
-	},
-	{
-		ID:     "chaos",
-		Label:  "chaos load",
-		Stacks: chaosStacks(),
-	},
-}
+// stories are the -story hook fixtures. Built on first use so a live
+// fetch does not pay for them. Chaos and other unused stories stay out
+// of the binary.
+var (
+	storiesOnce sync.Once
+	stories     []FixtureStory
+)
 
-func init() {
-	applySummaries(FixtureStories, summary.FromLayers{})
-}
-
-func applySummaries(stories []FixtureStory, s summary.Summarizer) {
-	for i := range stories {
-		for j := range stories[i].Stacks {
-			stories[i].Stacks[j].Summary = s.Summarize(stories[i].Stacks[j])
+func Stories() []FixtureStory {
+	storiesOnce.Do(func() {
+		stories = []FixtureStory{
+			{
+				ID:    "mixed",
+				Label: "mixed health",
+				Stacks: []domain.Stack{
+					StackFixture(StackFixtureInput{Number: 1, Name: "auth cleanup", Description: desc("Simplify authentication boundaries"), PRs: []domain.PullRequest{
+						pr(184, "Split auth scope from session checks", domain.StateMerged, PullRequestFixtureInput{
+							Labels: []domain.Label{
+								{Name: "bug", Color: "#d73a4a"},
+								{Name: "auth", Color: "#0e8a16"},
+							},
+						}),
+						pr(185, "Keep service identity explicit", domain.StateReady),
+						pr(186, "Remove implicit session fallback", domain.StateCIFailure),
+					}}),
+					StackFixture(StackFixtureInput{Number: 2, Name: "composer tokens", Description: desc("Add ontology tokens to email"), PRs: []domain.PullRequest{
+						pr(211, "Add token catalogue", domain.StateReady),
+						pr(212, "Map entity fields into composer", domain.StateReviewBlocked),
+						pr(213, "Prepare token migration", domain.StateQueued),
+					}}),
+					StackFixture(StackFixtureInput{Number: 3, Name: "sync rewrite", Description: desc("Fix optimistic sync lifecycle"), PRs: []domain.PullRequest{
+						pr(241, "Mark syncing work clearly", domain.StateDraft),
+						pr(242, "Avoid duplicate invalidation", domain.StateOpen),
+					}}),
+				},
+			},
+			{ID: "all-merged", Label: "empty repository", Stacks: []domain.Stack{}},
+			{
+				ID:         "draft",
+				Label:      "stale cache",
+				CacheState: CacheStale,
+				Stacks: []domain.Stack{
+					StackFixture(StackFixtureInput{Number: 6, Name: "release notes", Description: desc("Cached 18m ago · waiting to refresh"), PRs: []domain.PullRequest{
+						pr(321, "Draft release notes from merged work", domain.StateOpen, PullRequestFixtureInput{
+							CI: &domain.CISummary{State: domain.CIUnknown, Failed: 0, Pending: 0, Total: 0},
+						}),
+						pr(322, "Publish the rollout note", domain.StateReady),
+					}}),
+				},
+			},
+			{ID: "ci-failing", Label: "refresh error", CacheState: CacheError, Stacks: []domain.Stack{}},
+			{
+				ID:    "changes-requested",
+				Label: "changes requested",
+				Stacks: []domain.Stack{
+					StackFixture(StackFixtureInput{Number: 9, Name: "checkout safety", Description: desc("Needs one review follow-up"), PRs: []domain.PullRequest{
+						pr(351, "Protect local checkout action", domain.StateReviewBlocked, PullRequestFixtureInput{
+							Approvals:        intPtr(1),
+							ChangesRequested: boolPtr(true),
+						}),
+					}}),
+				},
+			},
+			{
+				ID:    "large-stack",
+				Label: "large stack",
+				Stacks: []domain.Stack{
+					StackFixture(StackFixtureInput{Number: 13, Name: "migration train", Description: desc("Ten independent layers, still one readable line"), PRs: largeStackPRs()}),
+				},
+			},
+			{
+				ID:    "pair",
+				Label: "two layers",
+				Stacks: []domain.Stack{
+					StackFixture(StackFixtureInput{Number: 1, Name: "pair", Description: desc("Two reviewable cuts on the same checkout"), PRs: pairPRs()}),
+				},
+			},
+			{
+				ID:    "freight",
+				Label: "twenty layers",
+				Stacks: []domain.Stack{
+					StackFixture(StackFixtureInput{Number: 2, Name: "freight train", Description: desc("Authored cutover train: mixed CI and review"), PRs: twentyLayerPRs()}),
+				},
+			},
 		}
-	}
+	})
+	return stories
 }
 
 func pairPRs() []domain.PullRequest {
@@ -419,35 +355,6 @@ func twentyLayerPRs() []domain.PullRequest {
 	return out
 }
 
-func chaosStacks() []domain.Stack {
-	states := []domain.PrDisplayState{
-		domain.StateMerged, domain.StateReady, domain.StateQueued, domain.StateOpen,
-		domain.StateDraft, domain.StateCIFailure, domain.StateReviewBlocked,
-	}
-	names := []string{
-		"pair", "ok", "x", "billing", "sync", "auth",
-		"a very long stack name from last quarter",
-		"ci", "docs", "hotfix",
-	}
-	out := make([]domain.Stack, 0, 300)
-	out = append(out, StackFixture(StackFixtureInput{Number: 1, Name: "pair", Description: desc("Two reviewable cuts on the same checkout"), PRs: pairPRs()}))
-	out = append(out, StackFixture(StackFixtureInput{Number: 2, Name: "freight train", Description: desc("Authored cutover train: mixed CI and review"), PRs: twentyLayerPRs()}))
-	for n := 3; n <= 300; n++ {
-		layers := 1 + n%5
-		prs := make([]domain.PullRequest, layers)
-		for i := 0; i < layers; i++ {
-			prs[i] = pr(1000+n*10+i, names[n%len(names)]+" layer "+itoa(i+1), states[(n+i)%len(states)])
-		}
-		out = append(out, StackFixture(StackFixtureInput{
-			Number:      n,
-			Name:        names[n%len(names)] + " " + itoa(n),
-			Description: desc("chaos stack"),
-			PRs:         prs,
-		}))
-	}
-	return out
-}
-
 func largeStackPRs() []domain.PullRequest {
 	states := []domain.PrDisplayState{
 		domain.StateMerged, domain.StateMerged, domain.StateReady, domain.StateReady, domain.StateQueued,
@@ -461,8 +368,9 @@ func largeStackPRs() []domain.PullRequest {
 }
 
 func FixtureStoryIDs() []string {
-	ids := make([]string, len(FixtureStories))
-	for i, story := range FixtureStories {
+	all := Stories()
+	ids := make([]string, len(all))
+	for i, story := range all {
 		ids[i] = story.ID
 	}
 	return ids
@@ -478,24 +386,13 @@ func IsFixtureStoryID(value string) bool {
 }
 
 func StoryByID(id string) FixtureStory {
-	for _, story := range FixtureStories {
+	all := Stories()
+	for _, story := range all {
 		if story.ID == id {
 			return story
 		}
 	}
-	return FixtureStories[0]
-}
-
-// ExampleIDs are the authored stacks shown when --repo is off.
-var ExampleIDs = []string{"mixed", "pair", "freight"}
-
-// ExampleStacks returns mixed + pair + freight. Not chaos, not random.
-func ExampleStacks() []domain.Stack {
-	var out []domain.Stack
-	for _, id := range ExampleIDs {
-		out = append(out, StoryByID(id).Stacks...)
-	}
-	return out
+	return all[0]
 }
 
 func boolPtr(v bool) *bool { return &v }

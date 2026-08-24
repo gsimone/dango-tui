@@ -3,8 +3,7 @@
 A small native terminal UI for reading a GitHub pull-request stack at a glance.
 
 The product path is a Go binary (Go 1.24+) built with
-[Bubble Tea](https://github.com/charmbracelet/bubbletea) and
-[Lipgloss](https://charmbracelet/lipgloss). No Bubbles restyle. No picker.
+[Bubble Tea](https://github.com/charmbracelet/bubbletea). No Bubbles restyle. No picker.
 
 ## Run
 
