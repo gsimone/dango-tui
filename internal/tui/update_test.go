@@ -10,6 +10,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gsimone/dango-tui/internal/domain"
+	"github.com/gsimone/dango-tui/internal/live"
 	"github.com/gsimone/dango-tui/internal/summary"
 )
 
@@ -486,7 +487,7 @@ func TestInspectorStatusInkIsValueOnly(t *testing.T) {
 func TestDotCopiesFetchError(t *testing.T) {
 	sha := "dddddddddddddddddddddddddddddddddddddddd"
 	withVCS(t, sha)
-	err502 := errors.New("gh pr list --repo archetype-labs/app --state open --limit 100 --json number,title,url,headRefName,baseRefName,author,labels,isDraft,state: HTTP 502: Bad Gateway")
+	err502 := errors.New(live.FormatGHArgv(live.PRListArgs("archetype-labs/app")) + ": HTTP 502: Bad Gateway")
 	var copied string
 	old := copyText
 	copyText = func(s string) error { copied = s; return nil }

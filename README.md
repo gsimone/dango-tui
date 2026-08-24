@@ -108,6 +108,6 @@ CI on pull requests and pushes to `main` publishes coverage (total %) and real g
 - 2-column side pad, 1 blank row at the top
 - Stack list on the left; one `│` rule; inspector pane on the right (left/right pad)
 - List names are short stack titles in paper, leftover measure, one line. Full GitHub title lives in the right pane.
-- Inspector facts include status (status ink on the value only), labels in their GitHub hex, and author (`●` + login)
+- Inspector facts include status (status ink on the value only), labels in their GitHub hex, and author (`●` + login). `●` is the dominant color from that user's GitHub avatar, never a picture. Fetch failure uses a stable login ink.
 - Selected row `#242018` with paper ink; list titles stay paper; chrome is meta
 - **120×30** is the product: list + right inspector pane. Narrow widths keep a stacked card clipped to content + pad.
