@@ -4,8 +4,9 @@
 # Do not fail the job: coverage % or gremlins score (thresholds stay unset / 0).
 # Tomorrow: add a min coverage % and/or gremlins --threshold-efficacy / --threshold-mcover.
 #
-# Mutation is gremlins (https://github.com/go-gremlins/gremlins), not `make mutate`.
-# `make mutate` only runs hand-written Mutant_* tests; those are ordinary tests.
+# Mutation is gremlins (https://github.com/go-gremlins/gremlins), not Stryker (JS)
+# and not `make mutate`. `make mutate` only runs hand-written Mutant_* tests;
+# those stay ordinary tests — do not rename or dress them up as a mutator.
 #
 # Scope: ./internal (app, cli, data, domain, live, summary, tui).
 # testdata/ is not a Go package. cmd/dango has no tests (all mutants would be
