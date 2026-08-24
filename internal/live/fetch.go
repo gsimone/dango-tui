@@ -243,11 +243,16 @@ func fetchWith(run runner, repo string) ([]domain.Stack, error) {
 	return GroupStacks(prs, "main"), nil
 }
 
-// prListFields is the first-paint grouping set. No body, no check rollup,
-// no review history — those 502 GraphQL on a normal private repo.
+// prListFields is the first-paint grouping set plus the cheap status
+// fields GetDisplayState reads. No body, no statusCheckRollup, no
+// latestReviews — those 502 GraphQL on a normal private repo.
+// gh pr list --json accepts mergeable, reviewDecision, mergeStateStatus
+// (verified against `gh pr list --help` JSON FIELDS). CI stays unknown:
+// there is no cheap check-rollup substitute.
 var prListFields = []string{
 	"number", "title", "url", "headRefName", "baseRefName",
 	"author", "labels", "isDraft", "state",
+	"mergeable", "reviewDecision", "mergeStateStatus",
 }
 
 type ghRepo struct {
@@ -301,6 +306,8 @@ type ghPR struct {
 
 func (p ghPR) toRemote() RemotePR {
 	approvals, changes := reviewCounts(p.LatestReviews)
+	// First list does not request statusCheckRollup, so this stays empty
+	// and CI.State is unknown. mergeStateStatus is queue only.
 	ciState, failed, pending, total := rollupCI(p.StatusCheckRollup)
 	queue := ""
 	if strings.EqualFold(p.MergeStateStatus, "QUEUED") {
