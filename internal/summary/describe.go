@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -32,6 +33,27 @@ func describeArgv(raw string) []string {
 	return strings.Fields(strings.TrimSpace(raw))
 }
 
+// resolveDescribeArgv joins a relative argv[0] to configDir. echo stays on PATH.
+func resolveDescribeArgv(argv []string, configDir string) []string {
+	if len(argv) == 0 {
+		return argv
+	}
+	out := append([]string(nil), argv...)
+	name := out[0]
+	if filepath.IsAbs(name) || strings.TrimSpace(configDir) == "" {
+		return out
+	}
+	if strings.ContainsAny(name, `/\`) || strings.HasPrefix(name, ".") {
+		out[0] = filepath.Join(configDir, name)
+		return out
+	}
+	cand := filepath.Join(configDir, name)
+	if st, err := os.Stat(cand); err == nil && !st.IsDir() {
+		out[0] = cand
+	}
+	return out
+}
+
 func describePayload(stack domain.Stack) []byte {
 	in := describeInput{Titles: layerTitleList(stack)}
 	raw, err := json.Marshal(in)
@@ -53,7 +75,7 @@ func layerTitleList(stack domain.Stack) []string {
 }
 
 func describeScript(job Job) (string, error) {
-	argv := describeArgv(job.Describe)
+	argv := resolveDescribeArgv(describeArgv(job.Describe), job.DescribeDir)
 	if len(argv) == 0 {
 		return "", errNoDescribe
 	}
@@ -101,7 +123,7 @@ func cleanDescribe(raw string, stack domain.Stack) string {
 }
 
 func execDescribe(ctx context.Context, argv []string, stdin []byte) (string, error) {
-	if testing.Testing() {
+	if testing.Testing() && !allowTestDescribe(argv) {
 		return "", errNoDescribe
 	}
 	if len(argv) == 0 {
@@ -116,6 +138,9 @@ func execDescribe(ctx context.Context, argv []string, stdin []byte) (string, err
 		return "", errNoDescribe
 	}
 	cmd := exec.CommandContext(ctx, name, argv[1:]...)
+	if filepath.IsAbs(name) {
+		cmd.Dir = filepath.Dir(name)
+	}
 	cmd.Stdin = bytes.NewReader(stdin)
 	cmd.Stderr = io.Discard
 	out, err := cmd.Output()
@@ -123,4 +148,8 @@ func execDescribe(ctx context.Context, argv []string, stdin []byte) (string, err
 		return "", err
 	}
 	return string(bytes.TrimSpace(out)), nil
+}
+
+func allowTestDescribe(argv []string) bool {
+	return len(argv) > 0 && argv[0] == "echo"
 }

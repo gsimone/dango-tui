@@ -13,13 +13,14 @@ import (
 )
 
 type Options struct {
-	StoryID  string
-	Repo     string
-	Provider summary.Provider
-	Describe string
-	Width    int
-	Height   int
-	Fetch    live.FetchFunc
+	StoryID     string
+	Repo        string
+	Provider    summary.Provider
+	Describe    string
+	DescribeDir string
+	Width       int
+	Height      int
+	Fetch       live.FetchFunc
 	// EnrichCI fills CI after first paint. Nil is a no-op unless Fetch
 	// is also nil (production then uses live.EnrichCI).
 	EnrichCI live.EnrichCIFunc
@@ -42,6 +43,7 @@ type Model struct {
 	Repo        string
 	Provider    summary.Provider
 	Describe    string
+	DescribeDir string
 	Live        bool
 	File        bool
 	file        string
@@ -66,15 +68,16 @@ func New(opts Options) Model {
 		height = 24
 	}
 	m := Model{
-		Width:     width,
-		Height:    height,
-		State:     app.InitialState(),
-		LogoDots:  domain.ProcessLogoDots(),
-		Provider:  opts.Provider,
-		Describe:  strings.TrimSpace(opts.Describe),
-		fetch:     opts.Fetch,
-		enrichCI:  opts.EnrichCI,
-		summarize: opts.Summarize,
+		Width:       width,
+		Height:      height,
+		State:       app.InitialState(),
+		LogoDots:    domain.ProcessLogoDots(),
+		Provider:    opts.Provider,
+		Describe:    strings.TrimSpace(opts.Describe),
+		DescribeDir: strings.TrimSpace(opts.DescribeDir),
+		fetch:       opts.Fetch,
+		enrichCI:    opts.EnrichCI,
+		summarize:   opts.Summarize,
 	}
 	if m.fetch == nil {
 		m.fetch = live.Fetch
@@ -210,8 +213,8 @@ func (m *Model) startSelectedSummary() tea.Cmd {
 	if describe == "" && (!m.Live || m.Provider.Empty()) {
 		return nil
 	}
-	stack, ok := m.SelectedStack()
-	if !ok || stack.ID == "" {
+	stack, ok := m.ensureSelectedStackID()
+	if !ok {
 		return nil
 	}
 	if m.summaryDone[stack.ID] {
@@ -225,7 +228,7 @@ func (m *Model) startSelectedSummary() tea.Cmd {
 	}
 	m.summaryBusy = true
 	token := m.fetchSeq
-	job := summary.Job{Provider: m.Provider, Describe: m.Describe, Stack: stack, ID: stack.ID}
+	job := summary.Job{Provider: m.Provider, Describe: m.Describe, DescribeDir: m.DescribeDir, Stack: stack, ID: stack.ID}
 	run := m.summarize
 	return func() tea.Msg {
 		res := run(job)
@@ -236,6 +239,43 @@ func (m *Model) startSelectedSummary() tea.Cmd {
 			description: res.Description,
 		}
 	}
+}
+
+func (m *Model) ensureSelectedStackID() (domain.Stack, bool) {
+	filtered := m.Stacks()
+	sel := app.ClampSelection(m.State.Selection, filtered)
+	if len(filtered) == 0 || sel.StackIndex >= len(filtered) {
+		return domain.Stack{}, false
+	}
+	stack := filtered[sel.StackIndex]
+	if stack.ID != "" {
+		return stack, true
+	}
+	id := "stack-" + itoa(sel.StackIndex)
+	for i := range m.stacks {
+		if stackRefEquals(m.stacks[i], stack) {
+			m.stacks[i].ID = id
+			stack.ID = id
+			return stack, true
+		}
+	}
+	stack.ID = id
+	return stack, true
+}
+
+func stackRefEquals(a, b domain.Stack) bool {
+	if a.ID != "" && a.ID == b.ID {
+		return true
+	}
+	if len(a.PRs) == 0 || len(a.PRs) != len(b.PRs) {
+		return false
+	}
+	for i := range a.PRs {
+		if a.PRs[i].Number != b.PRs[i].Number {
+			return false
+		}
+	}
+	return true
 }
 
 func (m Model) startCIEnrich() tea.Cmd {

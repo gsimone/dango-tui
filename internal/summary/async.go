@@ -9,10 +9,11 @@ import (
 
 // Job is one stack-title request. Fetch does not wait on it.
 type Job struct {
-	Provider Provider
-	Describe string
-	Stack    domain.Stack
-	ID       string
+	Provider    Provider
+	Describe    string
+	DescribeDir string
+	Stack       domain.Stack
+	ID          string
 }
 
 // Result lands after first paint. Empty Title/Description means no fill.

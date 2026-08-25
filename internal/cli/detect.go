@@ -127,6 +127,20 @@ func parseDangoConfig(name string, raw []byte) (Config, error) {
 	}
 }
 
+// LaunchDir is the real process cwd. Resolve uses this, not ".".
+func LaunchDir() string {
+	cwd, err := os.Getwd()
+	if err != nil || strings.TrimSpace(cwd) == "" {
+		return "."
+	}
+	return cwd
+}
+
+// ResolveLaunch is what `dango --repo` does: detect/config from Getwd.
+func ResolveLaunch(args Args) (Args, error) {
+	return Resolve(args, LaunchDir())
+}
+
 func loadConfigFile(path, name string) (Config, bool, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -150,28 +164,65 @@ func loadConfigFile(path, name string) (Config, bool, error) {
 // dango.json may look at cwd yml/yaml, then the git root. --repo
 // owner/name is not a remote file. Missing file is empty.
 func ReadDangoConfig(dir string) (Config, error) {
+	cfg, _, err := ReadDangoConfigAt(dir)
+	return cfg, err
+}
+
+// ReadDangoConfigAt is ReadDangoConfig plus the file path that won.
+func ReadDangoConfigAt(dir string) (Config, string, error) {
 	dir = filepath.Clean(dir)
-	if cfg, ok, err := loadConfigFile(filepath.Join(dir, "dango.json"), "dango.json"); ok || err != nil {
-		return cfg, err
+	path := filepath.Join(dir, "dango.json")
+	if cfg, ok, err := loadConfigFile(path, "dango.json"); ok || err != nil {
+		return cfg, path, err
 	}
 	for _, name := range []string{"dango.yml", "dango.yaml"} {
-		if cfg, ok, err := loadConfigFile(filepath.Join(dir, name), name); ok || err != nil {
-			return cfg, err
+		path = filepath.Join(dir, name)
+		if cfg, ok, err := loadConfigFile(path, name); ok || err != nil {
+			return cfg, path, err
 		}
 	}
 	root, err := GitRoot(dir)
 	if err != nil || root == "" {
-		return Config{}, nil
+		return Config{}, "", nil
 	}
 	if filepath.Clean(root) == dir {
-		return Config{}, nil
+		return Config{}, "", nil
 	}
 	for _, name := range configNames {
-		if cfg, ok, err := loadConfigFile(filepath.Join(root, name), name); ok || err != nil {
-			return cfg, err
+		path = filepath.Join(root, name)
+		if cfg, ok, err := loadConfigFile(path, name); ok || err != nil {
+			return cfg, path, err
 		}
 	}
-	return Config{}, nil
+	return Config{}, "", nil
+}
+
+// resolveDescribe rewrites a relative argv[0] against the config file dir.
+// Bare PATH commands such as echo stay as-is unless that name exists there.
+func resolveDescribe(raw, configPath string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || strings.TrimSpace(configPath) == "" {
+		return raw
+	}
+	dir := filepath.Dir(configPath)
+	fields := strings.Fields(raw)
+	if len(fields) == 0 {
+		return raw
+	}
+	name := fields[0]
+	if filepath.IsAbs(name) {
+		return raw
+	}
+	if strings.ContainsAny(name, `/\`) || strings.HasPrefix(name, ".") {
+		fields[0] = filepath.Join(dir, name)
+		return strings.Join(fields, " ")
+	}
+	cand := filepath.Join(dir, name)
+	if st, err := os.Stat(cand); err == nil && !st.IsDir() {
+		fields[0] = cand
+		return strings.Join(fields, " ")
+	}
+	return raw
 }
 
 // ReadDangoJSON loads provider config. Prefer ReadDangoConfig.
@@ -203,12 +254,16 @@ func Resolve(args Args, dir string) (Args, error) {
 		args.Repo = repo
 	}
 	args.Describe = ""
-	cfg, err := ReadDangoConfig(dir)
+	args.DescribeDir = ""
+	cfg, path, err := ReadDangoConfigAt(dir)
 	if err == nil {
 		if args.Provider.Empty() && cfg.Provider != "" {
 			args.Provider = ParseProvider(cfg.Provider)
 		}
-		args.Describe = cfg.Describe
+		args.Describe = resolveDescribe(cfg.Describe, path)
+		if args.Describe != "" && path != "" {
+			args.DescribeDir = filepath.Dir(path)
+		}
 	}
 	return args, nil
 }

@@ -249,6 +249,27 @@ func TestExecDescribeNeverRunsLiveInUnitTests(t *testing.T) {
 	}
 }
 
+func TestRunEchoPaneHookOKExecsWithoutInject(t *testing.T) {
+	res := Run(Job{ID: "s", Describe: "echo pane-hook-ok", Stack: sampleStack()})
+	if res.Err != nil {
+		t.Fatalf("echo must exec: %v", res.Err)
+	}
+	if res.Description != "pane-hook-ok" {
+		t.Fatalf("echo result: %q", res.Description)
+	}
+}
+
+func TestResolveDescribeArgvJoinsConfigDir(t *testing.T) {
+	got := resolveDescribeArgv([]string{"./bin/hook"}, "/tmp/cwd")
+	if got[0] != filepath.Join("/tmp/cwd", "bin", "hook") && got[0] != "/tmp/cwd/bin/hook" {
+		t.Fatalf("%v", got)
+	}
+	echo := resolveDescribeArgv([]string{"echo", "pane-hook-ok"}, "/tmp/cwd")
+	if echo[0] != "echo" || echo[1] != "pane-hook-ok" {
+		t.Fatalf("echo stays on PATH: %v", echo)
+	}
+}
+
 func TestProductGoHasNoCodexString(t *testing.T) {
 	root := filepath.Join("..", "..")
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {

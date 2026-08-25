@@ -23,17 +23,18 @@ func main() {
 		os.Exit(2)
 	}
 
-	args, err = cli.Resolve(args, ".")
+	args, err = cli.ResolveLaunch(args)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "dango: %v\n", err)
 		os.Exit(2)
 	}
 
 	model := tui.New(tui.Options{
-		StoryID:  args.Story,
-		Repo:     args.Repo,
-		Provider: args.Provider,
-		Describe: args.Describe,
+		StoryID:     args.Story,
+		Repo:        args.Repo,
+		Provider:    args.Provider,
+		Describe:    args.Describe,
+		DescribeDir: args.DescribeDir,
 	})
 
 	if args.Frame != "" {

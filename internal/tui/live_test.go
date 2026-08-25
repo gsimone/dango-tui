@@ -672,6 +672,68 @@ func TestLiveDescribeSelectedStackFirst(t *testing.T) {
 	}
 }
 
+func TestDangoRepoCwdDescribePaintsPaneHookOK(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "dango.json"), []byte(`{"describe":"echo pane-hook-ok"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+
+	parsed, err := cli.Parse([]string{"--repo", "archetype-labs/app"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	args, err := cli.ResolveLaunch(parsed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if args.Describe != "echo pane-hook-ok" {
+		t.Fatalf("cwd dango.json describe: %q", args.Describe)
+	}
+
+	m := tui.New(tui.Options{
+		Repo:        args.Repo,
+		Provider:    args.Provider,
+		Describe:    args.Describe,
+		DescribeDir: args.DescribeDir,
+		Width:       120,
+		Height:      30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{{
+				ID:          "s",
+				Name:        "LEV-182",
+				Description: "already a gh sentence",
+				PRs: []domain.PullRequest{
+					{Number: 1, Title: "alpha layer", Branch: "feat/email-token-overrides-model"},
+					{Number: 2, Title: "beta layer"},
+				},
+			}}, nil
+		},
+	})
+	if m.Init() == nil {
+		t.Fatal("live --repo must fetch")
+	}
+	m, extra := applyLiveFetch(m)
+	if extra == nil {
+		t.Fatal("after first live paint the selected stack must run describe")
+	}
+	first := frameOf(m)
+	if strings.Contains(first, "pane-hook-ok") {
+		t.Fatalf("describe must not block first paint:\n%s", first)
+	}
+	m = applyLiveCmds(m, extra)
+	if m.Stacks()[0].Description != "pane-hook-ok" {
+		t.Fatalf("must overwrite gh description, got %q", m.Stacks()[0].Description)
+	}
+	frame := frameOf(m)
+	if !strings.Contains(frame, "pane-hook-ok") {
+		t.Fatalf("inspector View must paint echo stdout:\n%s", frame)
+	}
+	if strings.Contains(frame, "already a gh sentence") {
+		t.Fatalf("gh description must not stay:\n%s", frame)
+	}
+}
+
 func TestLiveEchoDescribeRendersPaneHookOK(t *testing.T) {
 	var jobs int
 	m := tui.New(tui.Options{

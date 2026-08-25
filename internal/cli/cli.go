@@ -20,11 +20,12 @@ func IsStackFile(raw string) bool {
 // remote and fetches live gh. Detect failure is an error, not examples.
 // --repo archetype-labs/app is live gh. --repo path.json is a stack dump.
 type Args struct {
-	Frame    string
-	Story    string // test/dev hook only; not advertised
-	Repo     string
-	Provider summary.Provider
-	Describe string
+	Frame       string
+	Story       string // test/dev hook only; not advertised
+	Repo        string
+	Provider    summary.Provider
+	Describe    string
+	DescribeDir string // directory of the config file that set Describe
 }
 
 // Provider is the --provider flag. The summarizer owns the type.

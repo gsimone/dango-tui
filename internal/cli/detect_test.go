@@ -165,6 +165,56 @@ func TestReadDangoJSONWinsOverYAML(t *testing.T) {
 	}
 }
 
+func TestResolveLaunchUsesGetwd(t *testing.T) {
+	dir := t.TempDir()
+	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")
+	if err := os.WriteFile(filepath.Join(dir, "dango.json"), []byte(`{"describe":"echo pane-hook-ok"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	parsed, err := Parse([]string{"--repo", "archetype-labs/app"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := ResolveLaunch(parsed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Repo != "archetype-labs/app" {
+		t.Fatalf("repo %q", got.Repo)
+	}
+	if got.Describe != "echo pane-hook-ok" {
+		t.Fatalf("Getwd dango.json describe: %q", got.Describe)
+	}
+	if got.DescribeDir != dir {
+		t.Fatalf("describe dir %q want %q", got.DescribeDir, dir)
+	}
+}
+
+func TestResolveDescribeRelativeAgainstConfigDir(t *testing.T) {
+	dir := t.TempDir()
+	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")
+	bin := filepath.Join(dir, "bin")
+	if err := os.Mkdir(bin, 0755); err != nil {
+		t.Fatal(err)
+	}
+	script := filepath.Join(bin, "hook")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\necho ok\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "dango.json"), []byte(`{"describe":"./bin/hook"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	got := mustResolve(t, Args{Repo: "archetype-labs/app"}, dir)
+	want := filepath.Join(dir, "bin", "hook")
+	if got.Describe != want {
+		t.Fatalf("relative describe: %q want %q", got.Describe, want)
+	}
+	if got.DescribeDir != dir {
+		t.Fatalf("describe dir %q", got.DescribeDir)
+	}
+}
+
 func TestReadDangoConfigCwdJSONDoesNotFallThrough(t *testing.T) {
 	dir := t.TempDir()
 	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")
@@ -286,12 +336,13 @@ func TestResolveDescribeFromConfigFileOnly(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "dango.json"), []byte(`{"describe":"bin/from-json"}`), 0644); err != nil {
 		t.Fatal(err)
 	}
+	want := filepath.Join(dir, "bin", "from-json")
 	fromFile := mustResolve(t, Args{}, dir)
-	if fromFile.Describe != "bin/from-json" {
-		t.Fatalf("json describe: %q", fromFile.Describe)
+	if fromFile.Describe != want {
+		t.Fatalf("json describe: %q want %q", fromFile.Describe, want)
 	}
 	ignored := mustResolve(t, Args{Describe: "bin/from-flag"}, dir)
-	if ignored.Describe != "bin/from-json" {
+	if ignored.Describe != want {
 		t.Fatalf("describe comes only from the config file: %q", ignored.Describe)
 	}
 }
