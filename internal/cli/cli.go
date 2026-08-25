@@ -47,7 +47,7 @@ func Usage() string {
 		"No --repo: detect the GitHub remote from cwd and fetch via gh.\n" +
 		"No GitHub remote: pass --repo archetype-labs/app or --repo testdata/test.json.\n" +
 		"--repo archetype-labs/app fetches via gh. --repo path.json is a stack dump, not live gh.\n" +
-		"--doctor prints the launch cwd, the config files it looks at, and the describe argv.\n" +
+		"--doctor prints cwd / looked / won / describe on stdout and exits. No TUI.\n" +
 		"If cwd has no dango.json / dango.yml / dango.yaml it writes cwd/dango.json.\n" +
 		"dango.json / dango.yml / dango.yaml may set provider and describe.\n" +
 		"Missing config file = no generated title. Missing describe = empty inspector pane.\n" +

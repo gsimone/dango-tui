@@ -16,7 +16,7 @@ const doctorDescribeJSON = `{"describe":"echo pane-hook-ok"}` + "\n"
 
 var errDoctorNoDescribe = fmt.Errorf("describe is none")
 
-// RunDoctor is `dango --doctor`. No --repo. Uses the real launch cwd.
+// RunDoctor is `dango --doctor`: stdout only, then exit. No --repo, no TUI.
 func RunDoctor(w io.Writer) error {
 	return Doctor(LaunchDir(), w)
 }
