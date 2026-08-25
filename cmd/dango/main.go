@@ -23,6 +23,14 @@ func main() {
 		os.Exit(2)
 	}
 
+	if args.Doctor {
+		if err := cli.RunDoctor(os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "dango: %v\n", err)
+			os.Exit(2)
+		}
+		os.Exit(0)
+	}
+
 	args, err = cli.ResolveLaunch(args)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "dango: %v\n", err)

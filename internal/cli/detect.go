@@ -168,6 +168,36 @@ func ReadDangoConfig(dir string) (Config, error) {
 	return cfg, err
 }
 
+func configSearchPaths(dir string) []string {
+	dir = filepath.Clean(dir)
+	var paths []string
+	for _, name := range configNames {
+		paths = append(paths, filepath.Join(dir, name))
+	}
+	root, err := GitRoot(dir)
+	if err != nil || root == "" {
+		return paths
+	}
+	if filepath.Clean(root) == dir {
+		return paths
+	}
+	for _, name := range configNames {
+		paths = append(paths, filepath.Join(root, name))
+	}
+	return paths
+}
+
+func cwdHasConfigFile(dir string) bool {
+	dir = filepath.Clean(dir)
+	for _, name := range configNames {
+		st, err := os.Stat(filepath.Join(dir, name))
+		if err == nil && !st.IsDir() {
+			return true
+		}
+	}
+	return false
+}
+
 // ReadDangoConfigAt is ReadDangoConfig plus the file path that won.
 func ReadDangoConfigAt(dir string) (Config, string, error) {
 	dir = filepath.Clean(dir)

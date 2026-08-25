@@ -26,6 +26,7 @@ type Args struct {
 	Provider    summary.Provider
 	Describe    string
 	DescribeDir string // directory of the config file that set Describe
+	Doctor      bool
 }
 
 // Provider is the --provider flag. The summarizer owns the type.
@@ -41,10 +42,13 @@ func Usage() string {
 	return "Usage: dango\n" +
 		"       dango --repo archetype-labs/app [--provider name@model]\n" +
 		"       dango --repo testdata/test.json\n" +
+		"       dango --doctor\n" +
 		"\n" +
 		"No --repo: detect the GitHub remote from cwd and fetch via gh.\n" +
 		"No GitHub remote: pass --repo archetype-labs/app or --repo testdata/test.json.\n" +
 		"--repo archetype-labs/app fetches via gh. --repo path.json is a stack dump, not live gh.\n" +
+		"--doctor prints the launch cwd, the config files it looks at, and the describe argv.\n" +
+		"If cwd has no dango.json / dango.yml / dango.yaml it writes cwd/dango.json.\n" +
 		"dango.json / dango.yml / dango.yaml may set provider and describe.\n" +
 		"Missing config file = no generated title. Missing describe = empty inspector pane.\n" +
 		"--provider overrides the title hook. No picker.\n"
@@ -61,6 +65,7 @@ func parse(args []string, usage io.Writer) (Args, error) {
 	story := fs.String("story", "", "")
 	repo := fs.String("repo", "", "archetype-labs/app (live gh) or a JSON file of authored stacks")
 	provider := fs.String("provider", "", "stack title summarizer (e.g. name@model); optional, does not block fetch")
+	doctor := fs.Bool("doctor", false, "print config lookup and write cwd/dango.json if missing")
 	fs.Usage = func() {
 		fmt.Fprint(usage, Usage())
 	}
@@ -72,6 +77,7 @@ func parse(args []string, usage io.Writer) (Args, error) {
 		Frame:    strings.TrimSpace(*frame),
 		Story:    strings.TrimSpace(*story),
 		Provider: ParseProvider(*provider),
+		Doctor:   *doctor,
 	}
 	if out.Story != "" {
 		return out, nil

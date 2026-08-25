@@ -141,6 +141,9 @@ func TestParseHelp(t *testing.T) {
 	if strings.Contains(got, "--describe") {
 		t.Fatalf("must not advertise --describe:\n%s", got)
 	}
+	if !strings.Contains(got, "--doctor") {
+		t.Fatalf("must advertise --doctor:\n%s", got)
+	}
 }
 
 func TestUsageDoesNotAdvertiseStory(t *testing.T) {
@@ -162,5 +165,8 @@ func TestUsageDoesNotAdvertiseStory(t *testing.T) {
 	}
 	if strings.Contains(got, "--describe") {
 		t.Fatalf("usage must not sell --describe:\n%s", got)
+	}
+	if !strings.Contains(got, "--doctor") {
+		t.Fatalf("usage must name --doctor:\n%s", got)
 	}
 }
