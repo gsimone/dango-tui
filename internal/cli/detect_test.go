@@ -371,6 +371,24 @@ func TestResolveDetectFailureIsLoudError(t *testing.T) {
 	}
 }
 
+func TestResolveDescribeBareDangoDescribeStaysOnPATH(t *testing.T) {
+	dir := t.TempDir()
+	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")
+	if err := os.WriteFile(filepath.Join(dir, "dango.json"), []byte(`{"describe":"dango-describe"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	got := mustResolve(t, Args{Repo: "archetype-labs/app"}, dir)
+	if got.Describe != "dango-describe" {
+		t.Fatalf("bare dango-describe stays on PATH, got %q", got.Describe)
+	}
+	if strings.Contains(got.Describe, dir) || strings.Contains(got.Describe, "scripts/") {
+		t.Fatalf("must not join a PATH command to the config dir: %q", got.Describe)
+	}
+	if resolveDescribe("dango-describe", filepath.Join(dir, "dango.json")) != "dango-describe" {
+		t.Fatal("resolveDescribe leaves the bare name")
+	}
+}
+
 func TestResolveStoryHookStaysFixtures(t *testing.T) {
 	dir := t.TempDir()
 	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")

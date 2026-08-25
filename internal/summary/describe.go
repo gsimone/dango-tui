@@ -16,7 +16,7 @@ import (
 	"github.com/gsimone/dango-tui/internal/domain"
 )
 
-const describeTimeout = 8 * time.Second
+const describeTimeout = 45 * time.Second
 
 var errNoDescribe = errors.New("dango: no describe command")
 
@@ -151,5 +151,13 @@ func execDescribe(ctx context.Context, argv []string, stdin []byte) (string, err
 }
 
 func allowTestDescribe(argv []string) bool {
-	return len(argv) > 0 && argv[0] == "echo"
+	if len(argv) == 0 {
+		return false
+	}
+	if argv[0] == "echo" {
+		return true
+	}
+	// Testdata fixtures only. Never a PATH lookup or the in-repo example script.
+	slash := filepath.ToSlash(argv[0])
+	return strings.Contains(slash, "/testdata/") || strings.HasPrefix(slash, "testdata/")
 }

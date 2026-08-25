@@ -1,0 +1,9 @@
+#!/bin/sh
+# Test fixture. Reads {"titles":[...]} and prints two fixed inspector lines.
+# Not the product Luna path. Not echo pane-hook-ok.
+payload=$(cat) || exit 1
+case $payload in
+*'"titles"'*) ;;
+*) exit 1 ;;
+esac
+printf '%s\n' 'luna-line-one' 'luna-line-two'

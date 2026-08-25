@@ -27,8 +27,8 @@ func TestDoctorIsStdoutOnlyAndExits(t *testing.T) {
 	if opened {
 		t.Fatal("startTUI ran")
 	}
-	if code != 0 {
-		t.Fatalf("exit %d stderr %q", code, stderr.String())
+	if code != 2 {
+		t.Fatalf("missing describe exits 2, got %d stderr %q", code, stderr.String())
 	}
 	if stderr.String() != "" {
 		t.Fatalf("doctor is stdout only, stderr %q", stderr.String())
@@ -40,11 +40,14 @@ func TestDoctorIsStdoutOnlyAndExits(t *testing.T) {
 		"looked: " + wantJSON,
 		"wrote: " + wantJSON,
 		"won: " + wantJSON,
-		"describe: echo pane-hook-ok",
+		"describe: none",
 	} {
 		if !strings.Contains(out, needle) {
 			t.Fatalf("missing %q:\n%s", needle, out)
 		}
+	}
+	if strings.Contains(out, "pane-hook-ok") {
+		t.Fatalf("must not seed echo pane-hook-ok:\n%s", out)
 	}
 	for _, leak := range []string{"DANGO", "fetching", "STACKS", "\x1b[?1049", "●-●-●"} {
 		if strings.Contains(out, leak) {
@@ -55,7 +58,10 @@ func TestDoctorIsStdoutOnlyAndExits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.TrimSpace(string(raw)) != `{"describe":"echo pane-hook-ok"}` {
+	if strings.Contains(string(raw), "pane-hook-ok") || strings.Contains(string(raw), "echo") {
+		t.Fatalf("wrote echo seed %q", raw)
+	}
+	if strings.TrimSpace(string(raw)) != `{}` {
 		t.Fatalf("wrote %q", raw)
 	}
 }

@@ -12,7 +12,11 @@ import (
 	"time"
 )
 
-const doctorDescribeJSON = `{"describe":"echo pane-hook-ok"}` + "\n"
+const doctorProbeTimeout = 45 * time.Second
+
+// doctorDescribeJSON is written when cwd has no config. No describe key —
+// echo pane-hook-ok is not a product default. Missing describe stays none.
+const doctorDescribeJSON = "{}\n"
 
 var errDoctorNoDescribe = fmt.Errorf("describe is none")
 
@@ -22,7 +26,7 @@ func RunDoctor(w io.Writer) error {
 }
 
 // Doctor prints the config walk for dir, writes cwd/dango.json when cwd
-// has no config file, and probes echo when describe is set.
+// has no config file (no describe key), and probes describe when set.
 func Doctor(dir string, w io.Writer) error {
 	dir = filepath.Clean(dir)
 	if dir == "." {
@@ -95,7 +99,7 @@ func probeDescribe(raw, dir string) (string, error) {
 	if len(argv) == 0 {
 		return "", errDoctorNoDescribe
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), doctorProbeTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	if dir != "" {

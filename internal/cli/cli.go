@@ -48,7 +48,7 @@ func Usage() string {
 		"No GitHub remote: pass --repo archetype-labs/app or --repo testdata/test.json.\n" +
 		"--repo archetype-labs/app fetches via gh. --repo path.json is a stack dump, not live gh.\n" +
 		"--doctor prints cwd / looked / won / describe on stdout and exits. No TUI.\n" +
-		"If cwd has no dango.json / dango.yml / dango.yaml it writes cwd/dango.json.\n" +
+		"If cwd has no dango.json / dango.yml / dango.yaml it writes cwd/dango.json without a describe key.\n" +
 		"dango.json / dango.yml / dango.yaml may set provider and describe.\n" +
 		"Missing config file = no generated title. Missing describe = empty inspector pane.\n" +
 		"--provider overrides the title hook. No picker.\n"
