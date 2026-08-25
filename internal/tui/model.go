@@ -153,7 +153,7 @@ func (m Model) Init() tea.Cmd {
 	if strings.TrimSpace(m.Describe) == "" {
 		return nil
 	}
-	return func() tea.Msg { return afterPaintMsg{} }
+	return m.startSelectedSummary()
 }
 
 func (m Model) fetchCmd(token int) tea.Cmd {
@@ -298,10 +298,9 @@ func (m Model) startCIEnrich() tea.Cmd {
 }
 
 func (m *Model) afterFetch() tea.Cmd {
-	// First paint must not wait on the describe script. fetchDone
-	// already stored stacks; the next Update (afterPaint) starts one
-	// selected-stack process.
-	return tea.Batch(func() tea.Msg { return afterPaintMsg{} }, m.startCIEnrich())
+	// startSelectedSummary is a tea.Cmd. It must not exec the script
+	// inside fetchDone — tea runs the cmd after this Update returns.
+	return tea.Batch(m.startSelectedSummary(), m.startCIEnrich())
 }
 
 func (m Model) fetchBadge() string {

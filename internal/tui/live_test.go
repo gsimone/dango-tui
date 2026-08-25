@@ -786,6 +786,74 @@ func TestLiveEchoDescribeRendersPaneHookOK(t *testing.T) {
 	}
 }
 
+func TestLiveRealRunEchoLandsAfterFetchCmds(t *testing.T) {
+	stack := []domain.Stack{{
+		ID: "stack-184",
+		PRs: []domain.PullRequest{
+			{Number: 183, Title: "email token base", Branch: "feat/email-base"},
+			{Number: 184, Title: "feat/email-token-overrides-model", Branch: "feat/email-token-overrides-model"},
+		},
+	}}
+	for _, size := range []struct{ w, h int }{{80, 24}, {120, 30}} {
+		m := tui.New(tui.Options{
+			Repo:     "archetype-labs/app",
+			Describe: "echo pane-hook-ok",
+			Width:    size.w,
+			Height:   size.h,
+			Fetch: func(string) ([]domain.Stack, error) {
+				return append([]domain.Stack(nil), stack...), nil
+			},
+		})
+		cmd := m.Init()
+		if cmd == nil {
+			t.Fatal("live Init must fetch")
+		}
+		next, extra := m.Update(cmd())
+		m = next.(tui.Model)
+		first := frameOf(m)
+		if strings.Contains(first, "pane-hook-ok") {
+			t.Fatalf("%dx%d first View must not wait on describe:\n%s", size.w, size.h, first)
+		}
+		if !strings.Contains(strings.Join(listRows(first), "\n"), "email token base") {
+			t.Fatalf("%dx%d fetchDone View must paint the list:\n%s", size.w, size.h, first)
+		}
+		if extra == nil {
+			t.Fatalf("%dx%d fetchDone must return the describe cmd", size.w, size.h)
+		}
+
+		m = applyLiveCmds(m, extra)
+		raw := m.View()
+		frame := frameOf(m)
+		if m.Stacks()[0].Description != "pane-hook-ok" {
+			t.Fatalf("%dx%d real summary.Run must land echo stdout, got %q", size.w, size.h, m.Stacks()[0].Description)
+		}
+		if !strings.Contains(frame, "pane-hook-ok") {
+			t.Fatalf("%dx%d View must paint pane-hook-ok:\n%s", size.w, size.h, frame)
+		}
+		if !descUnderTitle(frame, "#183", "pane-hook-ok") {
+			t.Fatalf("%dx%d landed lines must sit under the title:\n%s", size.w, size.h, frame)
+		}
+		if !nearHex(raw, "pane-hook-ok", domain.Color("paper")) {
+			t.Fatalf("%dx%d landed lines must be paper ink", size.w, size.h)
+		}
+	}
+}
+
+func descUnderTitle(frame, titleBit, desc string) bool {
+	lines := strings.Split(frame, "\n")
+	for i, line := range lines {
+		if !strings.Contains(line, titleBit) {
+			continue
+		}
+		for j := i + 1; j < len(lines) && j <= i+2; j++ {
+			if strings.Contains(lines[j], desc) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func TestLiveDeadDescribeStaysEmpty(t *testing.T) {
 	m := tui.New(tui.Options{
 		Repo:     "archetype-labs/app",

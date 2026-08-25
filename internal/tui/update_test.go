@@ -391,7 +391,7 @@ func TestFetchDoneDoesNotWaitOnDescribe(t *testing.T) {
 		})
 		m = got.(Model)
 		if cmd == nil {
-			t.Fatalf("%dx%d fetchDone must return afterPaint, not block", size.w, size.h)
+			t.Fatalf("%dx%d fetchDone must return a describe cmd, not block", size.w, size.h)
 		}
 		select {
 		case <-started:
@@ -418,19 +418,8 @@ func TestFetchDoneDoesNotWaitOnDescribe(t *testing.T) {
 			t.Fatalf("%dx%d reserved pane missing facts:\n%s", size.w, size.h, first)
 		}
 
-		got, descCmd := m.Update(afterPaintMsg{})
-		m = got.(Model)
-		if descCmd == nil {
-			t.Fatalf("%dx%d afterPaint must start one describe", size.w, size.h)
-		}
 		close(release)
-		msg := descCmd()
-		sd, ok := msg.(summaryDoneMsg)
-		if !ok {
-			t.Fatalf("%dx%d describe cmd yielded %T", size.w, size.h, msg)
-		}
-		got, _ = m.Update(sd)
-		m = got.(Model)
+		m = applyCmd(m, cmd)
 		if m.stacks[0].Description != "pane-hook-ok" {
 			t.Fatalf("%dx%d summaryDone must write the reserved slot, got %q", size.w, size.h, m.stacks[0].Description)
 		}

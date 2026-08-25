@@ -72,6 +72,9 @@ func TestSplashPaintsBeforeFetchAndDies(t *testing.T) {
 	if !strings.Contains(frame, "deadbee") {
 		t.Fatalf("short SHA under fetching:\n%s", frame)
 	}
+	if !strings.Contains(frame, "describe: none") {
+		t.Fatalf("splash must show describe: none when unset:\n%s", frame)
+	}
 	if strings.Contains(frame, "version") || strings.Contains(strings.ToLower(frame), "banner") {
 		t.Fatalf("SHA is one meta line, not a banner:\n%s", frame)
 	}
@@ -100,6 +103,28 @@ func TestSplashPaintsBeforeFetchAndDies(t *testing.T) {
 	}
 	if !strings.Contains(listed, "landed layer") {
 		t.Fatalf("list:\n%s", listed)
+	}
+}
+
+func TestSplashShowsLoadedDescribeArgv(t *testing.T) {
+	withVCS(t, "deadbeefcafebabe0123456789abcdef01234567")
+	m := New(Options{
+		Repo:     "archetype-labs/app",
+		Describe: "echo pane-hook-ok",
+		Width:    80,
+		Height:   24,
+		Fetch:    func(string) ([]domain.Stack, error) { return nil, nil },
+	})
+	frame := stripANSI(m.View())
+	assertSplashFrame(t, frame, "fetching archetype-labs/app")
+	if !strings.Contains(frame, "deadbee") {
+		t.Fatalf("SHA stays:\n%s", frame)
+	}
+	if !strings.Contains(frame, "describe: echo pane-hook-ok") {
+		t.Fatalf("splash must show the loaded describe argv:\n%s", frame)
+	}
+	if strings.Contains(frame, "describe: none") {
+		t.Fatalf("loaded hook is not none:\n%s", frame)
 	}
 }
 

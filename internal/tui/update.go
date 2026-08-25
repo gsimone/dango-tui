@@ -21,8 +21,6 @@ type fetchDoneMsg struct {
 	slug   string
 }
 
-type afterPaintMsg struct{}
-
 type summaryDoneMsg struct {
 	token       int
 	id          string
@@ -89,8 +87,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Fetched = "last fetched 2 mins ago"
 		}
 		return m, nil
-	case afterPaintMsg:
-		return m, m.startSelectedSummary()
 	case summaryDoneMsg:
 		return m, m.applySummary(msg)
 	case ciDoneMsg:
