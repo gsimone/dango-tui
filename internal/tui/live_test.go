@@ -591,16 +591,13 @@ func TestLiveDescribeScriptWithoutProvider(t *testing.T) {
 		},
 	})
 	m, extra := applyLiveFetch(m)
-	if extra == nil {
-		t.Fatal("describe must start after first paint, not block fetch")
-	}
 	first := frameOf(m)
 	list := strings.Join(listRows(first), "\n")
 	if !strings.Contains(list, "LEV-182") {
 		t.Fatalf("first paint keeps the short list title:\n%s", first)
 	}
-	if strings.Contains(first, scripted) {
-		t.Fatalf("describe must not block first paint:\n%s", first)
+	if !strings.Contains(first, "script pinned hosts") {
+		t.Fatalf("fetchDone View must already have script stdout:\n%s", first)
 	}
 	local := summary.Describe(m.Stacks()[0])
 	m = applyLiveCmds(m, extra)
@@ -645,9 +642,6 @@ func TestLiveDescribeSelectedStackFirst(t *testing.T) {
 		},
 	})
 	m, extra := applyLiveFetch(m)
-	if extra == nil {
-		t.Fatal("selected describe starts after first paint")
-	}
 	m = applyLiveCmds(m, extra)
 	if strings.Join(ids, ",") != "a" {
 		t.Fatalf("selected first, one process: %v", ids)
@@ -714,12 +708,9 @@ func TestDangoRepoCwdDescribePaintsPaneHookOK(t *testing.T) {
 		t.Fatal("live --repo must fetch")
 	}
 	m, extra := applyLiveFetch(m)
-	if extra == nil {
-		t.Fatal("after first live paint the selected stack must run describe")
-	}
 	first := frameOf(m)
-	if strings.Contains(first, "pane-hook-ok") {
-		t.Fatalf("describe must not block first paint:\n%s", first)
+	if !strings.Contains(first, "pane-hook-ok") {
+		t.Fatalf("fetchDone View must already have pane-hook-ok:\n%s", first)
 	}
 	m = applyLiveCmds(m, extra)
 	if m.Stacks()[0].Description != "pane-hook-ok" {
@@ -763,12 +754,9 @@ func TestLiveEchoDescribeRendersPaneHookOK(t *testing.T) {
 		},
 	})
 	m, extra := applyLiveFetch(m)
-	if extra == nil {
-		t.Fatal("afterFetch must start the selected describe")
-	}
 	first := frameOf(m)
-	if strings.Contains(first, "pane-hook-ok") {
-		t.Fatalf("describe must not block first paint:\n%s", first)
+	if !strings.Contains(first, "pane-hook-ok") {
+		t.Fatalf("fetchDone View must already have pane-hook-ok:\n%s", first)
 	}
 	m = applyLiveCmds(m, extra)
 	if jobs != 1 {

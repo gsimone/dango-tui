@@ -374,77 +374,29 @@ func TestDoctorSuccessLiveFetchUpdatePaintsPaneHookOK(t *testing.T) {
 			Fetch: func(string) ([]domain.Stack, error) {
 				return []domain.Stack{liveStack}, nil
 			},
-			EnrichCI: func(string, []domain.Stack) []domain.Stack {
-				return []domain.Stack{liveStack}
-			},
 		})
 
-		// Real Update loop: fetchDone → afterPaint → run the cmd → summaryDone.
-		got, cmd := m.Update(fetchDoneMsg{
+		got, _ := m.Update(fetchDoneMsg{
 			stacks: []domain.Stack{liveStack},
 			live:   true,
 			token:  m.fetchSeq,
 			at:     time.Now(),
 		})
 		m = got.(Model)
-		if cmd == nil {
-			t.Fatalf("%dx%d fetchDone must return afterPaint", size.w, size.h)
-		}
-
-		var paintCmd tea.Cmd
-		for _, msg := range cmdMsgs(cmd) {
-			if _, ok := msg.(afterPaintMsg); !ok {
-				continue
-			}
-			got, paintCmd = m.Update(msg)
-			m = got.(Model)
-		}
-		if paintCmd == nil {
-			t.Fatalf("%dx%d afterPaint must start describe", size.w, size.h)
-		}
-
-		sumMsgs := cmdMsgs(paintCmd)
-		if len(sumMsgs) != 1 {
-			t.Fatalf("%dx%d describe cmd should yield summaryDone, got %#v", size.w, size.h, sumMsgs)
-		}
-		sd, ok := sumMsgs[0].(summaryDoneMsg)
-		if !ok {
-			t.Fatalf("%dx%d describe cmd yielded %T", size.w, size.h, sumMsgs[0])
-		}
-		if strings.TrimSpace(sd.description) != "pane-hook-ok" {
-			t.Fatalf("%dx%d echo stdout: %q", size.w, size.h, sd.description)
-		}
-		sd.id = "not-the-live-id"
-
-		got, toast := m.Update(sd)
-		m = got.(Model)
 		if m.stacks[0].Description != "pane-hook-ok" {
-			t.Fatalf("%dx%d applySummary must write the selected row on id miss, got %q", size.w, size.h, m.stacks[0].Description)
-		}
-		if toast == nil {
-			t.Fatalf("%dx%d land flashes described", size.w, size.h)
+			t.Fatalf("%dx%d fetchDone must write Description before return, got %q", size.w, size.h, m.stacks[0].Description)
 		}
 
 		raw := m.View()
 		view := stripANSI(raw)
 		if !strings.Contains(view, "pane-hook-ok") {
-			t.Fatalf("%dx%d View must paint pane-hook-ok:\n%s", size.w, size.h, view)
+			t.Fatalf("%dx%d first View after fetchDone must paint pane-hook-ok:\n%s", size.w, size.h, view)
 		}
 		if !descSitsUnderTitle(view, "#183", "pane-hook-ok") {
 			t.Fatalf("%dx%d landed lines must sit under the title:\n%s", size.w, size.h, view)
 		}
-		if !strings.Contains(view, "described") {
-			t.Fatalf("%dx%d footer flashes described:\n%s", size.w, size.h, view)
-		}
 		if !paperInkBefore(raw, "pane-hook-ok") {
 			t.Fatalf("%dx%d landed lines must be paper ink, not dim meta", size.w, size.h)
-		}
-
-		got, _ = m.Update(clearFeedbackMsg{token: m.feedbackSeq})
-		m = got.(Model)
-		cleared := stripANSI(m.View())
-		if strings.Contains(cleared, "described") && !strings.Contains(cleared, "[ . ] copy") {
-			t.Fatalf("%dx%d described toast must die:\n%s", size.w, size.h, cleared)
 		}
 	}
 }
@@ -600,21 +552,6 @@ func applyCmd(m Model, cmd tea.Cmd) Model {
 	}
 	next, nextCmd := m.Update(msg)
 	return applyCmd(next.(Model), nextCmd)
-}
-
-func cmdMsgs(cmd tea.Cmd) []tea.Msg {
-	if cmd == nil {
-		return nil
-	}
-	msg := cmd()
-	if batch, ok := msg.(tea.BatchMsg); ok {
-		var out []tea.Msg
-		for _, c := range batch {
-			out = append(out, cmdMsgs(c)...)
-		}
-		return out
-	}
-	return []tea.Msg{msg}
 }
 
 func descSitsUnderTitle(frame, titleBit, desc string) bool {
