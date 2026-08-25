@@ -297,65 +297,11 @@ func (m Model) startCIEnrich() tea.Cmd {
 	}
 }
 
-func (m *Model) applySelectedDescribeSync() tea.Cmd {
-	if strings.TrimSpace(m.Describe) == "" {
-		return nil
-	}
-	stack, ok := m.ensureSelectedStackID()
-	if !ok {
-		return nil
-	}
-	run := m.summarize
-	res := run(summary.Job{
-		Provider:    m.Provider,
-		Describe:    m.Describe,
-		DescribeDir: m.DescribeDir,
-		Stack:       stack,
-		ID:          stack.ID,
-	})
-	idx := -1
-	for i := range m.stacks {
-		if stackRefEquals(m.stacks[i], stack) {
-			idx = i
-			break
-		}
-	}
-	if idx < 0 && m.State.Selection.StackIndex >= 0 && m.State.Selection.StackIndex < len(m.stacks) {
-		idx = m.State.Selection.StackIndex
-	}
-	if idx < 0 {
-		return nil
-	}
-	if m.summaryDone == nil {
-		m.summaryDone = map[string]bool{}
-	}
-	m.summaryDone[m.stacks[idx].ID] = true
-	if res.ID != "" {
-		m.summaryDone[res.ID] = true
-	}
-	if title := strings.TrimSpace(res.Title); title != "" {
-		m.stacks[idx].Name = title
-		m.stacks[idx].Summary = title
-	}
-	desc := strings.TrimSpace(res.Description)
-	if desc == "" {
-		return nil
-	}
-	m.stacks[idx].Description = desc
-	m.State.Feedback = "described"
-	return m.clearFeedback()
-}
-
 func (m *Model) afterFetch() tea.Cmd {
-	// Live describe runs in this Update, after stacks are on the
-	// returned model. First View after fetch already has stdout.
-	// Provider titles (no describe) stay a follow-up cmd.
-	toast := m.applySelectedDescribeSync()
-	var titles tea.Cmd
-	if strings.TrimSpace(m.Describe) == "" {
-		titles = m.startSelectedSummary()
-	}
-	return tea.Batch(toast, titles, m.startCIEnrich())
+	// First paint must not wait on the describe script. fetchDone
+	// already stored stacks; the next Update (afterPaint) starts one
+	// selected-stack process.
+	return tea.Batch(func() tea.Msg { return afterPaintMsg{} }, m.startCIEnrich())
 }
 
 func (m Model) fetchBadge() string {

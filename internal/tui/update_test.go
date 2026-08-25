@@ -321,11 +321,11 @@ func TestDescriptionFillsInspectorInPlace(t *testing.T) {
 		if strings.Contains(after, "⠋") {
 			t.Fatalf("%dx%d land must not spin the list:\n%s", size.w, size.h, after)
 		}
+		if factRow(after, "status") != statusAt || factRow(after, "ci") != ciAt {
+			t.Fatalf("%dx%d fact rows moved (pane morph): before status=%d ci=%d after status=%d ci=%d\n%s",
+				size.w, size.h, statusAt, ciAt, factRow(after, "status"), factRow(after, "ci"), after)
+		}
 		if size.w >= 100 {
-			if factRow(after, "status") != statusAt || factRow(after, "ci") != ciAt {
-				t.Fatalf("%dx%d fact rows moved (pane morph): before status=%d ci=%d after status=%d ci=%d\n%s",
-					size.w, size.h, statusAt, ciAt, factRow(after, "status"), factRow(after, "ci"), after)
-			}
 			if boxBounds(after) != box {
 				t.Fatalf("%dx%d pane morphed: before %v after %v", size.w, size.h, box, boxBounds(after))
 			}
@@ -336,7 +336,7 @@ func TestDescriptionFillsInspectorInPlace(t *testing.T) {
 	}
 }
 
-func TestDoctorSuccessLiveFetchUpdatePaintsPaneHookOK(t *testing.T) {
+func TestFetchDoneDoesNotWaitOnDescribe(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "dango.json"), []byte(`{"describe":"echo pane-hook-ok"}`), 0644); err != nil {
 		t.Fatal(err)
@@ -365,6 +365,8 @@ func TestDoctorSuccessLiveFetchUpdatePaintsPaneHookOK(t *testing.T) {
 	}
 
 	for _, size := range []struct{ w, h int }{{80, 24}, {120, 30}} {
+		started := make(chan struct{})
+		release := make(chan struct{})
 		m := New(Options{
 			Repo:        args.Repo,
 			Describe:    args.Describe,
@@ -374,29 +376,79 @@ func TestDoctorSuccessLiveFetchUpdatePaintsPaneHookOK(t *testing.T) {
 			Fetch: func(string) ([]domain.Stack, error) {
 				return []domain.Stack{liveStack}, nil
 			},
+			Summarize: func(job summary.Job) summary.Result {
+				close(started)
+				<-release
+				return summary.Result{ID: job.ID, Description: "pane-hook-ok"}
+			},
 		})
 
-		got, _ := m.Update(fetchDoneMsg{
+		got, cmd := m.Update(fetchDoneMsg{
 			stacks: []domain.Stack{liveStack},
 			live:   true,
 			token:  m.fetchSeq,
 			at:     time.Now(),
 		})
 		m = got.(Model)
+		if cmd == nil {
+			t.Fatalf("%dx%d fetchDone must return afterPaint, not block", size.w, size.h)
+		}
+		select {
+		case <-started:
+			t.Fatalf("%dx%d fetchDone must not run describe", size.w, size.h)
+		default:
+		}
+		if m.stacks[0].Description != "" {
+			t.Fatalf("%dx%d first paint Description must stay empty, got %q", size.w, size.h, m.stacks[0].Description)
+		}
+
+		first := stripANSI(m.View())
+		if !strings.Contains(strings.Join(listNames(first), "\n"), "feat/email-token-overrides-model") {
+			t.Fatalf("%dx%d fetchDone View must paint the list:\n%s", size.w, size.h, first)
+		}
+		if strings.Contains(first, "pane-hook-ok") {
+			t.Fatalf("%dx%d fetchDone View must not wait on describe:\n%s", size.w, size.h, first)
+		}
+		if strings.Contains(first, summary.Describe(m.stacks[0])) && summary.Describe(m.stacks[0]) != "" {
+			t.Fatalf("%dx%d empty reserve must not be a local sentence:\n%s", size.w, size.h, first)
+		}
+		statusAt := factRow(first, "status")
+		ciAt := factRow(first, "ci")
+		if statusAt < 0 || ciAt < 0 {
+			t.Fatalf("%dx%d reserved pane missing facts:\n%s", size.w, size.h, first)
+		}
+
+		got, descCmd := m.Update(afterPaintMsg{})
+		m = got.(Model)
+		if descCmd == nil {
+			t.Fatalf("%dx%d afterPaint must start one describe", size.w, size.h)
+		}
+		close(release)
+		msg := descCmd()
+		sd, ok := msg.(summaryDoneMsg)
+		if !ok {
+			t.Fatalf("%dx%d describe cmd yielded %T", size.w, size.h, msg)
+		}
+		got, _ = m.Update(sd)
+		m = got.(Model)
 		if m.stacks[0].Description != "pane-hook-ok" {
-			t.Fatalf("%dx%d fetchDone must write Description before return, got %q", size.w, size.h, m.stacks[0].Description)
+			t.Fatalf("%dx%d summaryDone must write the reserved slot, got %q", size.w, size.h, m.stacks[0].Description)
 		}
 
 		raw := m.View()
-		view := stripANSI(raw)
-		if !strings.Contains(view, "pane-hook-ok") {
-			t.Fatalf("%dx%d first View after fetchDone must paint pane-hook-ok:\n%s", size.w, size.h, view)
+		after := stripANSI(raw)
+		if !strings.Contains(after, "pane-hook-ok") {
+			t.Fatalf("%dx%d reserved slot must paint pane-hook-ok:\n%s", size.w, size.h, after)
 		}
-		if !descSitsUnderTitle(view, "#183", "pane-hook-ok") {
-			t.Fatalf("%dx%d landed lines must sit under the title:\n%s", size.w, size.h, view)
+		if !descSitsUnderTitle(after, "#183", "pane-hook-ok") {
+			t.Fatalf("%dx%d landed lines must sit under the title:\n%s", size.w, size.h, after)
 		}
 		if !paperInkBefore(raw, "pane-hook-ok") {
-			t.Fatalf("%dx%d landed lines must be paper ink, not dim meta", size.w, size.h)
+			t.Fatalf("%dx%d landed lines must be paper ink", size.w, size.h)
+		}
+		if factRow(after, "status") != statusAt || factRow(after, "ci") != ciAt {
+			t.Fatalf("%dx%d facts shifted: before status=%d ci=%d after status=%d ci=%d\n%s",
+				size.w, size.h, statusAt, ciAt, factRow(after, "status"), factRow(after, "ci"), after)
 		}
 	}
 }

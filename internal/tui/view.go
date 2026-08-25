@@ -539,7 +539,7 @@ func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper
 	id := "#" + itoa(pr.Number)
 	landed := m.landedInspectorDesc()
 	hold := 0
-	if landed != "" {
+	if m.reserveInspectorDesc() || landed != "" {
 		hold = min(inspectorDescLines, h)
 	}
 	titleLimit := h
@@ -554,9 +554,9 @@ func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper
 		c.text(x, y+row, line, paper, bg, maxLine)
 		row++
 	}
-	// Landed copy sits on the next row. A reserved empty slot on the
-	// wide live pane does too. Fixture cards keep the blank under title.
-	if !tight && row < titleLimit && landed == "" && !m.reserveInspectorDesc() {
+	// Reserved slot sits immediately under the title. Fixture cards
+	// keep the blank under title.
+	if !tight && row < titleLimit && !m.reserveInspectorDesc() && landed == "" {
 		row++
 	}
 	if hold > 0 && row > h-hold {
@@ -584,9 +584,9 @@ func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper
 const inspectorDescLines = 2
 
 func (m Model) reserveInspectorDesc() bool {
-	// Wide pane keeps a reserved slot so a land does not shift facts.
-	// Stacked card is content+pad only — empty reserve would eat the list.
-	return m.Live && !StackedInspector(m.Width)
+	// Live inspector always keeps two rows under the title so a land
+	// does not grow the card or shift facts. Empty is blank.
+	return m.Live
 }
 
 func (m Model) landedInspectorDesc() string {
@@ -620,7 +620,7 @@ func (m Model) inspectorDescRows(innerW int) int {
 
 func (m Model) paintStackDescription(c *canvas, x, y, row, h, maxLine int, ink, bg string, tight bool) int {
 	desc := m.landedInspectorDesc()
-	if m.reserveInspectorDesc() && !tight {
+	if m.reserveInspectorDesc() {
 		painted := 0
 		if desc != "" {
 			for _, line := range wrapDesc(desc, maxLine) {
@@ -633,7 +633,7 @@ func (m Model) paintStackDescription(c *canvas, x, y, row, h, maxLine int, ink, 
 			}
 		}
 		row += inspectorDescLines - painted
-		if row < h {
+		if !tight && row < h {
 			row++
 		}
 		return row
@@ -641,7 +641,6 @@ func (m Model) paintStackDescription(c *canvas, x, y, row, h, maxLine int, ink, 
 	if desc == "" {
 		return row
 	}
-	// Landed lines win over facts when the card is leftover-tight.
 	if row >= h {
 		row = max(0, h-min(inspectorDescLines, h))
 	}
@@ -744,16 +743,17 @@ func (m Model) stackedPaneHeight(listWidth int) int {
 	title := "#" + itoa(pr.Number) + " " + pr.Title
 	lines := len(wrapWords(title, innerW))
 	descLines := 0
-	if d := m.landedInspectorDesc(); d != "" {
+	if m.reserveInspectorDesc() {
+		descLines = inspectorDescLines
+	} else if d := m.landedInspectorDesc(); d != "" {
 		descLines = len(wrapDesc(d, innerW))
 	}
 	return 2*border + 2*padY + lines + descLines + len(inspectorFacts(pr))
 }
 
-// stackedDescFloor is the leftover-tight card: chrome + one title row
-// + the two landed description lines. Facts are dropped first.
+// stackedDescFloor is chrome + one title row + the reserved two lines.
 func (m Model) stackedDescFloor(listWidth int) int {
-	if m.landedInspectorDesc() == "" {
+	if !m.reserveInspectorDesc() && m.landedInspectorDesc() == "" {
 		return 0
 	}
 	border, padY := 1, 1
