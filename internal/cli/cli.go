@@ -20,10 +20,13 @@ func IsStackFile(raw string) bool {
 // remote and fetches live gh. Detect failure is an error, not examples.
 // --repo archetype-labs/app is live gh. --repo path.json is a stack dump.
 type Args struct {
-	Frame    string
-	Story    string // test/dev hook only; not advertised
-	Repo     string
-	Provider summary.Provider
+	Frame       string
+	Story       string // test/dev hook only; not advertised
+	Repo        string
+	Provider    summary.Provider
+	Describe    string
+	DescribeDir string // directory of the config file that set Describe
+	Doctor      bool
 }
 
 // Provider is the --provider flag. The summarizer owns the type.
@@ -39,14 +42,16 @@ func Usage() string {
 	return "Usage: dango\n" +
 		"       dango --repo archetype-labs/app [--provider name@model]\n" +
 		"       dango --repo testdata/test.json\n" +
+		"       dango --doctor\n" +
 		"\n" +
 		"No --repo: detect the GitHub remote from cwd and fetch via gh.\n" +
 		"No GitHub remote: pass --repo archetype-labs/app or --repo testdata/test.json.\n" +
 		"--repo archetype-labs/app fetches via gh. --repo path.json is a stack dump, not live gh.\n" +
-		"dango.json / dango.yml / dango.yaml sets the title provider.\n" +
-		"Missing config file = no generated title. --provider overrides.\n" +
-		"A set provider writes a short stack title and an inspector description after first paint.\n" +
-		"No picker.\n"
+		"--doctor prints cwd / looked / won / describe on stdout and exits. No TUI.\n" +
+		"If cwd has no dango.json / dango.yml / dango.yaml it writes cwd/dango.json.\n" +
+		"dango.json / dango.yml / dango.yaml may set provider and describe.\n" +
+		"Missing config file = no generated title. Missing describe = empty inspector pane.\n" +
+		"--provider overrides the title hook. No picker.\n"
 }
 
 func Parse(args []string) (Args, error) {
@@ -59,7 +64,8 @@ func parse(args []string, usage io.Writer) (Args, error) {
 	frame := fs.String("frame", "", "print one frame (WxH, e.g. 80x24) and exit")
 	story := fs.String("story", "", "")
 	repo := fs.String("repo", "", "archetype-labs/app (live gh) or a JSON file of authored stacks")
-	provider := fs.String("provider", "", "stack title summarizer (e.g. codex@luna.medium); optional, does not block fetch")
+	provider := fs.String("provider", "", "stack title summarizer (e.g. name@model); optional, does not block fetch")
+	doctor := fs.Bool("doctor", false, "print config lookup and write cwd/dango.json if missing")
 	fs.Usage = func() {
 		fmt.Fprint(usage, Usage())
 	}
@@ -71,6 +77,7 @@ func parse(args []string, usage io.Writer) (Args, error) {
 		Frame:    strings.TrimSpace(*frame),
 		Story:    strings.TrimSpace(*story),
 		Provider: ParseProvider(*provider),
+		Doctor:   *doctor,
 	}
 	if out.Story != "" {
 		return out, nil

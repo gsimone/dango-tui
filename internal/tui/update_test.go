@@ -2,18 +2,46 @@ package tui
 
 import (
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/gsimone/dango-tui/internal/cli"
 	"github.com/gsimone/dango-tui/internal/domain"
+	"github.com/gsimone/dango-tui/internal/live"
 	"github.com/gsimone/dango-tui/internal/summary"
 )
 
 var ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\x07]*(?:\x07|\x1b\\)`)
+
+func TestStackListNameKeepsShortTitle(t *testing.T) {
+	gh := "LEV-182: Bound hosts to the session"
+	stack := domain.Stack{
+		Name: "LEV-182",
+		PRs:  []domain.PullRequest{{Title: gh}, {Title: "head"}},
+	}
+	if got := stackListName(stack); got != "LEV-182" {
+		t.Fatalf("list keeps the ticket, got %q", got)
+	}
+	named := stack
+	named.Name = "from the title agent"
+	if got := stackListName(named); got != "from the title agent" {
+		t.Fatalf("landed provider title still swaps in place, got %q", got)
+	}
+	stamped := domain.Stack{Name: gh, PRs: []domain.PullRequest{{Title: gh}, {Title: "head"}}}
+	if got := stackListName(stamped); got != "LEV-182" {
+		t.Fatalf("full sentence belongs in the pane, got %q", got)
+	}
+	blank := domain.Stack{PRs: []domain.PullRequest{{Title: gh}, {Title: "head"}}}
+	if got := stackListName(blank); got != "LEV-182" {
+		t.Fatalf("empty name uses the short gh title, got %q", got)
+	}
+}
 
 func TestRelativeFetched(t *testing.T) {
 	at := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
@@ -75,9 +103,16 @@ func TestSummariesAreAsyncAndLandInPlace(t *testing.T) {
 	if m.Fetching || strings.Contains(stripANSI(m.View()), "⠋") {
 		t.Fatal("title wait must not be a spinner")
 	}
-	_, extra := applyFetch(New(Options{Repo: "archetype-labs/app", Width: 80, Height: 24, Fetch: fetch}))
-	if extra != nil {
-		t.Fatal("missing provider must not start summaries")
+	bare, extra := applyFetch(New(Options{Repo: "archetype-labs/app", Width: 80, Height: 24, Fetch: fetch}))
+	bare = applyCmd(bare, extra)
+	if bare.stacks[0].Name != "alpha layer" {
+		t.Fatalf("missing provider must keep the gh list name: %+v", bare.stacks[0])
+	}
+	if bare.stacks[0].Description != "" {
+		t.Fatalf("unset describe leaves the pane empty: %q", bare.stacks[0].Description)
+	}
+	if strings.Contains(strings.Join(listNames(stripANSI(bare.View())), "\n"), "alpha layer and beta layer") {
+		t.Fatalf("missing provider must not invent a list title:\n%s", stripANSI(bare.View()))
 	}
 
 	next, extra := m.Update(summaryDoneMsg{token: m.fetchSeq, id: "s"})
@@ -88,16 +123,22 @@ func TestSummariesAreAsyncAndLandInPlace(t *testing.T) {
 
 	next, extra = m.Update(summaryDoneMsg{token: m.fetchSeq, id: "s", description: "later"})
 	m = next.(Model)
-	if extra != nil || m.stacks[0].Name != "alpha layer" || m.stacks[0].Description != "later" {
+	if m.stacks[0].Name != "alpha layer" || m.stacks[0].Description != "later" {
 		t.Fatalf("description is inspector-only: %+v", m.stacks[0])
+	}
+	if extra == nil {
+		t.Fatal("landed describe flashes described")
 	}
 	if !strings.Contains(stripANSI(m.View()), "later") {
 		t.Fatal("description fills the inspector pane")
 	}
+	if !strings.Contains(stripANSI(m.View()), "described") {
+		t.Fatalf("footer flashes described:\n%s", stripANSI(m.View()))
+	}
 
 	next, extra = m.Update(summaryDoneMsg{token: m.fetchSeq, id: "s", title: "from hook", description: "later"})
-	if extra != nil {
-		t.Fatal("summary fill is not a new fetch")
+	if extra == nil {
+		t.Fatal("another land still flashes described")
 	}
 	m = next.(Model)
 	if m.stacks[0].Name != "from hook" || m.stacks[0].Description != "later" {
@@ -121,13 +162,10 @@ func TestSummariesAreAsyncAndLandInPlace(t *testing.T) {
 	if landed.stacks[0].Name != "alpha layer and beta layer" {
 		t.Fatalf("real Run must land the generated title: %+v", landed.stacks[0])
 	}
-	if landed.stacks[0].Description == "" {
-		t.Fatal("real Run must land an inspector description")
+	if landed.stacks[0].Description != "" {
+		t.Fatalf("provider without describe leaves the pane empty: %q", landed.stacks[0].Description)
 	}
 	after := stripANSI(landed.View())
-	if !strings.Contains(after, landed.stacks[0].Description) {
-		t.Fatalf("description fills the inspector:\n%s", after)
-	}
 	if strings.Contains(after, "⠋") {
 		t.Fatalf("in-place fill is not a spinner:\n%s", after)
 	}
@@ -170,7 +208,10 @@ func TestSummaryDonePaneDescriptionIsNotGhTitle(t *testing.T) {
 		return []domain.Stack{{
 			ID:   "s",
 			Name: gh,
-			PRs:  []domain.PullRequest{{Number: 182, Title: gh, Body: "<!-- CURSOR_AGENT_PR_BODY_BEGIN -->\nPin each bound host to the worker.\n"}},
+			PRs: []domain.PullRequest{
+				{Number: 182, Title: gh, Body: "<!-- CURSOR_AGENT_PR_BODY_BEGIN -->\nPin each bound host to the worker.\n"},
+				{Number: 183, Title: "head layer"},
+			},
 		}}, nil
 	}
 	m := New(Options{
@@ -241,10 +282,17 @@ func TestDescriptionFillsInspectorInPlace(t *testing.T) {
 	for _, size := range []struct{ w, h int }{{80, 24}, {120, 30}} {
 		m := New(Options{
 			Repo:     "owner/name",
-			Provider: summary.ParseProvider("codex@luna.medium"),
+			Provider: summary.ParseProvider("name@model"),
 			Width:    size.w,
 			Height:   size.h,
 			Fetch:    fetch,
+			Summarize: func(job summary.Job) summary.Result {
+				return summary.Result{
+					ID:          job.ID,
+					Title:       summary.Title(job.Stack),
+					Description: "hosts stay pinned so undo cannot widen scope",
+				}
+			},
 		})
 		var sumCmd tea.Cmd
 		m, sumCmd = applyFetch(m)
@@ -268,21 +316,241 @@ func TestDescriptionFillsInspectorInPlace(t *testing.T) {
 			t.Fatal("description must land")
 		}
 		if !strings.Contains(after, m.stacks[0].Description) && !strings.Contains(after, strings.Fields(m.stacks[0].Description)[0]) {
-			t.Fatalf("%dx%d description must fill the reserved slot:\n%s", size.w, size.h, after)
+			t.Fatalf("%dx%d description must fill the inspector:\n%s", size.w, size.h, after)
 		}
 		if strings.Contains(after, "⠋") {
 			t.Fatalf("%dx%d land must not spin the list:\n%s", size.w, size.h, after)
 		}
 		if factRow(after, "status") != statusAt || factRow(after, "ci") != ciAt {
-			t.Fatalf("%dx%d fact rows moved (card morph): before status=%d ci=%d after status=%d ci=%d\n%s",
+			t.Fatalf("%dx%d fact rows moved (pane morph): before status=%d ci=%d after status=%d ci=%d\n%s",
 				size.w, size.h, statusAt, ciAt, factRow(after, "status"), factRow(after, "ci"), after)
 		}
-		if boxBounds(after) != box {
-			t.Fatalf("%dx%d stacked card morphed: before %v after %v", size.w, size.h, box, boxBounds(after))
+		if size.w >= 100 {
+			if boxBounds(after) != box {
+				t.Fatalf("%dx%d pane morphed: before %v after %v", size.w, size.h, box, boxBounds(after))
+			}
 		}
 		if len(listNames(after)) != len(listNames(before)) {
 			t.Fatalf("%dx%d list rows changed: before %v after %v", size.w, size.h, listNames(before), listNames(after))
 		}
+	}
+}
+
+func TestFetchDoneDoesNotWaitOnDescribe(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "dango.json"), []byte(`{"describe":"echo pane-hook-ok"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+
+	parsed, err := cli.Parse([]string{"--repo", "archetype-labs/app"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	args, err := cli.ResolveLaunch(parsed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if args.Describe != "echo pane-hook-ok" {
+		t.Fatalf("doctor-success describe: %q", args.Describe)
+	}
+
+	liveStack := domain.Stack{
+		ID:   "stack-184",
+		Name: "feat/email-token-overrides-model",
+		PRs: []domain.PullRequest{
+			{Number: 183, Title: "email token base", Branch: "feat/email-base"},
+			{Number: 184, Title: "feat/email-token-overrides-model", Branch: "feat/email-token-overrides-model"},
+		},
+	}
+
+	for _, size := range []struct{ w, h int }{{80, 24}, {120, 30}} {
+		started := make(chan struct{})
+		release := make(chan struct{})
+		m := New(Options{
+			Repo:        args.Repo,
+			Describe:    args.Describe,
+			DescribeDir: args.DescribeDir,
+			Width:       size.w,
+			Height:      size.h,
+			Fetch: func(string) ([]domain.Stack, error) {
+				return []domain.Stack{liveStack}, nil
+			},
+			Summarize: func(job summary.Job) summary.Result {
+				close(started)
+				<-release
+				return summary.Result{ID: job.ID, Description: "pane-hook-ok"}
+			},
+		})
+
+		got, cmd := m.Update(fetchDoneMsg{
+			stacks: []domain.Stack{liveStack},
+			live:   true,
+			token:  m.fetchSeq,
+			at:     time.Now(),
+		})
+		m = got.(Model)
+		if cmd == nil {
+			t.Fatalf("%dx%d fetchDone must return a describe cmd, not block", size.w, size.h)
+		}
+		select {
+		case <-started:
+			t.Fatalf("%dx%d fetchDone must not run describe", size.w, size.h)
+		default:
+		}
+		if m.stacks[0].Description != "" {
+			t.Fatalf("%dx%d first paint Description must stay empty, got %q", size.w, size.h, m.stacks[0].Description)
+		}
+
+		first := stripANSI(m.View())
+		if !strings.Contains(strings.Join(listNames(first), "\n"), "feat/email-token-overrides-model") {
+			t.Fatalf("%dx%d fetchDone View must paint the list:\n%s", size.w, size.h, first)
+		}
+		if strings.Contains(first, "pane-hook-ok") {
+			t.Fatalf("%dx%d fetchDone View must not wait on describe:\n%s", size.w, size.h, first)
+		}
+		if strings.Contains(first, summary.Describe(m.stacks[0])) && summary.Describe(m.stacks[0]) != "" {
+			t.Fatalf("%dx%d empty reserve must not be a local sentence:\n%s", size.w, size.h, first)
+		}
+		statusAt := factRow(first, "status")
+		ciAt := factRow(first, "ci")
+		if statusAt < 0 || ciAt < 0 {
+			t.Fatalf("%dx%d reserved pane missing facts:\n%s", size.w, size.h, first)
+		}
+
+		close(release)
+		m = applyCmd(m, cmd)
+		if m.stacks[0].Description != "pane-hook-ok" {
+			t.Fatalf("%dx%d summaryDone must write the reserved slot, got %q", size.w, size.h, m.stacks[0].Description)
+		}
+
+		raw := m.View()
+		after := stripANSI(raw)
+		if !strings.Contains(after, "pane-hook-ok") {
+			t.Fatalf("%dx%d reserved slot must paint pane-hook-ok:\n%s", size.w, size.h, after)
+		}
+		if !descSitsUnderTitle(after, "#183", "pane-hook-ok") {
+			t.Fatalf("%dx%d landed lines must sit under the title:\n%s", size.w, size.h, after)
+		}
+		if !paperInkBefore(raw, "pane-hook-ok") {
+			t.Fatalf("%dx%d landed lines must be paper ink", size.w, size.h)
+		}
+		if factRow(after, "status") != statusAt || factRow(after, "ci") != ciAt {
+			t.Fatalf("%dx%d facts shifted: before status=%d ci=%d after status=%d ci=%d\n%s",
+				size.w, size.h, statusAt, ciAt, factRow(after, "status"), factRow(after, "ci"), after)
+		}
+	}
+}
+
+func TestDescribeFailStaysSilent(t *testing.T) {
+	m := New(Options{
+		Repo:     "archetype-labs/app",
+		Describe: "echo pane-hook-ok",
+		Width:    80,
+		Height:   24,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{{
+				ID: "stack-184",
+				PRs: []domain.PullRequest{
+					{Number: 183, Title: "a"},
+					{Number: 184, Title: "b"},
+				},
+			}}, nil
+		},
+		Summarize: func(job summary.Job) summary.Result {
+			return summary.Result{ID: job.ID, Err: errors.New("exit 1")}
+		},
+	})
+	got, cmd := m.Update(fetchDoneMsg{
+		stacks: []domain.Stack{{
+			ID:  "stack-184",
+			PRs: []domain.PullRequest{{Number: 183, Title: "a"}, {Number: 184, Title: "b"}},
+		}},
+		live:  true,
+		token: m.fetchSeq,
+		at:    time.Now(),
+	})
+	m = applyCmd(got.(Model), cmd)
+	if m.stacks[0].Description != "" {
+		t.Fatalf("fail stays empty: %q", m.stacks[0].Description)
+	}
+	view := stripANSI(m.View())
+	if strings.Contains(view, "described") || strings.Contains(view, "pane-hook-ok") || strings.Contains(view, "exit 1") {
+		t.Fatalf("empty/fail stays silent:\n%s", view)
+	}
+}
+
+func TestApplySummaryWritesSelectedStackOnIDMiss(t *testing.T) {
+	m := New(Options{
+		Repo:     "archetype-labs/app",
+		Describe: "echo pane-hook-ok",
+		Width:    80,
+		Height:   24,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{{
+				ID: "stack-184",
+				PRs: []domain.PullRequest{
+					{Number: 183, Title: "a"},
+					{Number: 184, Title: "b", Branch: "feat/email-token-overrides-model"},
+				},
+			}}, nil
+		},
+	})
+	got, _ := m.Update(fetchDoneMsg{
+		stacks: []domain.Stack{{
+			ID: "stack-184",
+			PRs: []domain.PullRequest{
+				{Number: 183, Title: "a"},
+				{Number: 184, Title: "b", Branch: "feat/email-token-overrides-model"},
+			},
+		}},
+		live:  true,
+		token: m.fetchSeq,
+		at:    time.Now(),
+	})
+	m = got.(Model)
+	got, _ = m.Update(summaryDoneMsg{token: m.fetchSeq, id: "stack-0", description: "pane-hook-ok"})
+	m = got.(Model)
+	if m.stacks[0].Description != "pane-hook-ok" {
+		t.Fatalf("id miss must still write the live selected stack, got %q", m.stacks[0].Description)
+	}
+	if !strings.Contains(stripANSI(m.View()), "pane-hook-ok") {
+		t.Fatalf("tight 80 View must still paint the landed lines:\n%s", stripANSI(m.View()))
+	}
+}
+
+func TestLandedDescPaintsWhenStackedTitleFillsTheCard(t *testing.T) {
+	long := strings.Repeat("feat/email-token-overrides-model ", 16)
+	stack := domain.Stack{
+		ID:          "stack-184",
+		Description: "pane-hook-ok",
+		PRs: []domain.PullRequest{
+			{Number: 183, Title: "email token base", Branch: "feat/email-base"},
+			{Number: 184, Title: strings.TrimSpace(long), Branch: "feat/email-token-overrides-model"},
+		},
+	}
+	m := New(Options{
+		Repo:     "archetype-labs/app",
+		Describe: "echo pane-hook-ok",
+		Width:    80,
+		Height:   24,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{stack}, nil
+		},
+	})
+	got, _ := m.Update(fetchDoneMsg{
+		stacks: []domain.Stack{stack},
+		live:   true,
+		token:  m.fetchSeq,
+		at:     time.Now(),
+	})
+	m = got.(Model)
+	if m.stacks[0].Description != "pane-hook-ok" {
+		t.Fatalf("fetch must keep the landed description, got %q", m.stacks[0].Description)
+	}
+	view := stripANSI(m.View())
+	if !strings.Contains(view, "pane-hook-ok") {
+		t.Fatalf("tight 80 card must still paint the two landed lines:\n%s", view)
 	}
 }
 
@@ -327,6 +595,38 @@ func applyCmd(m Model, cmd tea.Cmd) Model {
 	return applyCmd(next.(Model), nextCmd)
 }
 
+func descSitsUnderTitle(frame, titleBit, desc string) bool {
+	lines := strings.Split(frame, "\n")
+	for i, line := range lines {
+		if !strings.Contains(line, titleBit) {
+			continue
+		}
+		for j := i + 1; j < len(lines) && j <= i+2; j++ {
+			if strings.Contains(lines[j], desc) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func paperInkBefore(raw, needle string) bool {
+	idx := strings.Index(raw, needle)
+	if idx < 0 {
+		return false
+	}
+	start := strings.LastIndex(raw[:idx], "\x1b[")
+	if start < 0 {
+		return false
+	}
+	r, g, b, ok := domain.ParseRGB(domain.Color("paper"))
+	if !ok {
+		return false
+	}
+	want := "38;2;" + itoa(r) + ";" + itoa(g) + ";" + itoa(b)
+	return strings.Contains(raw[start:idx], want)
+}
+
 func listNames(frame string) []string {
 	var out []string
 	for _, line := range strings.Split(frame, "\n") {
@@ -334,7 +634,7 @@ func listNames(frame string) []string {
 		if idx := strings.Index(line, "│"); idx >= 0 {
 			part = line[:idx]
 		}
-		if strings.Contains(part, "▸") || strings.Contains(part, "·") {
+		if strings.Contains(part, "▶") || strings.Contains(part, "▸") || strings.Contains(part, "·") {
 			out = append(out, part)
 		}
 	}
@@ -347,8 +647,89 @@ func TestStatusWordsKeepStatusColor(t *testing.T) {
 		t.Fatalf("auth head should be ciFailure, got %s", got)
 	}
 	composer := New(Options{StoryID: "mixed", Width: 120, Height: 30}).Stacks()[1]
-	if got := stackHealthColor(composer); got != domain.Color("queued") {
-		t.Fatalf("composer head should be queued, got %s", got)
+	if got := stackHealthColor(composer); got != domain.Color("paper") {
+		t.Fatalf("composer head queued ink is paper, got %s", got)
+	}
+}
+
+func TestActiveLayerKeepsInkAndFills(t *testing.T) {
+	review := domain.PullRequest{ReviewDecision: "CHANGES_REQUESTED"}
+	if got := layerBallGlyph(review, false); got != '◎' {
+		t.Fatalf("review resting glyph %q", string(got))
+	}
+	if got := layerBallGlyph(review, true); got != '●' {
+		t.Fatalf("active review is ●, not %q", string(got))
+	}
+	if layerBallInk(review) != domain.Color("warning") || layerBallInk(review) != "#e6b84d" {
+		t.Fatalf("active keeps review ink, got %s", layerBallInk(review))
+	}
+	fail := domain.PullRequest{CI: domain.CISummary{State: domain.CIFailure, Failed: 1}}
+	if got := layerBallGlyph(fail, true); got != '●' {
+		t.Fatalf("active fail is ●, not %q", string(got))
+	}
+	if layerBallInk(fail) != "#e24b4a" {
+		t.Fatalf("active fail keeps red, got %s", layerBallInk(fail))
+	}
+	open := domain.PullRequest{}
+	if got := layerBallGlyph(open, true); got != '●' {
+		t.Fatalf("active open is ●, not %q", string(got))
+	}
+	if layerBallInk(open) != domain.Color("paper") {
+		t.Fatalf("active open keeps paper ink, got %s", layerBallInk(open))
+	}
+	if layerBallGlyph(fail, false) == '●' || layerBallGlyph(open, false) == '●' {
+		t.Fatal("resting status must not be filled")
+	}
+}
+
+func TestDraftUnmergeableKeepsDraftInk(t *testing.T) {
+	draft := domain.PullRequest{Number: 5209, Draft: true, Mergeable: domain.MergeableFalse()}
+	if domain.GetDisplayState(draft) != domain.StateDraft {
+		t.Fatalf("unmergeable draft is draft, got %s", domain.GetDisplayState(draft))
+	}
+	if got := layerBallInk(draft); got != "#8b8e93" {
+		t.Fatalf("draft ink %s, want #8b8e93", got)
+	}
+	if got := layerBallInk(draft); got == "#f2ebe0" || got == "#e6b84d" {
+		t.Fatalf("draft must not be paper or review: %s", got)
+	}
+	if got := layerBallGlyph(draft, false); got != '○' {
+		t.Fatalf("idle draft is ○, not %q", string(got))
+	}
+	if got := layerBallGlyph(draft, true); got != '●' {
+		t.Fatalf("active draft is ●, not %q", string(got))
+	}
+	review := domain.PullRequest{ReviewDecision: "CHANGES_REQUESTED"}
+	if got := layerBallGlyph(review, false); got != '◎' {
+		t.Fatalf("real review stays ◎, got %q", string(got))
+	}
+	if got := layerBallGlyph(review, true); got != '●' || layerBallInk(review) != "#e6b84d" {
+		t.Fatalf("active review is amber ●, glyph=%q ink=%s", string(layerBallGlyph(review, true)), layerBallInk(review))
+	}
+}
+
+func TestDraftChainGlance(t *testing.T) {
+	open := domain.PullRequest{}
+	draft := domain.PullRequest{Draft: true, Mergeable: domain.MergeableFalse()}
+	review := domain.PullRequest{ReviewDecision: "CHANGES_REQUESTED"}
+	idle := string([]rune{
+		layerBallGlyph(open, false), '-',
+		layerBallGlyph(draft, false), '-',
+		layerBallGlyph(review, false),
+	})
+	if idle != "○-○-◎" {
+		t.Fatalf("idle chain %q", idle)
+	}
+	onYou := string([]rune{
+		layerBallGlyph(open, false), '-',
+		layerBallGlyph(draft, true), '-',
+		layerBallGlyph(review, false),
+	})
+	if onYou != "○-●-◎" {
+		t.Fatalf("on-draft chain %q", onYou)
+	}
+	if layerBallInk(draft) != "#8b8e93" {
+		t.Fatalf("draft ink %s", layerBallInk(draft))
 	}
 }
 
@@ -365,6 +746,36 @@ func TestLayerBallsUseStatusTokens(t *testing.T) {
 		if domain.IsLogoToken(domain.StateColorToken(domain.GetDisplayState(pr))) {
 			t.Fatalf("layer %d must not use a logo hue token", i)
 		}
+	}
+}
+
+func TestInspectorStatusInkMatchesBall(t *testing.T) {
+	cases := []struct {
+		name  string
+		pr    domain.PullRequest
+		token string
+	}{
+		{name: "draft", pr: domain.PullRequest{Draft: true}, token: "draft"},
+		{name: "merged", pr: domain.PullRequest{Merged: true}, token: "merged"},
+		{name: "blocked", pr: domain.PullRequest{ReviewDecision: "CHANGES_REQUESTED"}, token: "warning"},
+		{name: "open", pr: domain.PullRequest{}, token: "paper"},
+		{name: "queued", pr: domain.PullRequest{MergeQueueState: "QUEUED"}, token: "paper"},
+		{name: "approved", pr: domain.PullRequest{ReviewDecision: "APPROVED"}, token: "ready"},
+		{name: "fail", pr: domain.PullRequest{CI: domain.CISummary{State: domain.CIFailure, Failed: 1}}, token: "ciFailure"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			want := domain.Color(tc.token)
+			if got := layerBallInk(tc.pr); got != want {
+				t.Fatalf("ball %s, want %s", got, want)
+			}
+			if got := inspectorStatusColor(tc.pr); got != want {
+				t.Fatalf("inspector %s, want %s", got, want)
+			}
+			if layerBallInk(tc.pr) != inspectorStatusColor(tc.pr) {
+				t.Fatal("ball and inspector status ink must share GetDisplayState")
+			}
+		})
 	}
 }
 
@@ -417,7 +828,7 @@ func TestInspectorStatusInkIsValueOnly(t *testing.T) {
 	}
 
 	blocked := New(Options{StoryID: "changes-requested", Width: 120, Height: 30}).Stacks()[0].PRs[0]
-	if got := inspectorStatusColor(blocked); got != domain.Color("reviewBlocked") {
+	if got := inspectorStatusColor(blocked); got != domain.Color("warning") {
 		t.Fatalf("blocked status value %s", got)
 	}
 	merged := auth.PRs[0]
@@ -429,7 +840,7 @@ func TestInspectorStatusInkIsValueOnly(t *testing.T) {
 func TestDotCopiesFetchError(t *testing.T) {
 	sha := "dddddddddddddddddddddddddddddddddddddddd"
 	withVCS(t, sha)
-	err502 := errors.New("gh pr list --repo archetype-labs/app --state open --limit 100 --json number,title,url,headRefName,baseRefName,author,labels,isDraft,state: HTTP 502: Bad Gateway")
+	err502 := errors.New(live.FormatGHArgv(live.PRListArgs("archetype-labs/app")) + ": HTTP 502: Bad Gateway")
 	var copied string
 	old := copyText
 	copyText = func(s string) error { copied = s; return nil }
@@ -460,8 +871,8 @@ func TestDotCopiesFetchError(t *testing.T) {
 	}
 	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(".")})
 	m = next.(Model)
-	if !strings.Contains(copied, err502.Error()) || !strings.Contains(copied, sha) {
-		t.Fatalf("dot copies the error plus SHA, got %q", copied)
+	if !strings.Contains(copied, err502.Error()) || !strings.Contains(copied, shortSHA(sha)) {
+		t.Fatalf("dot copies the error plus short SHA, got %q", copied)
 	}
 	if cmd == nil {
 		t.Fatal("copy toast should clear")
@@ -485,11 +896,11 @@ func TestDotCopiesBranchToast(t *testing.T) {
 	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(".")})
 	m = next.(Model)
 	frame := stripANSI(m.View())
-	if !strings.Contains(frame, "copied gm/stacks-184") {
+	if !strings.Contains(frame, "copied") {
 		t.Fatalf("toast:\n%s", frame)
 	}
-	if strings.Contains(frame, "Copied ") {
-		t.Fatalf("toast is lowercase copied, not Copied:\n%s", frame)
+	if strings.Contains(frame, "Copied ") || strings.Contains(frame, "copied gm/") {
+		t.Fatalf("toast is copied, not the branch:\n%s", frame)
 	}
 	if strings.Contains(frame, "Checked out") {
 		t.Fatalf("copy must not checkout:\n%s", frame)
@@ -501,7 +912,7 @@ func TestDotCopiesBranchToast(t *testing.T) {
 		t.Fatalf("no picker:\n%s", frame)
 	}
 	if copied != "gm/stacks-184" {
-		t.Fatalf("copied %q", copied)
+		t.Fatalf("dot copies the selected layer branch, got %q", copied)
 	}
 	if after := gitHEAD(t); after != before {
 		t.Fatalf("changed git HEAD: %s -> %s", before, after)
@@ -512,14 +923,104 @@ func TestDotCopiesBranchToast(t *testing.T) {
 	next, _ = m.Update(clearFeedbackMsg{token: m.feedbackSeq})
 	m = next.(Model)
 	cleared := stripANSI(m.View())
-	if strings.Contains(cleared, "copied gm/stacks-184") {
+	if strings.Contains(cleared, "copied") && !strings.Contains(cleared, "[ . ] copy") {
 		t.Fatalf("toast should clear:\n%s", cleared)
 	}
-	if !strings.Contains(cleared, "[ ↑↓ ] stack") || !strings.Contains(cleared, "[ o ] open") || !strings.Contains(cleared, "[ . ] copy") {
+	if !strings.Contains(cleared, "[ ↑↓←→ ] navigate") || !strings.Contains(cleared, "[ o ] open") || !strings.Contains(cleared, "[ . ] copy") {
 		t.Fatalf("footer should return to the key legend:\n%s", cleared)
 	}
-	if strings.Contains(cleared, "[ enter ]") {
-		t.Fatalf("enter must leave the footer:\n%s", cleared)
+	if strings.Contains(cleared, "[ enter ]") || strings.Contains(cleared, "[ a ] add") || strings.Contains(cleared, "[ esc ]") {
+		t.Fatalf("enter/add/esc must leave the footer:\n%s", cleared)
+	}
+}
+
+func TestDotCopiesBranchAfterDescribeRuns(t *testing.T) {
+	var copied string
+	old := copyText
+	copyText = func(s string) error { copied = s; return nil }
+	t.Cleanup(func() { copyText = old })
+
+	m := New(Options{
+		Repo:     "archetype-labs/app",
+		Describe: "echo pane-hook-ok",
+		Width:    80,
+		Height:   24,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{{
+				ID: "s",
+				PRs: []domain.PullRequest{
+					{Number: 1, Title: "alpha layer", Branch: "gm/alpha"},
+					{Number: 2, Title: "beta layer"},
+				},
+			}}, nil
+		},
+		Summarize: func(job summary.Job) summary.Result {
+			if job.Describe != "echo pane-hook-ok" {
+				t.Fatalf("describe argv: %q", job.Describe)
+			}
+			return summary.Result{ID: job.ID, Description: "pane-hook-ok"}
+		},
+	})
+	m, extra := applyFetch(m)
+	m = applyCmd(m, extra)
+	if m.Stacks()[0].Description != "pane-hook-ok" {
+		t.Fatalf("script result: %q", m.Stacks()[0].Description)
+	}
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(".")})
+	m = next.(Model)
+	if copied != "gm/alpha" {
+		t.Fatalf("dot copies the selected layer branch, got %q", copied)
+	}
+	if !strings.Contains(stripANSI(m.View()), "copied") {
+		t.Fatalf("toast copied:\n%s", stripANSI(m.View()))
+	}
+	if strings.Contains(stripANSI(m.View()), "copied gm/") {
+		t.Fatalf("toast is copied, not the branch:\n%s", stripANSI(m.View()))
+	}
+	if strings.Contains(copied, "echo") || strings.Contains(copied, "pane-hook-ok") {
+		t.Fatalf("dot must not dump describe: %q", copied)
+	}
+	if cmd == nil {
+		t.Fatal("toast should clear")
+	}
+}
+
+func TestDotCopiesBranchWhenDescribeDies(t *testing.T) {
+	var copied string
+	old := copyText
+	copyText = func(s string) error { copied = s; return nil }
+	t.Cleanup(func() { copyText = old })
+
+	m := New(Options{
+		Repo:     "archetype-labs/app",
+		Describe: "echo pane-hook-ok",
+		Width:    80,
+		Height:   24,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{{
+				ID: "s",
+				PRs: []domain.PullRequest{
+					{Number: 1, Title: "alpha", Branch: "gm/alpha"},
+					{Number: 2, Title: "beta"},
+				},
+			}}, nil
+		},
+		Summarize: func(job summary.Job) summary.Result {
+			return summary.Result{ID: job.ID, Err: errors.New("exit 1")}
+		},
+	})
+	m, extra := applyFetch(m)
+	m = applyCmd(m, extra)
+	if m.Stacks()[0].Description != "" {
+		t.Fatalf("dead script stays empty: %q", m.Stacks()[0].Description)
+	}
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(".")})
+	m = next.(Model)
+	if copied != "gm/alpha" {
+		t.Fatalf("dot still copies the branch, got %q", copied)
+	}
+	if strings.Contains(copied, "exit 1") || strings.Contains(copied, "echo") {
+		t.Fatalf("dot must not dump describe: %q", copied)
 	}
 }
 
@@ -565,7 +1066,7 @@ func TestOpenRestoresFooterAfterResult(t *testing.T) {
 	if strings.Contains(okFrame, "Opening ") {
 		t.Fatalf("success must not leave Opening stuck:\n%s", okFrame)
 	}
-	if !strings.Contains(okFrame, "[ ↑↓ ] stack") || !strings.Contains(okFrame, "[ o ] open") || !strings.Contains(okFrame, "[ . ] copy") {
+	if !strings.Contains(okFrame, "[ ↑↓←→ ] navigate") || !strings.Contains(okFrame, "[ o ] open") || !strings.Contains(okFrame, "[ . ] copy") {
 		t.Fatalf("success should restore the key legend:\n%s", okFrame)
 	}
 	if strings.Contains(okFrame, "[ enter ]") {
@@ -583,7 +1084,7 @@ func TestOpenRestoresFooterAfterResult(t *testing.T) {
 	if strings.Contains(failFrame, "Opening ") || strings.Contains(failFrame, "Could not open") {
 		t.Fatalf("failure must not lock the footer:\n%s", failFrame)
 	}
-	if !strings.Contains(failFrame, "[ ↑↓ ] stack") || !strings.Contains(failFrame, "[ o ] open") || !strings.Contains(failFrame, "[ . ] copy") {
+	if !strings.Contains(failFrame, "[ ↑↓←→ ] navigate") || !strings.Contains(failFrame, "[ o ] open") || !strings.Contains(failFrame, "[ . ] copy") {
 		t.Fatalf("failure should restore the key legend:\n%s", failFrame)
 	}
 	if strings.Contains(failFrame, "[ enter ]") {

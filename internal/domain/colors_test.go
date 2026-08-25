@@ -82,6 +82,19 @@ func TestChromeHexLocks(t *testing.T) {
 	if _, ok := domain.ChromeHex["ready"]; ok {
 		t.Fatal("ready must not be chrome-locked")
 	}
+	status := map[string]string{
+		"paper":     "#f2ebe0",
+		"draft":     "#8b8e93",
+		"ciFailure": "#e24b4a",
+		"warning":   "#e6b84d",
+		"ready":     "#3daf6c",
+		"merged":    "#9b7bb8",
+	}
+	for name, hex := range status {
+		if got := domain.Color(name); got != hex {
+			t.Fatalf("status %s: got %s want %s", name, got, hex)
+		}
+	}
 	if domain.Color("ready") == domain.Color("stick") {
 		t.Fatal("status color collided with connector")
 	}

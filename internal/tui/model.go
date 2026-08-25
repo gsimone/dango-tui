@@ -2,6 +2,7 @@ package tui
 
 import (
 	"strings"
+	"testing"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -13,12 +14,17 @@ import (
 )
 
 type Options struct {
-	StoryID  string
-	Repo     string
-	Provider summary.Provider
-	Width    int
-	Height   int
-	Fetch    live.FetchFunc
+	StoryID     string
+	Repo        string
+	Provider    summary.Provider
+	Describe    string
+	DescribeDir string
+	Width       int
+	Height      int
+	Fetch       live.FetchFunc
+	// EnrichCI fills CI after first paint. Nil is a no-op unless Fetch
+	// is also nil (production then uses live.EnrichCI).
+	EnrichCI live.EnrichCIFunc
 	// Summarize is the provider hook. Nil uses summary.Run. Tests inject a fake.
 	Summarize summary.Func
 }
@@ -37,6 +43,8 @@ type Model struct {
 	LogoDots    [3]string
 	Repo        string
 	Provider    summary.Provider
+	Describe    string
+	DescribeDir string
 	Live        bool
 	File        bool
 	file        string
@@ -45,7 +53,10 @@ type Model struct {
 	fetchErr    error
 	fetchedAt   time.Time
 	fetch       live.FetchFunc
+	enrichCI    live.EnrichCIFunc
 	summarize   summary.Func
+	summaryBusy bool
+	summaryDone map[string]bool
 	splashKeep  string
 }
 
@@ -58,16 +69,22 @@ func New(opts Options) Model {
 		height = 24
 	}
 	m := Model{
-		Width:     width,
-		Height:    height,
-		State:     app.InitialState(),
-		LogoDots:  domain.ProcessLogoDots(),
-		Provider:  opts.Provider,
-		fetch:     opts.Fetch,
-		summarize: opts.Summarize,
+		Width:       width,
+		Height:      height,
+		State:       app.InitialState(),
+		LogoDots:    domain.ProcessLogoDots(),
+		Provider:    opts.Provider,
+		Describe:    strings.TrimSpace(opts.Describe),
+		DescribeDir: strings.TrimSpace(opts.DescribeDir),
+		fetch:       opts.Fetch,
+		enrichCI:    opts.EnrichCI,
+		summarize:   opts.Summarize,
 	}
 	if m.fetch == nil {
 		m.fetch = live.Fetch
+		if m.enrichCI == nil {
+			m.enrichCI = live.EnrichCI
+		}
 	}
 	if m.summarize == nil {
 		m.summarize = summary.Run
@@ -133,7 +150,10 @@ func (m Model) Init() tea.Cmd {
 	if m.Live {
 		return m.fetchCmd(m.fetchSeq)
 	}
-	return m.startSummaries()
+	if strings.TrimSpace(m.Describe) == "" {
+		return nil
+	}
+	return m.startSelectedSummary()
 }
 
 func (m Model) fetchCmd(token int) tea.Cmd {
@@ -182,33 +202,105 @@ func (m Model) splashCopyText() string {
 	return body
 }
 
-func (m Model) startSummaries() tea.Cmd {
-	if !m.Live || m.Provider.Empty() {
+func (m *Model) startSummaries() tea.Cmd {
+	return m.startSelectedSummary()
+}
+
+func (m *Model) startSelectedSummary() tea.Cmd {
+	if m.summaryBusy {
+		return nil
+	}
+	describe := strings.TrimSpace(m.Describe)
+	if describe == "" && (!m.Live || m.Provider.Empty()) {
+		return nil
+	}
+	stack, ok := m.ensureSelectedStackID()
+	if !ok {
+		return nil
+	}
+	if m.summaryDone[stack.ID] {
+		return nil
+	}
+	if describe == "" && strings.TrimSpace(stack.Description) != "" {
+		return nil
+	}
+	if m.summaryDone == nil {
+		m.summaryDone = map[string]bool{}
+	}
+	m.summaryBusy = true
+	token := m.fetchSeq
+	job := summary.Job{Provider: m.Provider, Describe: m.Describe, DescribeDir: m.DescribeDir, Stack: stack, ID: stack.ID}
+	run := m.summarize
+	return func() tea.Msg {
+		res := run(job)
+		return summaryDoneMsg{
+			token:       token,
+			id:          res.ID,
+			title:       res.Title,
+			description: res.Description,
+		}
+	}
+}
+
+func (m *Model) ensureSelectedStackID() (domain.Stack, bool) {
+	filtered := m.Stacks()
+	sel := app.ClampSelection(m.State.Selection, filtered)
+	if len(filtered) == 0 || sel.StackIndex >= len(filtered) {
+		return domain.Stack{}, false
+	}
+	stack := filtered[sel.StackIndex]
+	if stack.ID == "" {
+		stack.ID = "stack-" + itoa(sel.StackIndex)
+	}
+	for i := range m.stacks {
+		if !stackRefEquals(m.stacks[i], stack) {
+			continue
+		}
+		if m.stacks[i].ID == "" {
+			m.stacks[i].ID = stack.ID
+		} else {
+			stack.ID = m.stacks[i].ID
+		}
+		return stack, true
+	}
+	return stack, true
+}
+
+func stackRefEquals(a, b domain.Stack) bool {
+	if a.ID != "" && a.ID == b.ID {
+		return true
+	}
+	if len(a.PRs) == 0 || len(a.PRs) != len(b.PRs) {
+		return false
+	}
+	for i := range a.PRs {
+		if a.PRs[i].Number != b.PRs[i].Number {
+			return false
+		}
+	}
+	return true
+}
+
+func (m Model) startCIEnrich() tea.Cmd {
+	if !m.Live || m.enrichCI == nil {
 		return nil
 	}
 	token := m.fetchSeq
-	var cmds []tea.Cmd
-	for _, stack := range m.stacks {
-		id := stack.ID
-		if id == "" {
-			continue
-		}
-		job := summary.Job{Provider: m.Provider, Stack: stack, ID: id}
-		run := m.summarize
-		cmds = append(cmds, func() tea.Msg {
-			res := run(job)
-			return summaryDoneMsg{
-				token:       token,
-				id:          res.ID,
-				title:       res.Title,
-				description: res.Description,
-			}
-		})
+	repo := m.Repo
+	snap := append([]domain.Stack(nil), m.stacks...)
+	for i := range snap {
+		snap[i].PRs = append([]domain.PullRequest(nil), snap[i].PRs...)
 	}
-	if len(cmds) == 0 {
-		return nil
+	enrich := m.enrichCI
+	return func() tea.Msg {
+		return ciDoneMsg{token: token, stacks: enrich(repo, snap)}
 	}
-	return tea.Batch(cmds...)
+}
+
+func (m *Model) afterFetch() tea.Cmd {
+	// startSelectedSummary is a tea.Cmd. It must not exec the script
+	// inside fetchDone — tea runs the cmd after this Update returns.
+	return tea.Batch(m.startSelectedSummary(), m.startCIEnrich())
 }
 
 func (m Model) fetchBadge() string {
@@ -295,7 +387,7 @@ func (m *Model) copyBranch(pr domain.PullRequest) tea.Cmd {
 		return m.clearFeedback()
 	}
 	copyText(pr.Branch)
-	m.State.Feedback = "copied " + pr.Branch
+	m.State.Feedback = "copied"
 	return m.clearFeedback()
 }
 
@@ -313,10 +405,18 @@ func (m *Model) copySplash() tea.Cmd {
 	return m.clearFeedback()
 }
 
+var feedbackTTL = 900 * time.Millisecond
+
+func init() {
+	if testing.Testing() {
+		feedbackTTL = time.Millisecond
+	}
+}
+
 func (m *Model) clearFeedback() tea.Cmd {
 	m.feedbackSeq++
 	token := m.feedbackSeq
-	return tea.Tick(900*time.Millisecond, func(time.Time) tea.Msg {
+	return tea.Tick(feedbackTTL, func(time.Time) tea.Msg {
 		return clearFeedbackMsg{token: token}
 	})
 }

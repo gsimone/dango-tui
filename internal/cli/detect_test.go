@@ -84,8 +84,36 @@ func TestReadDangoConfigMissingIsEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Provider != "" {
-		t.Fatalf("missing file must not invent a provider: %+v", cfg)
+	if cfg.Provider != "" || cfg.Describe != "" {
+		t.Fatalf("missing file must not invent provider/describe: %+v", cfg)
+	}
+}
+
+func TestReadDangoJSONDescribe(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "dango.json"), []byte(`{"describe":"bin/describe-stack"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := ReadDangoConfig(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Describe != "bin/describe-stack" || cfg.Provider != "" {
+		t.Fatalf("got %+v", cfg)
+	}
+}
+
+func TestReadDangoYAMLDescribe(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "dango.yml"), []byte("describe: bin/describe-stack\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := ReadDangoConfig(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Describe != "bin/describe-stack" {
+		t.Fatalf("got %+v", cfg)
 	}
 }
 
@@ -137,25 +165,108 @@ func TestReadDangoJSONWinsOverYAML(t *testing.T) {
 	}
 }
 
-func TestReadDangoConfigPrefersRepoOverCwd(t *testing.T) {
+func TestResolveLaunchUsesGetwd(t *testing.T) {
 	dir := t.TempDir()
 	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")
-	if err := os.WriteFile(filepath.Join(dir, "dango.yml"), []byte("provider: from-repo\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "dango.json"), []byte(`{"describe":"echo pane-hook-ok"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	parsed, err := Parse([]string{"--repo", "archetype-labs/app"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := ResolveLaunch(parsed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Repo != "archetype-labs/app" {
+		t.Fatalf("repo %q", got.Repo)
+	}
+	if got.Describe != "echo pane-hook-ok" {
+		t.Fatalf("Getwd dango.json describe: %q", got.Describe)
+	}
+	if got.DescribeDir != dir {
+		t.Fatalf("describe dir %q want %q", got.DescribeDir, dir)
+	}
+}
+
+func TestResolveDescribeRelativeAgainstConfigDir(t *testing.T) {
+	dir := t.TempDir()
+	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")
+	bin := filepath.Join(dir, "bin")
+	if err := os.Mkdir(bin, 0755); err != nil {
+		t.Fatal(err)
+	}
+	script := filepath.Join(bin, "hook")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\necho ok\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "dango.json"), []byte(`{"describe":"./bin/hook"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	got := mustResolve(t, Args{Repo: "archetype-labs/app"}, dir)
+	want := filepath.Join(dir, "bin", "hook")
+	if got.Describe != want {
+		t.Fatalf("relative describe: %q want %q", got.Describe, want)
+	}
+	if got.DescribeDir != dir {
+		t.Fatalf("describe dir %q", got.DescribeDir)
+	}
+}
+
+func TestReadDangoConfigCwdJSONDoesNotFallThrough(t *testing.T) {
+	dir := t.TempDir()
+	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")
+	if err := os.WriteFile(filepath.Join(dir, "dango.json"), []byte(`{"describe":"echo from-root"}`), 0644); err != nil {
 		t.Fatal(err)
 	}
 	child := filepath.Join(dir, "pkg")
 	if err := os.Mkdir(child, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(child, "dango.yaml"), []byte("provider: from-cwd\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(child, "dango.json"), []byte(`{}`), 0644); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := ReadDangoConfig(child)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Provider != "from-repo" {
-		t.Fatalf("repo file wins over cwd, got %+v", cfg)
+	if cfg.Describe != "" || cfg.Provider != "" {
+		t.Fatalf("cwd dango.json wins and must not read the parent, got %+v", cfg)
+	}
+
+	if err := os.WriteFile(filepath.Join(child, "dango.json"), []byte(`{"describe":"echo pane-hook-ok"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	got := mustResolve(t, Args{Repo: "archetype-labs/app"}, child)
+	if got.Describe != "echo pane-hook-ok" {
+		t.Fatalf("--repo must keep cwd describe, got %q", got.Describe)
+	}
+	if got.Repo != "archetype-labs/app" {
+		t.Fatalf("repo %q", got.Repo)
+	}
+}
+
+func TestReadDangoConfigPrefersCwdOverGitRoot(t *testing.T) {
+	dir := t.TempDir()
+	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")
+	if err := os.WriteFile(filepath.Join(dir, "dango.yml"), []byte("provider: from-root\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	child := filepath.Join(dir, "pkg")
+	if err := os.Mkdir(child, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(child, "dango.yaml"), []byte("provider: from-cwd\ndescribe: bin/describe-stack\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := ReadDangoConfig(child)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Provider != "from-cwd" || cfg.Describe != "bin/describe-stack" {
+		t.Fatalf("launch dir wins over git root, got %+v", cfg)
 	}
 }
 
@@ -213,6 +324,26 @@ func TestResolveMissingJSONHasNoProvider(t *testing.T) {
 	}
 	if got.Provider.Raw != "" {
 		t.Fatalf("missing dango.json must not invent a provider: %+v", got.Provider)
+	}
+	if got.Describe != "" {
+		t.Fatalf("missing dango.json must not invent describe: %q", got.Describe)
+	}
+}
+
+func TestResolveDescribeFromConfigFileOnly(t *testing.T) {
+	dir := t.TempDir()
+	gitInitWithOrigin(t, dir, "https://github.com/gsimone/leva-2.git")
+	if err := os.WriteFile(filepath.Join(dir, "dango.json"), []byte(`{"describe":"bin/from-json"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(dir, "bin", "from-json")
+	fromFile := mustResolve(t, Args{}, dir)
+	if fromFile.Describe != want {
+		t.Fatalf("json describe: %q want %q", fromFile.Describe, want)
+	}
+	ignored := mustResolve(t, Args{Describe: "bin/from-flag"}, dir)
+	if ignored.Describe != want {
+		t.Fatalf("describe comes only from the config file: %q", ignored.Describe)
 	}
 }
 

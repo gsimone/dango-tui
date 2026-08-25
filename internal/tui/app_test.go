@@ -173,7 +173,7 @@ func TestKeyboardAndHoverRevealTheSameInspector(t *testing.T) {
 		t.Fatalf("keyboard inspector:\n%s", keyboard)
 	}
 	if !strings.Contains(keyboard, "○-●-○") {
-		t.Fatalf("keyboard selection glyph:\n%s", keyboard)
+		t.Fatalf("active layer is ●, others stay hollow:\n%s", keyboard)
 	}
 
 	first := data.Stories()[0].Stacks[0]
@@ -183,7 +183,7 @@ func TestKeyboardAndHoverRevealTheSameInspector(t *testing.T) {
 	if !strings.Contains(hover, "#185 Keep service identity") {
 		t.Fatalf("hover inspector:\n%s", hover)
 	}
-	if !strings.Contains(hover, "ready to merge") {
+	if !strings.Contains(hover, "approved") {
 		t.Fatalf("hover headline:\n%s", hover)
 	}
 }
@@ -202,8 +202,11 @@ func TestCompactCardAndHomeEnd(t *testing.T) {
 	if !strings.Contains(frame, "status") || !strings.Contains(frame, "branch") {
 		t.Fatalf("compact inspector should be labeled rows:\n%s", frame)
 	}
-	if !strings.Contains(frame, "[ ↑↓ ] stack") || !strings.Contains(frame, "[ ←→ ] layer") {
+	if !strings.Contains(frame, "[ ↑↓←→ ] navigate") {
 		t.Fatalf("compact footer:\n%s", frame)
+	}
+	if strings.Contains(frame, "[ ↑↓ ] stack") || strings.Contains(frame, "[ ←→ ] layer") {
+		t.Fatalf("footer is one navigate bind, not stack/layer:\n%s", frame)
 	}
 	assertFits(t, frame, 40)
 }
@@ -297,11 +300,11 @@ func TestEightyColumnFooterAndFocus(t *testing.T) {
 	if !strings.Contains(frame, "●") {
 		t.Fatalf("focused layer:\n%s", frame)
 	}
-	if !strings.Contains(frame, "[ ↑↓ ] stack") || !strings.Contains(frame, "[ o ] open") || !strings.Contains(frame, "[ . ] copy") {
+	if !strings.Contains(frame, "[ ↑↓←→ ] navigate") || !strings.Contains(frame, "[ o ] open") || !strings.Contains(frame, "[ . ] copy") {
 		t.Fatalf("80-col footer should be a key strip:\n%s", frame)
 	}
-	if strings.Contains(frame, "[ enter ]") {
-		t.Fatalf("enter must leave the footer:\n%s", frame)
+	if strings.Contains(frame, "[ enter ]") || strings.Contains(frame, "[ a ] add") || strings.Contains(frame, "[ esc ]") {
+		t.Fatalf("enter/add/esc must leave the footer:\n%s", frame)
 	}
 	if strings.Contains(frame, "fixture cache ·") || strings.Contains(frame, " · ") && strings.Contains(frame, "q quit") {
 		t.Fatalf("footer must not be a middot sentence:\n%s", frame)
@@ -377,7 +380,7 @@ func TestInspectorIsARightColumn(t *testing.T) {
 	m := makeUI(size, "mixed")
 	raw := m.View()
 	wide := strip(raw)
-	if !strings.Contains(wide, "#184 Split auth scope from session checks") {
+	if !strings.Contains(wide, "#184 Split auth scope") {
 		t.Fatalf("inspector missing title:\n%s", wide)
 	}
 	if strings.Contains(wide, "┌") || strings.Contains(wide, "└") {
@@ -440,7 +443,7 @@ func TestInspectorStatusColorStaysOnTheValue(t *testing.T) {
 func TestInspectorIsLabeledRows(t *testing.T) {
 	size := tui.TerminalSize{Width: 120, Height: 30}
 	frame := frameOf(makeUI(size, "mixed"))
-	if !strings.Contains(frame, "#184 Split auth scope from session checks") {
+	if !strings.Contains(frame, "#184 Split auth scope") {
 		t.Fatalf("paper title missing:\n%s", frame)
 	}
 	if strings.Contains(frame, "split auth scope from session checks, keep") {
@@ -469,7 +472,7 @@ func TestInspectorIsLabeledRows(t *testing.T) {
 		return line
 	}
 	for i, line := range lines {
-		if strings.Contains(pane(line), "#184 Split auth scope from session checks") {
+		if strings.Contains(pane(line), "#184 Split auth scope") {
 			titleAt = i
 			break
 		}
@@ -561,11 +564,11 @@ func TestFooterKeysAreBracketed(t *testing.T) {
 		frame := frameOf(makeUI(size, "mixed"))
 		lines := strings.Split(frame, "\n")
 		footer := lines[len(lines)-1]
-		if !strings.Contains(footer, "[ ↑↓ ]") || !strings.Contains(footer, "stack") {
+		if !strings.Contains(footer, "[ ↑↓←→ ]") || !strings.Contains(footer, "navigate") {
 			t.Fatalf("%dx%d footer missing bracketed keys:\n%s", size.Width, size.Height, footer)
 		}
-		if strings.Contains(footer, "↑↓ stack") && !strings.Contains(footer, "[ ↑↓ ] stack") {
-			t.Fatalf("%dx%d key is not bracketed:\n%s", size.Width, size.Height, footer)
+		if strings.Contains(footer, "[ ↑↓ ] stack") || strings.Contains(footer, "[ ←→ ] layer") || strings.Contains(footer, "[ a ] add") || strings.Contains(footer, "[ esc ]") {
+			t.Fatalf("%dx%d footer split stack/layer or leftover add/esc:\n%s", size.Width, size.Height, footer)
 		}
 	}
 }
@@ -630,7 +633,17 @@ func TestHoverFillsBallAndShowsInspector(t *testing.T) {
 		t.Fatalf("hover inspector:\n%s", frame)
 	}
 	if !strings.Contains(frame, "○-●-○") {
-		t.Fatalf("hover should fill the focused ball:\n%s", frame)
+		t.Fatalf("hover marks the active layer with ●:\n%s", frame)
+	}
+}
+
+func TestPagerBookendsStayGuillemets(t *testing.T) {
+	frame := frameOf(makeUI(tui.TerminalSize{Width: 120, Height: 30}, "freight"))
+	if !strings.Contains(frame, "‹›") {
+		t.Fatalf("bookends are ‹›:\n%s", frame)
+	}
+	if strings.Contains(frame, "<->") || strings.Contains(frame, "<>") {
+		t.Fatalf("never ASCII pager:\n%s", frame)
 	}
 }
 
@@ -649,7 +662,7 @@ func TestTypeIsThreeInks(t *testing.T) {
 		t.Fatal("failed / ready / blocked must keep their status colors")
 	}
 	frame := strip(raw)
-	if !strings.Contains(frame, "[ ↑↓ ]") || !strings.Contains(frame, "stack") {
+	if !strings.Contains(frame, "[ ↑↓←→ ]") || !strings.Contains(frame, "navigate") {
 		t.Fatalf("footer key legend missing:\n%s", frame)
 	}
 	if strings.Contains(frame, "fixture cache ·") {
@@ -669,8 +682,7 @@ func TestHelpOverlayToggles(t *testing.T) {
 	m = applyKey(m, key("?"))
 	frame := frameOf(m)
 	for _, needle := range []string{
-		"[ ↑↓ ] stack",
-		"[ ←→ ] layer",
+		"[ ↑↓←→ ] navigate",
 		"[ o ] open",
 		"[ . ] copy",
 		"[ / ] filter",
@@ -682,8 +694,8 @@ func TestHelpOverlayToggles(t *testing.T) {
 			t.Fatalf("help overlay missing %q:\n%s", needle, frame)
 		}
 	}
-	if strings.Contains(frame, "[ enter ]") || strings.Contains(frame, "[ p ] provider") {
-		t.Fatalf("help must not invent enter or a provider picker:\n%s", frame)
+	if strings.Contains(frame, "[ enter ]") || strings.Contains(frame, "[ p ] provider") || strings.Contains(frame, "[ a ] add") || strings.Contains(frame, "[ esc ]") {
+		t.Fatalf("help must not invent enter, add, esc, or a provider picker:\n%s", frame)
 	}
 	if strings.Contains(frame, "[ , ]") || strings.Contains(frame, "[ . , ]") {
 		t.Fatalf("help must not advertise comma copy:\n%s", frame)
@@ -700,8 +712,8 @@ func TestStackedCardIsInsetBox(t *testing.T) {
 	if !strings.Contains(stacked, "┌") || !strings.Contains(stacked, "└") {
 		t.Fatalf("stacked card needs one dim box:\n%s", stacked)
 	}
-	if !strings.Contains(stacked, "│ #184") && !strings.Contains(stacked, "│  #184") {
-		t.Fatalf("stacked card needs padding inside the box:\n%s", stacked)
+	if !strings.Contains(stacked, "│  #184") && !strings.Contains(stacked, "│   #184") {
+		t.Fatalf("stacked card needs left/right padding inside the box:\n%s", stacked)
 	}
 	wide := frameOf(makeUI(tui.TerminalSize{Width: 120, Height: 30}, "mixed"))
 	if strings.Contains(wide, "┌") || strings.Contains(wide, "└") {
@@ -758,5 +770,48 @@ func TestPDoesNotOpenAPicker(t *testing.T) {
 	}
 	if strings.Contains(after, "[ enter ]") && !strings.Contains(before, "[ enter ]") {
 		t.Fatalf("p must not invent picker chrome:\n%s", after)
+	}
+}
+
+func TestInspectorHasLeftRightPadding(t *testing.T) {
+	size := tui.TerminalSize{Width: 120, Height: 30}
+	frame := frameOf(makeUI(size, "mixed"))
+	var pane string
+	for _, line := range strings.Split(frame, "\n") {
+		idx := strings.Index(line, "│")
+		if idx < 0 {
+			continue
+		}
+		rest := line[idx+len("│"):]
+		if strings.Contains(rest, "#184 Split auth scope") {
+			pane = rest
+			break
+		}
+	}
+	if pane == "" {
+		t.Fatalf("inspector title missing:\n%s", frame)
+	}
+	if !strings.HasPrefix(pane, "  ") {
+		t.Fatalf("inspector flush against the rule:\n%q", pane)
+	}
+	if strings.HasPrefix(strings.TrimRight(pane, " "), "#184") {
+		t.Fatalf("no left pad: %q", pane)
+	}
+}
+
+func TestListTitlesArePaperFullMeasure(t *testing.T) {
+	size := tui.TerminalSize{Width: 120, Height: 30}
+	m := makeUI(size, "mixed")
+	raw := m.View()
+	frame := strip(raw)
+	if !strings.Contains(frame, "auth cleanup") {
+		t.Fatalf("list name missing:\n%s", frame)
+	}
+	if !nearHex(raw, "auth cleanup", domain.Color("paper")) {
+		t.Fatal("list titles are paper, not dim meta")
+	}
+	layout := tui.GetListRowLayout(tui.ListPaneWidth(size.Width), size.Width, 3)
+	if layout.NameWidth < 30 {
+		t.Fatalf("name column still locked cramped: %d", layout.NameWidth)
 	}
 }

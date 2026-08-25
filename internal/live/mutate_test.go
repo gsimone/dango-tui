@@ -1,6 +1,7 @@
 package live
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -126,11 +127,38 @@ func TestMutantGhTitleAndCI(t *testing.T) {
 	}
 }
 
-func TestMutantAuthorColorIsLoginStable(t *testing.T) {
+func TestMutantGroupStacksDropsSingles(t *testing.T) {
+	prs := []RemotePR{
+		{Number: 1, Title: "solo", HeadRefName: "a", BaseRefName: "main"},
+		{Number: 2, Title: "base", HeadRefName: "b", BaseRefName: "main"},
+		{Number: 3, Title: "head", HeadRefName: "c", BaseRefName: "b"},
+	}
+	got := GroupStacks(prs, "main")
+	if len(got) != 1 || len(got[0].PRs) != 2 {
+		t.Fatalf("real grouping drops the 1-PR row, got %+v", ids(got))
+	}
+	keepAll := func(in []RemotePR) []domain.Stack {
+		var stacks []domain.Stack
+		stacks = append(stacks, chainStacks(in, "main")...)
+		return stacks
+	}
+	if mutant := keepAll(prs); len(mutant) != 2 {
+		t.Fatal("keep-all mutant must still produce a solo stack")
+	}
+	if KeepRealStacks([]domain.Stack{{PRs: []domain.PullRequest{{Number: 1}}}}) != nil {
+		t.Fatal("KeepRealStacks must drop a one-ball stack")
+	}
+}
+
+func TestMutantAuthorColorFallsBackToLogin(t *testing.T) {
+	old := getURL
+	getURL = func(string) ([]byte, error) { return nil, errors.New("nope") }
+	t.Cleanup(func() { getURL = old })
+
 	prs := []RemotePR{{Author: "gm", AvatarURL: "https://avatars.example/gm.png"}}
 	applyAuthorColors(prs)
 	if prs[0].AuthorColor != domain.LoginColor("gm") || domain.IsLowChromaHex(prs[0].AuthorColor) {
-		t.Fatalf("real author color %q", prs[0].AuthorColor)
+		t.Fatalf("failure falls back to login, got %q", prs[0].AuthorColor)
 	}
 	paintRed := func(in []RemotePR) {
 		for i := range in {
@@ -140,7 +168,29 @@ func TestMutantAuthorColorIsLoginStable(t *testing.T) {
 	clone := []RemotePR{{Author: "gm"}}
 	paintRed(clone)
 	if clone[0].AuthorColor == domain.LoginColor("gm") {
-		t.Fatal("sampled-red mutant must not survive")
+		t.Fatal("always-red mutant must not survive the fallback path")
+	}
+}
+
+func TestMutantAuthorColorSamplesAvatar(t *testing.T) {
+	old := getURL
+	getURL = func(string) ([]byte, error) { return solidPNG(t, 200, 40, 40), nil }
+	t.Cleanup(func() { getURL = old })
+
+	prs := []RemotePR{{Author: "gm", AvatarURL: "https://avatars.example/gm.png"}}
+	applyAuthorColors(prs)
+	if prs[0].AuthorColor != "#c82828" {
+		t.Fatalf("real sampled color %q", prs[0].AuthorColor)
+	}
+	loginOnly := func(in []RemotePR) {
+		for i := range in {
+			in[i].AuthorColor = domain.LoginColor(in[i].Author)
+		}
+	}
+	clone := []RemotePR{{Author: "gm", AvatarURL: "https://avatars.example/gm.png"}}
+	loginOnly(clone)
+	if clone[0].AuthorColor == "#c82828" {
+		t.Fatal("login-only mutant must not survive")
 	}
 }
 

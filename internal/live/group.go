@@ -32,10 +32,25 @@ func GroupStacks(prs []RemotePR, defaultBranch string) []domain.Stack {
 	sort.SliceStable(stacks, func(i, j int) bool {
 		return stackKey(stacks[i]) > stackKey(stacks[j])
 	})
+	stacks = KeepRealStacks(stacks)
 	for i := range stacks {
 		stacks[i].Number = i + 1
 	}
 	return StampGhNames(stacks)
+}
+
+// KeepRealStacks drops 1-PR groups. A stack is two or more PRs.
+func KeepRealStacks(stacks []domain.Stack) []domain.Stack {
+	out := stacks[:0]
+	for _, stack := range stacks {
+		if len(stack.PRs) >= 2 {
+			out = append(out, stack)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func stackKey(stack domain.Stack) int {
@@ -59,21 +74,79 @@ func makeStack(prs []RemotePR, defaultBranch, id string) domain.Stack {
 	}
 	return domain.Stack{
 		ID:      id,
-		Name:    GhTitle(domain.Stack{PRs: layers}),
+		Name:    ShortName(GhTitle(domain.Stack{PRs: layers})),
 		BaseRef: base,
 		PRs:     layers,
 	}
 }
 
-// StampGhNames fills an empty list name from GitHub titles. It does not
-// invent a generated summary.
+// StampGhNames fills an empty list name from GitHub titles and clips a
+// "TICKET: sentence" name down to the ticket. It does not invent a
+// generated summary. The full sentence stays on the PR for the pane.
 func StampGhNames(stacks []domain.Stack) []domain.Stack {
 	for i := range stacks {
-		if strings.TrimSpace(stacks[i].Name) == "" {
-			stacks[i].Name = GhTitle(stacks[i])
+		name := strings.TrimSpace(stacks[i].Name)
+		if name == "" {
+			stacks[i].Name = ShortName(GhTitle(stacks[i]))
+			continue
 		}
+		stacks[i].Name = ShortName(name)
 	}
 	return stacks
+}
+
+// ShortName is the list title. A Linear/Jira id plus a sentence
+// ("LEV-182: Bound hosts…") stays the id. The pane shows the sentence.
+func ShortName(title string) string {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return ""
+	}
+	ticket, rest, ok := splitTicketTitle(title)
+	if ok && rest != "" {
+		return ticket
+	}
+	return title
+}
+
+func splitTicketTitle(title string) (ticket, rest string, ok bool) {
+	r := []rune(title)
+	i := 0
+	for i < len(r) && r[i] >= 'A' && r[i] <= 'Z' {
+		i++
+	}
+	if i == 0 {
+		return "", "", false
+	}
+	j := i
+	for j < len(r) && ((r[j] >= 'A' && r[j] <= 'Z') || (r[j] >= '0' && r[j] <= '9')) {
+		j++
+	}
+	if j < 2 || j >= len(r) || r[j] != '-' {
+		return "", "", false
+	}
+	k := j + 1
+	if k >= len(r) || r[k] < '0' || r[k] > '9' {
+		return "", "", false
+	}
+	for k < len(r) && r[k] >= '0' && r[k] <= '9' {
+		k++
+	}
+	ticket = string(r[:k])
+	tail := strings.TrimSpace(string(r[k:]))
+	if tail == "" {
+		return ticket, "", false
+	}
+	switch []rune(tail)[0] {
+	case ':', '-', '—', '–':
+		rest = strings.TrimSpace(string([]rune(tail)[1:]))
+		if rest == "" {
+			return ticket, "", false
+		}
+		return ticket, rest, true
+	default:
+		return "", "", false
+	}
 }
 
 func GhTitle(stack domain.Stack) string {

@@ -70,8 +70,8 @@ func TestPreferDescriptionSkipsStub(t *testing.T) {
 }
 
 func TestChooseThreadsProviderAndStaysLocal(t *testing.T) {
-	p := summary.ParseProvider("codex@luna.medium")
-	if p.Name != "codex" || p.Model != "luna.medium" {
+	p := summary.ParseProvider("name@model")
+	if p.Name != "name" || p.Model != "model" {
 		t.Fatalf("parse %+v", p)
 	}
 	got := summary.Choose(p)
@@ -118,12 +118,15 @@ func TestRunWritesTitleAndDescription(t *testing.T) {
 	if empty.ID != "stack-1" {
 		t.Fatalf("id %q", empty.ID)
 	}
-	if empty.Title != "" || empty.Description != "" {
+	if empty.Title != "" {
 		t.Fatalf("missing provider must not invent a title: %+v", empty)
+	}
+	if empty.Description != "" {
+		t.Fatalf("unset describe leaves the pane empty, got %q", empty.Description)
 	}
 
 	res := summary.Run(summary.Job{
-		Provider: summary.ParseProvider("codex@luna.medium"),
+		Provider: summary.ParseProvider("name@model"),
 		ID:       "stack-1",
 		Stack:    stack,
 	})
@@ -139,14 +142,8 @@ func TestRunWritesTitleAndDescription(t *testing.T) {
 	if strings.Contains(res.Title, "\n") {
 		t.Fatalf("title must be one line: %q", res.Title)
 	}
-	if res.Description == "" {
-		t.Fatalf("provider must write a description")
-	}
-	if strings.Contains(res.Description, "\n") {
-		t.Fatalf("description must be one line: %q", res.Description)
-	}
-	if !strings.Contains(strings.ToLower(res.Description), "alpha") || !strings.Contains(strings.ToLower(res.Description), "beta") {
-		t.Fatalf("description should cover the layers: %q", res.Description)
+	if res.Description != "" {
+		t.Fatalf("provider without describe leaves the pane empty: %q", res.Description)
 	}
 
 	named := stack
@@ -157,11 +154,8 @@ func TestRunWritesTitleAndDescription(t *testing.T) {
 		ID:       "stack-1",
 		Stack:    named,
 	})
-	if kept.Description == "Already summarized by a model." || strings.Contains(kept.Description, "CURSOR_AGENT") || strings.Contains(kept.Description, "raw body") {
-		t.Fatalf("local does not paste body or stored dump: %q", kept.Description)
-	}
-	if strings.HasPrefix(kept.Description, "Covers ") {
-		t.Fatalf("do not invent a Covers wrapper: %q", kept.Description)
+	if kept.Description != "" {
+		t.Fatalf("unset describe must not invent pane copy: %q", kept.Description)
 	}
 }
 
@@ -180,11 +174,8 @@ func TestRunDoesNotEchoGhTitle(t *testing.T) {
 	if res.Title == gh || strings.EqualFold(res.Title, gh) {
 		t.Fatalf("title echoed gh name: %q", res.Title)
 	}
-	if res.Description == gh || strings.EqualFold(res.Description, gh) {
-		t.Fatalf("description must not paste the gh title, got %q", res.Description)
-	}
-	if strings.HasPrefix(res.Description, "Covers ") {
-		t.Fatalf("do not invent a Covers wrapper: %q", res.Description)
+	if res.Description != "" {
+		t.Fatalf("unset describe leaves the pane empty, got %q", res.Description)
 	}
 
 	withBody := stack
@@ -194,11 +185,8 @@ func TestRunDoesNotEchoGhTitle(t *testing.T) {
 		ID:       "stack-1",
 		Stack:    withBody,
 	})
-	if strings.Contains(bodied.Description, "Pin each bound host") {
+	if bodied.Description != "" || strings.Contains(bodied.Description, "Pin each bound host") {
 		t.Fatalf("must not paste pr.Body: %q", bodied.Description)
-	}
-	if strings.HasPrefix(bodied.Description, "Covers ") {
-		t.Fatalf("do not invent a Covers wrapper: %q", bodied.Description)
 	}
 }
 

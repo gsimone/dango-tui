@@ -1,6 +1,7 @@
 package tui_test
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,6 +23,44 @@ func applyLiveFetch(m tui.Model) (tui.Model, tea.Cmd) {
 	}
 	next, extra := m.Update(cmd())
 	return next.(tui.Model), extra
+}
+
+func applyLiveCmds(m tui.Model, cmd tea.Cmd) tui.Model {
+	if cmd == nil {
+		return m
+	}
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, c := range batch {
+			m = applyLiveCmds(m, c)
+		}
+		return m
+	}
+	next, extra := m.Update(msg)
+	return applyLiveCmds(next.(tui.Model), extra)
+}
+
+// execFetchDoneCmdsOnce runs the cmds fetchDone actually returns, the
+// way tea does for one Batch: unwrap BatchMsg once, Update each
+// message, and discard extras. It does not invent afterPaintMsg and
+// does not follow a cmd that Update(afterPaintMsg) would return.
+func execFetchDoneCmdsOnce(m tui.Model, cmd tea.Cmd) tui.Model {
+	if cmd == nil {
+		return m
+	}
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, c := range batch {
+			if c == nil {
+				continue
+			}
+			next, _ := m.Update(c())
+			m = next.(tui.Model)
+		}
+		return m
+	}
+	next, _ := m.Update(msg)
+	return next.(tui.Model)
 }
 
 func testdataJSON(t *testing.T) string {
@@ -80,8 +119,11 @@ func TestNoFlagDetectsOriginAndFetches(t *testing.T) {
 				t.Fatalf("fetched %q", repo)
 			}
 			return []domain.Stack{{
-				ID:  "s",
-				PRs: []domain.PullRequest{{Number: 1, Title: "detected layer", Branch: "gm/detected"}},
+				ID: "s",
+				PRs: []domain.PullRequest{
+					{Number: 1, Title: "detected layer", Branch: "gm/detected"},
+					{Number: 2, Title: "detected head", Branch: "gm/detected-head"},
+				},
 			}}, nil
 		},
 	})
@@ -273,7 +315,7 @@ func TestLiveRepoHeaderAndTwoColumns(t *testing.T) {
 	if !strings.Contains(frame, "gsimone/leva-2  •  1 stacks / 2 layers") {
 		t.Fatalf("live header:\n%s", frame)
 	}
-	if !strings.Contains(frame, "○") {
+	if !strings.Contains(frame, "●-●") {
 		t.Fatalf("list:\n%s", frame)
 	}
 	if !strings.Contains(strings.Join(listRows(frame), "\n"), "base") {
@@ -351,15 +393,597 @@ func TestProviderWritesStackTitleOnly(t *testing.T) {
 		Fetch:  fetch,
 	})
 	plain, extra := applyLiveFetch(plain)
-	if extra != nil {
-		t.Fatal("missing provider must not start summaries")
-	}
 	bare := strings.Join(listRows(frameOf(plain)), "\n")
 	if !strings.Contains(bare, "alpha layer") {
 		t.Fatalf("missing provider keeps the gh name:\n%s", bare)
 	}
 	if strings.Contains(bare, "alpha layer and beta layer") {
+		t.Fatalf("first paint must not wait on a generated title:\n%s", bare)
+	}
+	plain = applyLiveCmds(plain, extra)
+	bare = strings.Join(listRows(frameOf(plain)), "\n")
+	if strings.Contains(bare, "alpha layer and beta layer") {
 		t.Fatalf("missing provider must not invent a generated title:\n%s", bare)
+	}
+	if plain.Stacks()[0].Name != "alpha layer" {
+		t.Fatalf("list name must stay the gh title: %+v", plain.Stacks()[0])
+	}
+	if plain.Stacks()[0].Description != "" {
+		t.Fatalf("unset describe leaves the pane empty: %q", plain.Stacks()[0].Description)
+	}
+}
+
+func TestLivePabloBallsOn120(t *testing.T) {
+	m := tui.New(tui.Options{
+		Repo:   "archetype-labs/app",
+		Width:  120,
+		Height: 30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			pr := func(n int, title string, extra domain.PullRequest) domain.PullRequest {
+				extra.Number = n
+				extra.Title = title
+				return extra
+			}
+			return []domain.Stack{
+				{ID: "open", PRs: []domain.PullRequest{pr(1, "open base", domain.PullRequest{}), pr(2, "open head", domain.PullRequest{})}},
+				{ID: "draft", PRs: []domain.PullRequest{pr(3, "draft base", domain.PullRequest{Draft: true, Mergeable: domain.MergeableFalse()}), pr(4, "draft head", domain.PullRequest{})}},
+				{ID: "fail", PRs: []domain.PullRequest{pr(5, "fail base", domain.PullRequest{CI: domain.CISummary{State: domain.CIFailure, Failed: 1}}), pr(6, "fail head", domain.PullRequest{})}},
+				{ID: "review", PRs: []domain.PullRequest{pr(7, "review base", domain.PullRequest{ReviewDecision: "CHANGES_REQUESTED"}), pr(8, "review head", domain.PullRequest{})}},
+				{ID: "ok", PRs: []domain.PullRequest{pr(9, "approved base", domain.PullRequest{ReviewDecision: "APPROVED"}), pr(10, "approved head", domain.PullRequest{})}},
+				{ID: "landed", PRs: []domain.PullRequest{pr(11, "merged base", domain.PullRequest{Merged: true}), pr(12, "merged head", domain.PullRequest{})}},
+				{ID: "queue", PRs: []domain.PullRequest{pr(13, "queued base", domain.PullRequest{MergeQueueState: "QUEUED"}), pr(14, "queued head", domain.PullRequest{})}},
+			}, nil
+		},
+	})
+	m, _ = applyLiveFetch(m)
+	frame := frameOf(m)
+	t.Logf("120 Pablo balls:\n%s", frame)
+	list := strings.Join(listRows(frame), "\n")
+	if !strings.Contains(list, "▶") {
+		t.Fatalf("selected stack is ▶:\n%s", frame)
+	}
+	if !strings.Contains(list, "●-○") {
+		t.Fatalf("active is ● on a hollow chain:\n%s", frame)
+	}
+	if !strings.Contains(list, "◎-○") {
+		t.Fatalf("needs-review stays ◎:\n%s", frame)
+	}
+	if !strings.Contains(list, "◌-○") {
+		t.Fatalf("queued is ◌:\n%s", frame)
+	}
+	if !strings.Contains(list, "○-○") {
+		t.Fatalf("idle layers are ○:\n%s", frame)
+	}
+	if strings.Contains(list, "◉") {
+		t.Fatalf("fisheye is retired:\n%s", frame)
+	}
+	if strings.Count(list, "●") != 1 {
+		t.Fatalf("filled never appears twice: %d in\n%s", strings.Count(list, "●"), frame)
+	}
+	if strings.Contains(list, "▸") {
+		t.Fatalf("selected marker is ▶, not ▸:\n%s", frame)
+	}
+	rr, rg, rb, _ := domain.ParseRGB(domain.Color("surfaceRaised"))
+	if strings.Contains(m.View(), fmt.Sprintf("48;2;%d;%d;%d", rr, rg, rb)) {
+		t.Fatalf("selected row must not wash:\n%s", frame)
+	}
+
+	draft := applyKey(m, key("down"))
+	draftList := strings.Join(listRows(frameOf(draft)), "\n")
+	if !strings.Contains(draftList, "●-○") || strings.Count(draftList, "●") != 1 {
+		t.Fatalf("draft you are on is one filled:\n%s", frameOf(draft))
+	}
+	for _, row := range listRows(frameOf(draft)) {
+		if strings.Contains(row, "draft base") && strings.Contains(row, "◎") {
+			t.Fatalf("unmergeable draft row is not review:\n%s", row)
+		}
+	}
+	dr, dg, db, _ := domain.ParseRGB("#8b8e93")
+	if !strings.Contains(draft.View(), fmt.Sprintf("38;2;%d;%d;%d", dr, dg, db)) {
+		t.Fatal("draft you are on keeps meta gray #8b8e93")
+	}
+	if !strings.Contains(frameOf(draft), "status    draft") {
+		t.Fatalf("inspector stays draft:\n%s", frameOf(draft))
+	}
+
+	fail := applyKey(applyKey(m, key("down")), key("down"))
+	failList := strings.Join(listRows(frameOf(fail)), "\n")
+	if !strings.Contains(failList, "●-○") || strings.Count(failList, "●") != 1 {
+		t.Fatalf("fail you are on is one filled:\n%s", frameOf(fail))
+	}
+	fr, fg, fb, _ := domain.ParseRGB("#e24b4a")
+	if !strings.Contains(fail.View(), fmt.Sprintf("38;2;%d;%d;%d", fr, fg, fb)) {
+		t.Fatal("failing layer you are on keeps red ink")
+	}
+
+	review := applyKey(fail, key("down"))
+	reviewList := strings.Join(listRows(frameOf(review)), "\n")
+	if strings.Contains(reviewList, "◎-○") {
+		t.Fatalf("active review is ●, not ◎:\n%s", frameOf(review))
+	}
+	if !strings.Contains(reviewList, "●-○") || strings.Count(reviewList, "●") != 1 {
+		t.Fatalf("review you are on is one filled:\n%s", frameOf(review))
+	}
+	ar, ag, ab, _ := domain.ParseRGB("#e6b84d")
+	if !strings.Contains(review.View(), fmt.Sprintf("38;2;%d;%d;%d", ar, ag, ab)) {
+		t.Fatal("review layer you are on keeps amber ink")
+	}
+}
+
+func TestLiveDraftChainOn120(t *testing.T) {
+	m := tui.New(tui.Options{
+		Repo:   "archetype-labs/app",
+		Width:  120,
+		Height: 30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{{
+				ID: "s",
+				PRs: []domain.PullRequest{
+					{Number: 1, Title: "open layer"},
+					{Number: 5209, Title: "draft layer", Draft: true, Mergeable: domain.MergeableFalse()},
+					{Number: 3, Title: "review layer", ReviewDecision: "CHANGES_REQUESTED"},
+				},
+			}}, nil
+		},
+	})
+	m, _ = applyLiveFetch(m)
+	list := strings.Join(listRows(frameOf(m)), "\n")
+	if !strings.Contains(list, "●-○-◎") {
+		t.Fatalf("idle #5209 is ○ in the chain:\n%s", frameOf(m))
+	}
+	onDraft := applyKey(m, key("right"))
+	onList := strings.Join(listRows(frameOf(onDraft)), "\n")
+	if !strings.Contains(onList, "○-●-◎") {
+		t.Fatalf("#5209 you are on is gray ● plus ○/◎:\n%s", frameOf(onDraft))
+	}
+	dr, dg, db, _ := domain.ParseRGB("#8b8e93")
+	if !strings.Contains(onDraft.View(), fmt.Sprintf("38;2;%d;%d;%d", dr, dg, db)) {
+		t.Fatal("draft you are on is meta gray")
+	}
+	if !strings.Contains(frameOf(onDraft), "status    draft") {
+		t.Fatalf("unmergeable draft stays draft:\n%s", frameOf(onDraft))
+	}
+}
+
+func TestLiveCIEnrichPaintsFailAfterList(t *testing.T) {
+	m := tui.New(tui.Options{
+		Repo:   "archetype-labs/app",
+		Width:  120,
+		Height: 30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{{
+				ID: "s",
+				PRs: []domain.PullRequest{
+					{Number: 1, Title: "base layer"},
+					{Number: 2, Title: "head layer"},
+				},
+			}}, nil
+		},
+		EnrichCI: func(repo string, stacks []domain.Stack) []domain.Stack {
+			if repo != "archetype-labs/app" {
+				t.Fatalf("repo %q", repo)
+			}
+			stacks[0].PRs[0].CI = domain.CISummary{State: domain.CIFailure, Failed: 1, Total: 2}
+			return stacks
+		},
+	})
+	m, extra := applyLiveFetch(m)
+	first := frameOf(m)
+	if domain.GetDisplayState(m.Stacks()[0].PRs[0]) == domain.StateCIFailure {
+		t.Fatal("first paint must not wait on checks")
+	}
+	m = applyLiveCmds(m, extra)
+	if domain.GetDisplayState(m.Stacks()[0].PRs[0]) != domain.StateCIFailure {
+		t.Fatalf("enrich must paint fail: %+v", m.Stacks()[0].PRs[0])
+	}
+	if !strings.Contains(frameOf(m), "CI failing") {
+		t.Fatalf("inspector after enrich:\n%s", frameOf(m))
+	}
+	if strings.Contains(first, "statusCheckRollup") {
+		t.Fatal("first list must stay off rollup")
+	}
+}
+
+func TestLiveDescribeScriptWithoutProvider(t *testing.T) {
+	title := "LEV-182: Bound hosts to the session so undo does not wedge"
+	scripted := "script pinned hosts to the worker so undo cannot widen scope"
+	var jobs []summary.Job
+	m := tui.New(tui.Options{
+		Repo:     "archetype-labs/app",
+		Describe: "bin/describe-stack",
+		Width:    120,
+		Height:   30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{{
+				ID: "s",
+				PRs: []domain.PullRequest{
+					{Number: 182, Title: title},
+					{Number: 183, Title: "Pin each host to the worker"},
+				},
+			}}, nil
+		},
+		Summarize: func(job summary.Job) summary.Result {
+			jobs = append(jobs, job)
+			if job.Provider.Raw != "" {
+				t.Fatalf("no provider: %+v", job.Provider)
+			}
+			if job.Describe != "bin/describe-stack" {
+				t.Fatalf("describe command: %q", job.Describe)
+			}
+			return summary.Result{ID: job.ID, Description: scripted}
+		},
+	})
+	m, extra := applyLiveFetch(m)
+	if extra == nil {
+		t.Fatal("describe must start after first paint, not block fetch")
+	}
+	first := frameOf(m)
+	list := strings.Join(listRows(first), "\n")
+	if !strings.Contains(list, "LEV-182") {
+		t.Fatalf("first paint keeps the short list title:\n%s", first)
+	}
+	if strings.Contains(first, "script pinned hosts") {
+		t.Fatalf("describe must not block first paint:\n%s", first)
+	}
+	local := summary.Describe(m.Stacks()[0])
+	m = applyLiveCmds(m, extra)
+	if len(jobs) != 1 {
+		t.Fatalf("one process for the selected stack, got %d", len(jobs))
+	}
+	if m.Stacks()[0].Name != "LEV-182" {
+		t.Fatalf("list title unchanged, got %q", m.Stacks()[0].Name)
+	}
+	if m.Stacks()[0].Description != scripted {
+		t.Fatalf("script description: %q", m.Stacks()[0].Description)
+	}
+	if m.Stacks()[0].Description == local && local != "" {
+		t.Fatal("Describe() is not the product sentence")
+	}
+	frame := frameOf(m)
+	if strings.Contains(strings.Join(listRows(frame), "\n"), scripted) {
+		t.Fatalf("description belongs in the pane:\n%s", frame)
+	}
+	if !strings.Contains(frame, "script pinned hosts") {
+		t.Fatalf("pane must show script:\n%s", frame)
+	}
+}
+
+func TestLiveDescribeSelectedStackFirst(t *testing.T) {
+	var ids []string
+	m := tui.New(tui.Options{
+		Repo:     "archetype-labs/app",
+		Describe: "bin/describe-stack",
+		Width:    120,
+		Height:   30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{
+				{ID: "a", PRs: []domain.PullRequest{{Number: 1, Title: "alpha base"}, {Number: 2, Title: "alpha head"}}},
+				{ID: "b", PRs: []domain.PullRequest{{Number: 3, Title: "beta base"}, {Number: 4, Title: "beta head"}}},
+				{ID: "c", PRs: []domain.PullRequest{{Number: 5, Title: "gamma base"}, {Number: 6, Title: "gamma head"}}},
+			}, nil
+		},
+		Summarize: func(job summary.Job) summary.Result {
+			ids = append(ids, job.ID)
+			return summary.Result{ID: job.ID, Description: "desc-" + job.ID}
+		},
+	})
+	m, extra := applyLiveFetch(m)
+	if extra == nil {
+		t.Fatal("selected describe starts after first paint")
+	}
+	m = applyLiveCmds(m, extra)
+	if strings.Join(ids, ",") != "a" {
+		t.Fatalf("selected first, one process: %v", ids)
+	}
+	if m.Stacks()[0].Description != "desc-a" {
+		t.Fatalf("selected landed: %+v", m.Stacks()[0])
+	}
+	if m.Stacks()[1].Description != "" || m.Stacks()[2].Description != "" {
+		t.Fatalf("must not spawn per row: %+v", m.Stacks())
+	}
+
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = applyLiveCmds(next.(tui.Model), cmd)
+	if strings.Join(ids, ",") != "a,b" {
+		t.Fatalf("next selected after first finishes: %v", ids)
+	}
+	if m.Stacks()[1].Description != "desc-b" {
+		t.Fatalf("second selected: %+v", m.Stacks()[1])
+	}
+	if m.Stacks()[2].Description != "" {
+		t.Fatalf("still not per-row: %+v", m.Stacks()[2])
+	}
+}
+
+func TestDangoRepoCwdDescribePaintsPaneHookOK(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "dango.json"), []byte(`{"describe":"echo pane-hook-ok"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+
+	parsed, err := cli.Parse([]string{"--repo", "archetype-labs/app"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	args, err := cli.ResolveLaunch(parsed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if args.Describe != "echo pane-hook-ok" {
+		t.Fatalf("cwd dango.json describe: %q", args.Describe)
+	}
+
+	m := tui.New(tui.Options{
+		Repo:        args.Repo,
+		Provider:    args.Provider,
+		Describe:    args.Describe,
+		DescribeDir: args.DescribeDir,
+		Width:       120,
+		Height:      30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{{
+				ID:          "s",
+				Name:        "LEV-182",
+				Description: "already a gh sentence",
+				PRs: []domain.PullRequest{
+					{Number: 1, Title: "alpha layer", Branch: "feat/email-token-overrides-model"},
+					{Number: 2, Title: "beta layer"},
+				},
+			}}, nil
+		},
+	})
+	if m.Init() == nil {
+		t.Fatal("live --repo must fetch")
+	}
+	m, extra := applyLiveFetch(m)
+	if extra == nil {
+		t.Fatal("after first live paint the selected stack must run describe")
+	}
+	first := frameOf(m)
+	if strings.Contains(first, "pane-hook-ok") {
+		t.Fatalf("describe must not block first paint:\n%s", first)
+	}
+	m = applyLiveCmds(m, extra)
+	if m.Stacks()[0].Description != "pane-hook-ok" {
+		t.Fatalf("must overwrite gh description, got %q", m.Stacks()[0].Description)
+	}
+	frame := frameOf(m)
+	if !strings.Contains(frame, "pane-hook-ok") {
+		t.Fatalf("inspector View must paint echo stdout:\n%s", frame)
+	}
+	if strings.Contains(frame, "already a gh sentence") {
+		t.Fatalf("gh description must not stay:\n%s", frame)
+	}
+}
+
+func TestLiveEchoDescribeRendersPaneHookOK(t *testing.T) {
+	var jobs int
+	m := tui.New(tui.Options{
+		Repo:     "archetype-labs/app",
+		Describe: "echo pane-hook-ok",
+		Width:    120,
+		Height:   30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{{
+				ID: "s",
+				PRs: []domain.PullRequest{
+					{Number: 1, Title: "alpha layer"},
+					{Number: 2, Title: "beta layer"},
+				},
+			}}, nil
+		},
+		Summarize: func(job summary.Job) summary.Result {
+			jobs++
+			if job.Describe != "echo pane-hook-ok" {
+				t.Fatalf("describe argv: %q", job.Describe)
+			}
+			out, err := exec.Command("echo", "pane-hook-ok").Output()
+			if err != nil {
+				t.Fatal(err)
+			}
+			return summary.Result{ID: job.ID, Description: strings.TrimSpace(string(out))}
+		},
+	})
+	m, extra := applyLiveFetch(m)
+	if extra == nil {
+		t.Fatal("afterFetch must start the selected describe")
+	}
+	first := frameOf(m)
+	if strings.Contains(first, "pane-hook-ok") {
+		t.Fatalf("describe must not block first paint:\n%s", first)
+	}
+	m = applyLiveCmds(m, extra)
+	if jobs != 1 {
+		t.Fatalf("selected stack, one process, got %d", jobs)
+	}
+	if m.Stacks()[0].Description != "pane-hook-ok" {
+		t.Fatalf("script result: %q", m.Stacks()[0].Description)
+	}
+	frame := frameOf(m)
+	if !strings.Contains(frame, "pane-hook-ok") {
+		t.Fatalf("pane must render echo stdout:\n%s", frame)
+	}
+	if strings.Contains(frame, "echo: ") || strings.Contains(strings.ToLower(frame), "not found") {
+		t.Fatalf("stderr must never land in the pane:\n%s", frame)
+	}
+}
+
+func TestLiveFetchDoneCmdsLandEchoPaneHookOK(t *testing.T) {
+	stack := []domain.Stack{{
+		ID: "s",
+		PRs: []domain.PullRequest{
+			{Number: 1, Title: "alpha layer", Branch: "feat/alpha"},
+			{Number: 2, Title: "beta layer", Branch: "feat/beta"},
+		},
+	}}
+	for _, size := range []struct{ w, h int }{{80, 24}, {120, 30}} {
+		m := tui.New(tui.Options{
+			Repo:     "archetype-labs/app",
+			Describe: "echo pane-hook-ok",
+			Width:    size.w,
+			Height:   size.h,
+			Fetch: func(string) ([]domain.Stack, error) {
+				return append([]domain.Stack(nil), stack...), nil
+			},
+		})
+		cmd := m.Init()
+		if cmd == nil {
+			t.Fatal("live Init must fetch")
+		}
+		next, extra := m.Update(cmd())
+		m = next.(tui.Model)
+		first := frameOf(m)
+		if !strings.Contains(strings.Join(listRows(first), "\n"), "alpha layer") {
+			t.Fatalf("%dx%d first View after fetchDone must paint the list:\n%s", size.w, size.h, first)
+		}
+		if strings.Contains(first, "pane-hook-ok") {
+			t.Fatalf("%dx%d first View after fetchDone must not contain pane-hook-ok:\n%s", size.w, size.h, first)
+		}
+		if extra == nil {
+			t.Fatalf("%dx%d fetchDone must return startSelectedSummary as a tea.Cmd", size.w, size.h)
+		}
+
+		m = execFetchDoneCmdsOnce(m, extra)
+		frame := frameOf(m)
+		if !strings.Contains(frame, "pane-hook-ok") {
+			t.Fatalf("%dx%d after fetchDone cmds, View must contain pane-hook-ok:\n%s", size.w, size.h, frame)
+		}
+		if !descUnderTitle(frame, "#1", "pane-hook-ok") {
+			t.Fatalf("%dx%d pane-hook-ok must sit under the title:\n%s", size.w, size.h, frame)
+		}
+	}
+}
+
+func descUnderTitle(frame, titleBit, desc string) bool {
+	lines := strings.Split(frame, "\n")
+	for i, line := range lines {
+		if !strings.Contains(line, titleBit) {
+			continue
+		}
+		for j := i + 1; j < len(lines) && j <= i+2; j++ {
+			if strings.Contains(lines[j], desc) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func TestLiveDeadDescribeStaysEmpty(t *testing.T) {
+	m := tui.New(tui.Options{
+		Repo:     "archetype-labs/app",
+		Describe: "echo pane-hook-ok",
+		Width:    120,
+		Height:   30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{{
+				ID: "s",
+				PRs: []domain.PullRequest{
+					{Number: 1, Title: "alpha layer"},
+					{Number: 2, Title: "beta layer"},
+				},
+			}}, nil
+		},
+		Summarize: func(job summary.Job) summary.Result {
+			return summary.Result{ID: job.ID, Err: fmt.Errorf("exit 1")}
+		},
+	})
+	m, extra := applyLiveFetch(m)
+	m = applyLiveCmds(m, extra)
+	if m.Stacks()[0].Description != "" {
+		t.Fatalf("dead script stays empty: %q", m.Stacks()[0].Description)
+	}
+	frame := frameOf(m)
+	if strings.Contains(frame, "exit 1") || strings.Contains(frame, "pane-hook-ok") {
+		t.Fatalf("stderr / result must not land in the pane:\n%s", frame)
+	}
+}
+
+func TestFileDescribeStartsSelected(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "stacks.json")
+	raw := `{"repo":"example/stacks","stacks":[{"id":"s","name":"auth cleanup","prs":[{"number":1,"title":"alpha layer"},{"number":2,"title":"beta layer"}]}]}`
+	if err := os.WriteFile(path, []byte(raw), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var jobs int
+	m := tui.New(tui.Options{
+		Repo:     path,
+		Describe: "echo pane-hook-ok",
+		Width:    120,
+		Height:   30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			t.Fatal("JSON --repo must not call gh")
+			return nil, nil
+		},
+		Summarize: func(job summary.Job) summary.Result {
+			jobs++
+			return summary.Result{ID: job.ID, Description: "pane-hook-ok"}
+		},
+	})
+	if m.Init() == nil {
+		t.Fatal("file dump with describe starts after first paint")
+	}
+	if strings.Contains(frameOf(m), "pane-hook-ok") {
+		t.Fatalf("first paint stays empty:\n%s", frameOf(m))
+	}
+	m = applyLiveCmds(m, m.Init())
+	if jobs != 1 {
+		t.Fatalf("one process, got %d", jobs)
+	}
+	if m.Stacks()[0].Description != "pane-hook-ok" {
+		t.Fatalf("file describe landed: %q", m.Stacks()[0].Description)
+	}
+	if !strings.Contains(frameOf(m), "pane-hook-ok") {
+		t.Fatalf("pane:\n%s", frameOf(m))
+	}
+}
+
+func TestLiveEmptyPaneWithoutDescribe(t *testing.T) {
+	title := "LEV-182: Bound hosts to the session so undo does not wedge"
+	m := tui.New(tui.Options{
+		Repo:   "archetype-labs/app",
+		Width:  120,
+		Height: 30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{{
+				ID: "s",
+				PRs: []domain.PullRequest{
+					{Number: 182, Title: title, Body: "<!-- CURSOR_AGENT_PR_BODY_BEGIN -->\nPin each bound host to the worker.\n"},
+					{Number: 183, Title: "Pin each host to the worker"},
+				},
+			}}, nil
+		},
+	})
+	if !strings.Contains(frameOf(m), "fetching archetype-labs/app") {
+		t.Fatalf("splash first:\n%s", frameOf(m))
+	}
+	m, sumCmd := applyLiveFetch(m)
+	if m.Provider.Raw != "" || m.Describe != "" {
+		t.Fatal("no dango.json describe / --provider")
+	}
+	first := frameOf(m)
+	list := strings.Join(listRows(first), "\n")
+	if !strings.Contains(list, "LEV-182") {
+		t.Fatalf("list still paints:\n%s", first)
+	}
+	if strings.Contains(list, "and pin each") {
+		t.Fatalf("first paint must not invent a list title:\n%s", list)
+	}
+	if strings.Contains(first, "CURSOR_AGENT") || strings.Contains(first, "Covers ") || strings.Contains(first, "Pin each bound host to the worker") {
+		t.Fatalf("first paint leaked body:\n%s", first)
+	}
+	m = applyLiveCmds(m, sumCmd)
+	if m.Stacks()[0].Name != "LEV-182" {
+		t.Fatalf("list title must stay short, got %q", m.Stacks()[0].Name)
+	}
+	if m.Stacks()[0].Description != "" {
+		t.Fatalf("unset describe leaves the pane empty, not Describe(): %q", m.Stacks()[0].Description)
+	}
+	frame := frameOf(m)
+	if strings.Contains(frame, "CURSOR_AGENT") || strings.Contains(frame, "Covers ") || strings.Contains(frame, "Pin each bound host to the worker") {
+		t.Fatalf("body / Covers leaked:\n%s", frame)
 	}
 }
 
@@ -393,11 +1017,57 @@ func listRows(frame string) []string {
 		if idx := strings.Index(line, "│"); idx >= 0 {
 			part = line[:idx]
 		}
-		if strings.Contains(part, "▸") || strings.Contains(part, "·") {
+		if strings.Contains(part, "▶") || strings.Contains(part, "▸") || strings.Contains(part, "·") {
 			out = append(out, part)
 		}
 	}
 	return out
+}
+
+func TestStackedCardDoesNotEatTheList(t *testing.T) {
+	m := tui.New(tui.Options{
+		Repo:   testdataJSON(t),
+		Width:  80,
+		Height: 24,
+		Fetch: func(string) ([]domain.Stack, error) {
+			t.Fatal("JSON --repo must not call gh")
+			return nil, nil
+		},
+	})
+	frame := frameOf(m)
+	if !strings.Contains(frame, "┌") || !strings.Contains(frame, "└") {
+		t.Fatalf("stacked card:\n%s", frame)
+	}
+	rows := listRows(frame)
+	joined := strings.Join(rows, "\n")
+	for _, name := range []string{"auth cleanup", "composer tokens", "sync rewrite", "schema cutover"} {
+		if !strings.Contains(joined, name) {
+			t.Fatalf("short card must leave the list visible, missing %q:\n%s", name, frame)
+		}
+	}
+	top, bot := -1, -1
+	lines := strings.Split(frame, "\n")
+	for i, line := range lines {
+		if strings.Contains(line, "┌") {
+			top = i
+		}
+		if strings.Contains(line, "└") {
+			bot = i
+		}
+	}
+	if top < 0 || bot < 0 || bot-top > 16 {
+		t.Fatalf("stacked card is leftover-tall (%d..%d):\n%s", top, bot, frame)
+	}
+	composerAt := -1
+	for i, line := range lines {
+		if strings.Contains(line, "composer tokens") {
+			composerAt = i
+			break
+		}
+	}
+	if composerAt < 0 || composerAt < bot {
+		t.Fatalf("next stacks should sit under a short card, composer=%d bot=%d:\n%s", composerAt, bot, frame)
+	}
 }
 
 func TestRepoJSONFilePaintsAuthoredStacks(t *testing.T) {
@@ -496,6 +1166,78 @@ func TestRepoJSONMissingFileIsErrorNotFixtures(t *testing.T) {
 	}
 }
 
+func TestLiveArchetypeAppNoOneBallRows(t *testing.T) {
+	if os.Getenv("DANGO_LIVE_PROOF") == "" {
+		t.Skip("manual: DANGO_LIVE_PROOF=1 go test ./internal/tui -run TestLiveArchetypeAppNoOneBallRows")
+	}
+	stacks, err := live.Fetch("archetype-labs/app")
+	if err != nil {
+		t.Fatalf("live Fetch archetype-labs/app: %v", err)
+	}
+	ones := 0
+	layers := 0
+	for i, stack := range stacks {
+		layers += len(stack.PRs)
+		if len(stack.PRs) < 2 {
+			ones++
+			t.Errorf("one-ball row %d %q n=%d", i, stack.Name, len(stack.PRs))
+		}
+	}
+	if ones > 0 {
+		t.Fatalf("live list still has %d one-ball rows", ones)
+	}
+	m := tui.New(tui.Options{
+		Repo:   "archetype-labs/app",
+		Width:  120,
+		Height: 30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return stacks, nil
+		},
+	})
+	m, _ = applyLiveFetch(m)
+	frame := frameOf(m)
+	t.Logf("live archetype-labs/app: %d stacks / %d layers\n%s", len(m.Stacks()), layers, frame)
+}
+
+func TestLiveDropsOnePRStacksKeepsShortListTitle(t *testing.T) {
+	title := "LEV-182: Bound hosts to the session so undo does not wedge"
+	m := tui.New(tui.Options{
+		Repo:   "archetype-labs/app",
+		Width:  120,
+		Height: 30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{
+				{ID: "solo", Name: "LEV-182", PRs: []domain.PullRequest{{Number: 1, Title: "solo open PR"}}},
+				{ID: "s", Name: "LEV-182", PRs: []domain.PullRequest{
+					{Number: 182, Title: title, Branch: "gm/bound"},
+					{Number: 183, Title: "head layer", Branch: "gm/bound-head"},
+				}},
+			}, nil
+		},
+	})
+	m, _ = applyLiveFetch(m)
+	if len(m.Stacks()) != 1 || len(m.Stacks()[0].PRs) != 2 {
+		t.Fatalf("1-PR row must not appear: %+v", m.Stacks())
+	}
+	frame := frameOf(m)
+	if strings.Contains(frame, "solo open PR") {
+		t.Fatalf("one-ball stack leaked:\n%s", frame)
+	}
+	list := strings.Join(listRows(frame), "\n")
+	if strings.Contains(list, "Bound hosts") || strings.Contains(list, "does not wedge") {
+		t.Fatalf("list must stay the short title:\n%s", list)
+	}
+	if !strings.Contains(list, "LEV-182") {
+		t.Fatalf("list keeps the ticket:\n%s", frame)
+	}
+	if !strings.Contains(frame, "Bound hosts") || !strings.Contains(frame, "session") {
+		t.Fatalf("pane must show the GitHub title:\n%s", frame)
+	}
+	if !strings.Contains(frame, "archetype-labs/app  •  1 stacks / 2 layers") {
+		t.Fatalf("counts are real stacks only:\n%s", frame)
+	}
+}
+
 func TestRepoOwnerNameStillFetches(t *testing.T) {
 	fetches := 0
 	m := tui.New(tui.Options{
@@ -508,8 +1250,11 @@ func TestRepoOwnerNameStillFetches(t *testing.T) {
 				t.Fatalf("repo %q", repo)
 			}
 			return []domain.Stack{{
-				ID:  "s",
-				PRs: []domain.PullRequest{{Number: 1, Title: "live layer"}},
+				ID: "s",
+				PRs: []domain.PullRequest{
+					{Number: 1, Title: "live layer"},
+					{Number: 2, Title: "live head"},
+				},
 			}}, nil
 		},
 	})
@@ -538,8 +1283,11 @@ func TestDotCopiesTestdataBranchToast(t *testing.T) {
 	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(".")})
 	m = next.(tui.Model)
 	frame := frameOf(m)
-	if !strings.Contains(frame, "copied gm/auth-scope") {
+	if !strings.Contains(frame, "copied") {
 		t.Fatalf("dot toast:\n%s", frame)
+	}
+	if strings.Contains(frame, "copied gm/auth-scope") {
+		t.Fatalf("toast is copied, not the branch:\n%s", frame)
 	}
 	if strings.Contains(frame, "Checked out") || strings.Contains(frame, "[ p ]") {
 		t.Fatalf("toast only, no checkout/picker:\n%s", frame)

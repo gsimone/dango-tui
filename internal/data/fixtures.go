@@ -41,8 +41,6 @@ var stateFlags = map[domain.PrDisplayState]func(*domain.PullRequest){
 	},
 	domain.StateQueued: func(pr *domain.PullRequest) {
 		pr.MergeQueueState = "QUEUED"
-		pr.ReviewDecision = "APPROVED"
-		pr.CI = domain.CISummary{State: domain.CISuccess, Failed: 0, Pending: 0, Total: 9}
 	},
 	domain.StateReady: func(pr *domain.PullRequest) {
 		pr.ReviewDecision = "APPROVED"

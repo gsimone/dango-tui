@@ -14,8 +14,11 @@ type RowLayout struct {
 }
 
 const (
-	BallColW  = 20
-	ColGutter = 2
+	BallColW      = 20
+	ColGutter     = 2
+	InspectorPadX = 2
+	ListNameLines = 1
+	listMarkerW   = 2
 )
 
 const (
@@ -40,25 +43,13 @@ func GetListRowLayout(listWidth, termWidth, prCount int) RowLayout {
 	return rowLayout(listWidth, prCount, termWidth <= 50)
 }
 
-func lockedNameWidth(contentWidth int, compact bool) int {
-	desired := 18
-	if compact {
-		desired = 14
-	}
-	return max(8, min(desired, max(8, contentWidth-6)))
-}
-
 func rowLayout(contentWidth int, prCount int, compact bool) RowLayout {
 	if contentWidth < 1 {
 		contentWidth = 1
 	}
 	balls := BallColW
 	gutter := ColGutter
-	nameWidth := lockedNameWidth(contentWidth, compact)
-	need := nameWidth + gutter + balls
-	if need > contentWidth {
-		nameWidth = max(8, contentWidth-balls-gutter)
-	}
+	nameWidth := max(8, contentWidth-balls-gutter)
 	return RowLayout{
 		Compact:     compact,
 		NameWidth:   nameWidth,
@@ -79,7 +70,8 @@ func InspectorColumnWidth(width int) int {
 	if StackedInspector(width) {
 		return inner
 	}
-	return min(48, max(40, inner*38/100))
+	pad := InspectorPadX * 2
+	return min(48+pad, max(40+pad, inner*38/100+pad))
 }
 
 func ListPaneWidth(termWidth int) int {

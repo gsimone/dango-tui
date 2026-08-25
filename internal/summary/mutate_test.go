@@ -41,17 +41,40 @@ func TestMutantTitleDoesNotEchoGh(t *testing.T) {
 func TestMutantRunNeedsProvider(t *testing.T) {
 	stack := domain.Stack{ID: "s", PRs: []domain.PullRequest{{Title: "Alpha"}, {Title: "Beta"}}}
 	empty := summary.Run(summary.Job{Stack: stack, ID: "s"})
-	if empty.Title != "" || empty.Description != "" {
-		t.Fatalf("missing provider must stay empty: %+v", empty)
+	if empty.Title != "" {
+		t.Fatalf("missing provider must not invent a title: %+v", empty)
 	}
-	alwaysLocal := func(job summary.Job) summary.Result {
+	if empty.Description != "" {
+		t.Fatalf("unset describe leaves the pane empty: %q", empty.Description)
+	}
+	alwaysTitle := func(job summary.Job) summary.Result {
 		return summary.Result{ID: job.ID, Title: summary.Title(job.Stack), Description: summary.Describe(job.Stack)}
 	}
-	if alwaysLocal(summary.Job{Stack: stack, ID: "s"}).Title == "" {
-		t.Fatal("always-local mutant must invent a title")
+	if alwaysTitle(summary.Job{Stack: stack, ID: "s"}).Title == "" {
+		t.Fatal("always-title mutant must invent a title")
 	}
-	if alwaysLocal(summary.Job{Stack: stack, ID: "s"}).Title == empty.Title {
-		t.Fatal("always-local mutant must not survive")
+	if alwaysTitle(summary.Job{Stack: stack, ID: "s"}).Title == empty.Title {
+		t.Fatal("always-title mutant must not survive")
+	}
+}
+
+func TestMutantRunKeepsDescribeAsFallback(t *testing.T) {
+	stack := domain.Stack{ID: "s", PRs: []domain.PullRequest{{Title: "Alpha"}, {Title: "Beta"}}}
+	res := summary.Run(summary.Job{Stack: stack, ID: "s"})
+	if res.Title != "" {
+		t.Fatalf("no provider must not retitle: %+v", res)
+	}
+	if res.Description != "" {
+		t.Fatalf("unset describe leaves the pane empty, not Describe(): %q", res.Description)
+	}
+	alwaysLocal := func(job summary.Job) summary.Result {
+		return summary.Result{ID: job.ID, Description: summary.Describe(job.Stack)}
+	}
+	if alwaysLocal(summary.Job{Stack: stack, ID: "s"}).Description == "" && summary.Describe(stack) != "" {
+		t.Fatal("Describe() helper still exists for tests")
+	}
+	if res.Description == alwaysLocal(summary.Job{Stack: stack, ID: "s"}).Description && summary.Describe(stack) != "" {
+		t.Fatal("Describe() must not be the product sentence")
 	}
 }
 

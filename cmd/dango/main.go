@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -13,43 +14,63 @@ import (
 )
 
 func main() {
-	args, err := cli.Parse(os.Args[1:])
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+// startTUI opens the alt-screen app. Tests replace this so --doctor
+// cannot silently construct a program.
+var startTUI = func(m tui.Model) error {
+	_, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion()).Run()
+	return err
+}
+
+func run(argv []string, stdout, stderr io.Writer) int {
+	args, err := cli.Parse(argv)
 	if err == flag.ErrHelp {
-		fmt.Fprint(os.Stderr, helpText())
-		os.Exit(0)
+		fmt.Fprint(stderr, helpText())
+		return 0
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "dango: %v\n", err)
-		os.Exit(2)
+		fmt.Fprintf(stderr, "dango: %v\n", err)
+		return 2
 	}
 
-	args, err = cli.Resolve(args, ".")
+	if args.Doctor {
+		if err := cli.RunDoctor(stdout); err != nil {
+			return 2
+		}
+		return 0
+	}
+
+	args, err = cli.ResolveLaunch(args)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "dango: %v\n", err)
-		os.Exit(2)
+		fmt.Fprintf(stderr, "dango: %v\n", err)
+		return 2
 	}
 
 	model := tui.New(tui.Options{
-		StoryID:  args.Story,
-		Repo:     args.Repo,
-		Provider: args.Provider,
+		StoryID:     args.Story,
+		Repo:        args.Repo,
+		Provider:    args.Provider,
+		Describe:    args.Describe,
+		DescribeDir: args.DescribeDir,
 	})
 
 	if args.Frame != "" {
 		width, height, err := parseFrame(args.Frame)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "dango: %v\n", err)
-			os.Exit(2)
+			fmt.Fprintf(stderr, "dango: %v\n", err)
+			return 2
 		}
-		fmt.Println(stripTrailing(model.RenderFrame(width, height)))
-		return
+		fmt.Fprintln(stdout, stripTrailing(model.RenderFrame(width, height)))
+		return 0
 	}
 
-	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
-	if _, err := program.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "dango: %v\n", err)
-		os.Exit(1)
+	if err := startTUI(model); err != nil {
+		fmt.Fprintf(stderr, "dango: %v\n", err)
+		return 1
 	}
+	return 0
 }
 
 func helpText() string {

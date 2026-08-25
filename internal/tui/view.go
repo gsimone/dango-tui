@@ -146,14 +146,43 @@ func repoCountLine(repo string, stacks, layers int) string {
 }
 
 func stackListName(stack domain.Stack) string {
-	if name := strings.TrimSpace(stack.Name); name != "" {
-		return name
+	name := strings.TrimSpace(stack.Name)
+	if name == "" {
+		return live.ShortName(live.GhTitle(stack))
 	}
-	return live.GhTitle(stack)
+	return live.ShortName(name)
+}
+
+func stackTitleLines(name string, nameW int) []string {
+	inner := max(1, nameW-listMarkerW)
+	lines := wrapWords(name, inner)
+	if len(lines) == 0 {
+		return []string{""}
+	}
+	if len(lines) > ListNameLines {
+		rest := strings.Join(lines[1:], " ")
+		lines = []string{lines[0], clip(rest, inner)}
+	}
+	return lines
+}
+
+func stackRowHeight(stack domain.Stack, nameW int) int {
+	return len(stackTitleLines(stackListName(stack), nameW))
 }
 
 func layerBallInk(pr domain.PullRequest) string {
 	return domain.Color(domain.StateColorToken(domain.GetDisplayState(pr)))
+}
+
+// Active layer keeps status ink and swaps the glyph to ●.
+// ● is never a status. ◉ is not used.
+const activeBallGlyph = '●'
+
+func layerBallGlyph(pr domain.PullRequest, active bool) rune {
+	if active {
+		return activeBallGlyph
+	}
+	return domain.BallGlyph(domain.GetDisplayState(pr))
 }
 
 func (m Model) paintRule(c *canvas, top, bottom int, meta, surface string) {
@@ -166,18 +195,17 @@ func (m Model) paintRule(c *canvas, top, bottom int, meta, surface string) {
 func (m Model) footer() string {
 	compact := IsCompact(m.Width)
 	if compact {
-		return "[ ↑↓ ] stack  [ ←→ ] layer  [ . ] copy  [ / ]  [ ? ]  [ q ]"
+		return "[ ↑↓←→ ] navigate  [ . ] copy  [ / ]  [ ? ]  [ q ]"
 	}
 	if m.Width <= 90 {
-		return "[ ↑↓ ] stack  [ ←→ ] layer  [ o ] open  [ . ] copy  [ / ]  [ ? ]  [ q ]"
+		return "[ ↑↓←→ ] navigate  [ o ] open  [ . ] copy  [ / ]  [ ? ]  [ q ]"
 	}
-	return "[ ↑↓ ] stack  [ ←→ ] layer  [ o ] open  [ . ] copy  [ a ] add  [ r ] refresh  [ / ] filter  [ esc ]  [ ? ]  [ q ]"
+	return "[ ↑↓←→ ] navigate  [ o ] open  [ . ] copy  [ r ] refresh  [ / ] filter  [ ? ]  [ q ]"
 }
 
 func helpItems() [][2]string {
 	return [][2]string{
-		{"↑↓", "stack"},
-		{"←→", "layer"},
+		{"↑↓←→", "navigate"},
 		{"o", "open"},
 		{".", "copy"},
 		{"/", "filter"},
@@ -266,7 +294,7 @@ func paintKeyLegend(c *canvas, x, y, maxWidth int, legend, paper, meta, bg strin
 	}
 }
 
-func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised, paper, meta, stick string) {
+func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, _, paper, meta, stick string) {
 	stacks := m.Stacks()
 	if len(stacks) == 0 {
 		width := max(1, listWidth)
@@ -287,29 +315,30 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 	if gutter < 1 {
 		gutter = ColGutter
 	}
-	start := m.listOrigin(len(stacks), sel.StackIndex, top, bottom)
+	start := m.listOrigin(stacks, sel.StackIndex, top, bottom)
 	y := top
 	for i := start; i < len(stacks); i++ {
 		stack := stacks[i]
 		if y >= bottom {
 			break
 		}
+		lines := stackTitleLines(stackListName(stack), nameW)
+		rowH := len(lines)
 		rowBg := surface
-		nameFg := meta
 		selectedStack := i == sel.StackIndex
 		focus := 0
 		if selectedStack {
-			rowBg = raised
-			nameFg = paper
 			focus = sel.PRIndex
-			c.fill(PadX, y, listWidth, 1, rowBg)
 		}
 		cells := ballCells(len(stack.PRs), focus)
 		marker := "· "
 		if selectedStack {
-			marker = "▸ "
+			marker = "▶ "
 		}
-		c.text(PadX, y, marker+stackListName(stack), nameFg, rowBg, nameW)
+		c.text(PadX, y, marker+lines[0], paper, rowBg, nameW)
+		for li := 1; li < rowH && y+li < bottom; li++ {
+			c.text(PadX+listMarkerW, y+li, lines[li], paper, rowBg, max(1, nameW-listMarkerW))
+		}
 
 		ballX := PadX + nameW + gutter
 		x := ballX
@@ -324,20 +353,12 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 				x += 2
 			} else if n <= 5 {
 				pr := stack.PRs[cell.pr]
-				fg := layerBallInk(pr)
-				selected := selectedStack && cell.pr == sel.PRIndex
-				glyph := '○'
-				if selected {
-					glyph = '●'
-				}
-				c.set(x, y, glyph, fg, rowBg)
+				active := selectedStack && cell.pr == focus
+				c.set(x, y, layerBallGlyph(pr, active), layerBallInk(pr), rowBg)
 				x++
 			} else {
 				pr := stack.PRs[cell.pr]
 				fg := layerBallInk(pr)
-				if selectedStack && cell.pr == sel.PRIndex {
-					fg = paper
-				}
 				label := "(" + itoa(cell.pr+1) + ")"
 				c.text(x, y, label, fg, rowBg, displayWidth(label))
 				x += displayWidth(label)
@@ -347,9 +368,20 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, raised,
 				x++
 			}
 		}
-		y++
+		y += rowH
 		if StackedInspector(m.Width) && selectedStack && m.State.CardVisible {
 			inspH := m.stackedPaneHeight(listWidth)
+			floor := m.stackedDescFloor(listWidth)
+			if y+inspH > bottom {
+				inspH = max(1, bottom-y)
+			}
+			if floor > 0 && y+inspH < y+floor {
+				inspH = floor
+			}
+			if y+inspH > bottom && floor > 0 {
+				y = max(top+rowH, bottom-floor)
+				inspH = max(floor, bottom-y)
+			}
 			if y+inspH > bottom {
 				inspH = max(1, bottom-y)
 			}
@@ -483,36 +515,54 @@ func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper
 		if w < 1 || h < 1 {
 			return
 		}
-		pad := 1
-		if w > pad*2 && h > pad*2 {
-			x += pad
-			y += pad
-			w -= pad * 2
-			h -= pad * 2
+		padX, padY := InspectorPadX, 1
+		if w > padX*2 && h > padY*2 {
+			x += padX
+			y += padY
+			w -= padX * 2
+			h -= padY * 2
 		}
 	} else {
 		c.fill(x, y, w, h, surface)
+		if w > InspectorPadX*2 {
+			x += InspectorPadX
+			w -= InspectorPadX * 2
+		}
 	}
 	pr, ok := m.SelectedPR()
 	if !m.State.CardVisible || !ok {
 		return
 	}
 
+	tight := place.Boxed
 	maxLine := max(1, w)
 	id := "#" + itoa(pr.Number)
+	landed := m.landedInspectorDesc()
+	hold := 0
+	if m.reserveInspectorDesc() || landed != "" {
+		hold = min(inspectorDescLines, h)
+	}
+	titleLimit := h
+	if hold > 0 {
+		titleLimit = max(0, h-hold)
+	}
 	row := 0
 	for _, line := range wrapWords(id+" "+pr.Title, maxLine) {
-		if row >= h {
-			return
+		if row >= titleLimit {
+			break
 		}
 		c.text(x, y+row, line, paper, bg, maxLine)
 		row++
 	}
-	if row >= h {
-		return
+	// Reserved slot sits immediately under the title. Fixture cards
+	// keep the blank under title.
+	if !tight && row < titleLimit && !m.reserveInspectorDesc() && landed == "" {
+		row++
 	}
-	row++
-	row = m.paintStackDescription(c, x, y, row, h, maxLine, meta, bg)
+	if hold > 0 && row > h-hold {
+		row = h - hold
+	}
+	row = m.paintStackDescription(c, x, y, row, h, maxLine, paper, bg, tight)
 	if row >= h {
 		return
 	}
@@ -534,7 +584,20 @@ func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper
 const inspectorDescLines = 2
 
 func (m Model) reserveInspectorDesc() bool {
-	return m.Live && !m.Provider.Empty()
+	// Live inspector always keeps two rows under the title so a land
+	// does not grow the card or shift facts. Empty is blank.
+	return m.Live
+}
+
+func (m Model) landedInspectorDesc() string {
+	if !m.Live && !m.File {
+		return ""
+	}
+	stack, ok := m.SelectedStack()
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(stack.Description)
 }
 
 func (m Model) inspectorDescRows(innerW int) int {
@@ -555,48 +618,40 @@ func (m Model) inspectorDescRows(innerW int) int {
 	return len(wrapDesc(desc, max(1, innerW))) + 1
 }
 
-func (m Model) paintStackDescription(c *canvas, x, y, row, h, maxLine int, meta, bg string) int {
+func (m Model) paintStackDescription(c *canvas, x, y, row, h, maxLine int, ink, bg string, tight bool) int {
+	desc := m.landedInspectorDesc()
 	if m.reserveInspectorDesc() {
-		desc := ""
-		if stack, ok := m.SelectedStack(); ok {
-			desc = strings.TrimSpace(stack.Description)
-		}
 		painted := 0
 		if desc != "" {
 			for _, line := range wrapDesc(desc, maxLine) {
 				if painted >= inspectorDescLines || row >= h {
 					break
 				}
-				c.text(x, y+row, line, meta, bg, maxLine)
+				c.text(x, y+row, line, ink, bg, maxLine)
 				row++
 				painted++
 			}
 		}
 		row += inspectorDescLines - painted
-		if row < h {
+		if !tight && row < h {
 			row++
 		}
 		return row
 	}
-	if !m.Live && !m.File {
-		return row
-	}
-	stack, ok := m.SelectedStack()
-	if !ok {
-		return row
-	}
-	desc := strings.TrimSpace(stack.Description)
 	if desc == "" {
 		return row
 	}
+	if row >= h {
+		row = max(0, h-min(inspectorDescLines, h))
+	}
 	for _, line := range wrapDesc(desc, maxLine) {
 		if row >= h {
-			return row
+			break
 		}
-		c.text(x, y+row, line, meta, bg, maxLine)
+		c.text(x, y+row, line, ink, bg, maxLine)
 		row++
 	}
-	if row < h {
+	if !tight && row < h {
 		row++
 	}
 	return row
@@ -649,31 +704,60 @@ func stackHealthColor(stack domain.Stack) string {
 	return domain.Color(domain.StateColorToken(domain.GetDisplayState(head)))
 }
 
-func (m Model) listOrigin(n, selected, top, bottom int) int {
+func (m Model) listOrigin(stacks []domain.Stack, selected, top, bottom int) int {
+	n := len(stacks)
+	if n == 0 {
+		return 0
+	}
 	room := max(1, bottom-top)
 	if StackedInspector(m.Width) && m.State.CardVisible {
 		room = max(1, room-m.stackedPaneHeight(ListPaneWidth(m.Width)))
 	}
-	if selected < room {
-		return 0
+	if selected < 0 {
+		selected = 0
 	}
 	if selected > n-1 {
 		selected = n - 1
 	}
-	return selected - room + 1
+	nameW := GetListRowLayout(ListPaneWidth(m.Width), m.Width, 0).NameWidth
+	used := stackRowHeight(stacks[selected], nameW)
+	start := selected
+	for start > 0 {
+		h := stackRowHeight(stacks[start-1], nameW)
+		if used+h > room {
+			break
+		}
+		used += h
+		start--
+	}
+	return start
 }
 
 func (m Model) stackedPaneHeight(listWidth int) int {
-	border, pad := 1, 1
-	innerW := max(1, listWidth-2*(border+pad))
+	border, padX, padY := 1, InspectorPadX, 1
+	innerW := max(1, listWidth-2*(border+padX))
 	pr, ok := m.SelectedPR()
 	if !ok {
-		return 2*border + 2*pad + 1
+		return 2*border + 2*padY + 1
 	}
 	title := "#" + itoa(pr.Number) + " " + pr.Title
 	lines := len(wrapWords(title, innerW))
-	descLines := m.inspectorDescRows(innerW)
-	return max(2*border+2*pad+1, 2*border+2*pad+lines+1+descLines+len(inspectorFacts(pr)))
+	descLines := 0
+	if m.reserveInspectorDesc() {
+		descLines = inspectorDescLines
+	} else if d := m.landedInspectorDesc(); d != "" {
+		descLines = len(wrapDesc(d, innerW))
+	}
+	return 2*border + 2*padY + lines + descLines + len(inspectorFacts(pr))
+}
+
+// stackedDescFloor is chrome + one title row + the reserved two lines.
+func (m Model) stackedDescFloor(listWidth int) int {
+	if !m.reserveInspectorDesc() && m.landedInspectorDesc() == "" {
+		return 0
+	}
+	border, padY := 1, 1
+	return 2*border + 2*padY + 1 + inspectorDescLines
 }
 
 func (m Model) ballHit(x, y int) (stackIndex, prIndex int, ok bool) {
@@ -686,15 +770,17 @@ func (m Model) ballHit(x, y int) (stackIndex, prIndex int, ok bool) {
 		return 0, 0, false
 	}
 	sel := app.ClampSelection(m.State.Selection, stacks)
-	start := m.listOrigin(len(stacks), sel.StackIndex, ListStartY, ListBottomY(m.Height))
+	start := m.listOrigin(stacks, sel.StackIndex, ListStartY, ListBottomY(m.Height))
+	nameW := GetListRowLayout(listWidth, m.Width, 0).NameWidth
 	rowY := ListStartY
 	stackIndex = -1
 	for i := start; i < len(stacks); i++ {
+		h := stackRowHeight(stacks[i], nameW)
 		if y == rowY {
 			stackIndex = i
 			break
 		}
-		rowY++
+		rowY += h
 		if StackedInspector(m.Width) && i == sel.StackIndex && m.State.CardVisible {
 			rowY += m.stackedPaneHeight(listWidth)
 		}

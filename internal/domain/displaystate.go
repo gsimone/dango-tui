@@ -5,31 +5,30 @@ import (
 	"strings"
 )
 
-// GetDisplayState resolves the single status that earns a PR's ball color and
-// inspector headline. The order is product policy, not a rendering detail.
+// GetDisplayState resolves the single status that earns a PR's ball.
+// Worst state wins: fail > review > approved > open > draft > queued > merged.
 func GetDisplayState(pr PullRequest) PrDisplayState {
-	if pr.Merged {
-		return StateMerged
-	}
-	if pr.Draft {
-		return StateDraft
-	}
 	if pr.CI.State == CIFailure || pr.CI.Failed > 0 {
 		return StateCIFailure
 	}
 
-	reviewBlocked := pr.ChangesRequested ||
-		pr.ReviewDecision == "CHANGES_REQUESTED" ||
-		(pr.Mergeable != nil && !*pr.Mergeable)
-	if reviewBlocked {
+	// Review is "you must reply", not CONFLICTING. Drafts are often
+	// unmergeable and must stay draft.
+	if pr.ChangesRequested || pr.ReviewDecision == "CHANGES_REQUESTED" {
 		return StateReviewBlocked
 	}
 
+	if pr.ReviewDecision == "APPROVED" {
+		return StateReady
+	}
+	if pr.Draft {
+		return StateDraft
+	}
 	if pr.MergeQueueState != "" && pr.MergeQueueState != "NONE" {
 		return StateQueued
 	}
-	if pr.ReviewDecision == "APPROVED" && pr.CI.State == CISuccess {
-		return StateReady
+	if pr.Merged {
+		return StateMerged
 	}
 	return StateOpen
 }
@@ -38,9 +37,9 @@ var DisplayStateLabel = map[PrDisplayState]string{
 	StateMerged:        "merged",
 	StateDraft:         "draft",
 	StateCIFailure:     "CI failing",
-	StateReviewBlocked: "review / merge blocked",
+	StateReviewBlocked: "needs your review",
 	StateQueued:        "merge queued",
-	StateReady:         "ready to merge",
+	StateReady:         "approved",
 	StateOpen:          "open / pending",
 }
 
@@ -52,10 +51,7 @@ func DisplayStateDetail(pr PullRequest) string {
 	case StateDraft:
 		return "not requesting review"
 	case StateReviewBlocked:
-		if pr.Mergeable != nil && !*pr.Mergeable {
-			return "merge conflict"
-		}
-		if pr.ChangesRequested {
+		if pr.ChangesRequested || pr.ReviewDecision == "CHANGES_REQUESTED" {
 			return "changes requested"
 		}
 	case StateCIFailure:
@@ -102,8 +98,30 @@ func StateColorToken(state PrDisplayState) string {
 	case StateCIFailure:
 		return "ciFailure"
 	case StateReviewBlocked:
-		return "reviewBlocked"
+		return "warning"
+	case StateDraft:
+		return "draft"
+	case StateReady:
+		return "ready"
+	case StateMerged:
+		return "merged"
+	case StateQueued, StateOpen:
+		return "paper"
 	default:
-		return string(state)
+		return "paper"
+	}
+}
+
+// BallGlyph is the resting mark. Filled is never a status — the list
+// paints filled only on the active layer. Draft idle is ○ (meta ink).
+// Review is ◎, queued is ◌, everything else is ○. No logo rainbow.
+func BallGlyph(state PrDisplayState) rune {
+	switch state {
+	case StateReviewBlocked:
+		return '◎'
+	case StateQueued:
+		return '◌'
+	default:
+		return '○'
 	}
 }

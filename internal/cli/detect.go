@@ -13,6 +13,7 @@ import (
 // Config is dango.json / dango.yml / dango.yaml. Missing file means no generated title.
 type Config struct {
 	Provider string `json:"provider"`
+	Describe string `json:"describe"`
 }
 
 var configNames = []string{"dango.json", "dango.yml", "dango.yaml"}
@@ -82,26 +83,6 @@ func ParseRemote(raw string) (string, error) {
 	return NormalizeRepo(raw)
 }
 
-func configRoots(dir string) []string {
-	seen := map[string]bool{}
-	var roots []string
-	add := func(path string) {
-		if path == "" {
-			return
-		}
-		if seen[path] {
-			return
-		}
-		seen[path] = true
-		roots = append(roots, path)
-	}
-	if found, err := GitRoot(dir); err == nil && found != "" {
-		add(found)
-	}
-	add(dir)
-	return roots
-}
-
 func parseDangoYAML(raw []byte) (Config, error) {
 	var cfg Config
 	for _, line := range strings.Split(string(raw), "\n") {
@@ -110,15 +91,21 @@ func parseDangoYAML(raw []byte) (Config, error) {
 			continue
 		}
 		key, val, ok := strings.Cut(line, ":")
-		if !ok || strings.TrimSpace(key) != "provider" {
+		if !ok {
 			continue
 		}
+		key = strings.TrimSpace(key)
 		val = strings.TrimSpace(val)
 		if i := strings.Index(val, " #"); i >= 0 {
 			val = strings.TrimSpace(val[:i])
 		}
 		val = strings.Trim(val, `"'`)
-		cfg.Provider = val
+		switch key {
+		case "provider":
+			cfg.Provider = val
+		case "describe":
+			cfg.Describe = val
+		}
 	}
 	return cfg, nil
 }
@@ -140,27 +127,132 @@ func parseDangoConfig(name string, raw []byte) (Config, error) {
 	}
 }
 
-// ReadDangoConfig loads provider config from dango.json, dango.yml, or
-// dango.yaml. Looks in the git root, then cwd. Missing file is empty.
+// LaunchDir is the real process cwd. Resolve uses this, not ".".
+func LaunchDir() string {
+	cwd, err := os.Getwd()
+	if err != nil || strings.TrimSpace(cwd) == "" {
+		return "."
+	}
+	return cwd
+}
+
+// ResolveLaunch is what `dango --repo` does: detect/config from Getwd.
+func ResolveLaunch(args Args) (Args, error) {
+	return Resolve(args, LaunchDir())
+}
+
+func loadConfigFile(path, name string) (Config, bool, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return Config{}, false, nil
+		}
+		return Config{}, false, err
+	}
+	cfg, err := parseDangoConfig(name, raw)
+	if err != nil {
+		return Config{}, false, err
+	}
+	cfg.Provider = strings.TrimSpace(cfg.Provider)
+	cfg.Describe = strings.TrimSpace(cfg.Describe)
+	return cfg, true, nil
+}
+
+// ReadDangoConfig loads provider / describe from dango.json, dango.yml,
+// or dango.yaml. A dango.json in dir (launch cwd) wins and stops the
+// walk — even when that file has no describe key. Only a missing cwd
+// dango.json may look at cwd yml/yaml, then the git root. --repo
+// owner/name is not a remote file. Missing file is empty.
 func ReadDangoConfig(dir string) (Config, error) {
-	for _, root := range configRoots(dir) {
-		for _, name := range configNames {
-			raw, err := os.ReadFile(filepath.Join(root, name))
-			if err != nil {
-				if os.IsNotExist(err) {
-					continue
-				}
-				return Config{}, err
-			}
-			cfg, err := parseDangoConfig(name, raw)
-			if err != nil {
-				return Config{}, err
-			}
-			cfg.Provider = strings.TrimSpace(cfg.Provider)
-			return cfg, nil
+	cfg, _, err := ReadDangoConfigAt(dir)
+	return cfg, err
+}
+
+func configSearchPaths(dir string) []string {
+	dir = filepath.Clean(dir)
+	var paths []string
+	for _, name := range configNames {
+		paths = append(paths, filepath.Join(dir, name))
+	}
+	root, err := GitRoot(dir)
+	if err != nil || root == "" {
+		return paths
+	}
+	if filepath.Clean(root) == dir {
+		return paths
+	}
+	for _, name := range configNames {
+		paths = append(paths, filepath.Join(root, name))
+	}
+	return paths
+}
+
+func cwdHasConfigFile(dir string) bool {
+	dir = filepath.Clean(dir)
+	for _, name := range configNames {
+		st, err := os.Stat(filepath.Join(dir, name))
+		if err == nil && !st.IsDir() {
+			return true
 		}
 	}
-	return Config{}, nil
+	return false
+}
+
+// ReadDangoConfigAt is ReadDangoConfig plus the file path that won.
+func ReadDangoConfigAt(dir string) (Config, string, error) {
+	dir = filepath.Clean(dir)
+	path := filepath.Join(dir, "dango.json")
+	if cfg, ok, err := loadConfigFile(path, "dango.json"); ok || err != nil {
+		return cfg, path, err
+	}
+	for _, name := range []string{"dango.yml", "dango.yaml"} {
+		path = filepath.Join(dir, name)
+		if cfg, ok, err := loadConfigFile(path, name); ok || err != nil {
+			return cfg, path, err
+		}
+	}
+	root, err := GitRoot(dir)
+	if err != nil || root == "" {
+		return Config{}, "", nil
+	}
+	if filepath.Clean(root) == dir {
+		return Config{}, "", nil
+	}
+	for _, name := range configNames {
+		path = filepath.Join(root, name)
+		if cfg, ok, err := loadConfigFile(path, name); ok || err != nil {
+			return cfg, path, err
+		}
+	}
+	return Config{}, "", nil
+}
+
+// resolveDescribe rewrites a relative argv[0] against the config file dir.
+// Bare PATH commands such as echo stay as-is unless that name exists there.
+func resolveDescribe(raw, configPath string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || strings.TrimSpace(configPath) == "" {
+		return raw
+	}
+	dir := filepath.Dir(configPath)
+	fields := strings.Fields(raw)
+	if len(fields) == 0 {
+		return raw
+	}
+	name := fields[0]
+	if filepath.IsAbs(name) {
+		return raw
+	}
+	if strings.ContainsAny(name, `/\`) || strings.HasPrefix(name, ".") {
+		fields[0] = filepath.Join(dir, name)
+		return strings.Join(fields, " ")
+	}
+	cand := filepath.Join(dir, name)
+	if st, err := os.Stat(cand); err == nil && !st.IsDir() {
+		fields[0] = cand
+		return strings.Join(fields, " ")
+	}
+	return raw
 }
 
 // ReadDangoJSON loads provider config. Prefer ReadDangoConfig.
@@ -173,10 +265,13 @@ func ReadDangoJSON(dir string) (Config, error) {
 var ErrNoRemote = fmt.Errorf("no GitHub remote in this directory. Pass --repo archetype-labs/app or --repo testdata/test.json")
 
 // Resolve fills repo from the cwd git remote when --repo is omitted, and
-// provider from dango.json / dango.yml / dango.yaml when --provider is
-// omitted. --repo (owner/name or a stack file) and --provider win.
-// Story is a test/dev hook and skips detect. Detect failure is ErrNoRemote
-// — never a silent examples fallback.
+// provider / describe from dango.json / dango.yml / dango.yaml in dir
+// (then that dir's git root). A cwd dango.json stops the walk.
+// --repo owner/name is live gh, not a remote config file, and does not
+// drop the launch-dir config. --provider overrides the title hook.
+// describe comes only from the config file. Story is a test/dev hook
+// and skips detect. Detect failure is ErrNoRemote — never a silent
+// examples fallback.
 func Resolve(args Args, dir string) (Args, error) {
 	if args.Story != "" {
 		return args, nil
@@ -188,9 +283,16 @@ func Resolve(args Args, dir string) (Args, error) {
 		}
 		args.Repo = repo
 	}
-	if args.Provider.Empty() {
-		if cfg, err := ReadDangoConfig(dir); err == nil && cfg.Provider != "" {
+	args.Describe = ""
+	args.DescribeDir = ""
+	cfg, path, err := ReadDangoConfigAt(dir)
+	if err == nil {
+		if args.Provider.Empty() && cfg.Provider != "" {
 			args.Provider = ParseProvider(cfg.Provider)
+		}
+		args.Describe = resolveDescribe(cfg.Describe, path)
+		if args.Describe != "" && path != "" {
+			args.DescribeDir = filepath.Dir(path)
 		}
 	}
 	return args, nil

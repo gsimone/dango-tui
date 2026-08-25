@@ -9,34 +9,46 @@ import (
 
 // Job is one stack-title request. Fetch does not wait on it.
 type Job struct {
-	Provider Provider
-	Stack    domain.Stack
-	ID       string
+	Provider    Provider
+	Describe    string
+	DescribeDir string
+	Stack       domain.Stack
+	ID          string
 }
 
 // Result lands after first paint. Empty Title/Description means no fill.
+// Err is the last run failure (never painted into the pane).
 type Result struct {
 	ID          string
 	Title       string
 	Description string
+	Err         error
 }
 
 // Func is one provider hook. Tests inject a fake; production uses Run.
 type Func func(Job) Result
 
-// Run generates a short stack title and an inspector description when the
-// job has a provider. Missing provider returns empty fills and keeps the
-// gh name. Fetch and first paint do not call this. local/demo write a
-// distinct clause — they never echo the raw gh title.
+// Run fills the inspector description after first paint from the
+// configured describe script only. Missing describe, a dead script,
+// timeout, or mush leaves the pane empty — local Describe() is a test
+// helper and is not the product sentence. A title is written only
+// when a provider is set. Fetch and first paint do not call this.
 func Run(job Job) Result {
 	id := job.ID
 	if id == "" {
 		id = job.Stack.ID
 	}
-	if job.Provider.Empty() {
-		return Result{ID: id}
+	res := Result{ID: id}
+	desc, err := describeScript(job)
+	if err != nil {
+		res.Err = err
+	} else if strings.TrimSpace(desc) != "" {
+		res.Description = strings.TrimSpace(desc)
 	}
-	return Result{ID: id, Title: Title(job.Stack), Description: Describe(job.Stack)}
+	if !job.Provider.Empty() {
+		res.Title = Title(job.Stack)
+	}
+	return res
 }
 
 func stripTicket(s string) string {

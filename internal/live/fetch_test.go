@@ -84,6 +84,12 @@ func TestFetchErrorIncludesExactArgv(t *testing.T) {
 	if !strings.Contains(err.Error(), "--json") || !strings.Contains(err.Error(), "isDraft") {
 		t.Fatalf("do not truncate argv: %v", err)
 	}
+	if !strings.Contains(err.Error(), "mergeable") || !strings.Contains(err.Error(), "reviewDecision") || !strings.Contains(err.Error(), "mergeStateStatus") {
+		t.Fatalf("error argv must keep display-state fields: %v", err)
+	}
+	if strings.Contains(err.Error(), "statusCheckRollup") || strings.Contains(err.Error(), "body") {
+		t.Fatalf("error argv must stay cheap: %v", err)
+	}
 	if strings.Contains(err.Error(), "/pulls") || strings.Contains(err.Error(), "repo view") {
 		t.Fatalf("must stay on pr list: %v", err)
 	}
@@ -93,20 +99,75 @@ func TestPRListFieldsAreSlim(t *testing.T) {
 	want := []string{
 		"number", "title", "url", "headRefName", "baseRefName",
 		"author", "labels", "isDraft", "state",
+		"mergeable", "reviewDecision", "mergeStateStatus",
 	}
 	if strings.Join(prListFields, ",") != strings.Join(want, ",") {
 		t.Fatalf("first list fields %v, want %v", prListFields, want)
 	}
 	joined := strings.Join(prListFields, ",")
+	// gh pr list --json has no avatarUrl field (author is login/id/name).
+	// Avatar bytes come from author.avatarUrl when present, else github.com/{login}.png.
+	if strings.Contains(joined, "avatarUrl") {
+		t.Fatalf("gh pr list --json rejects avatarUrl: %v", prListFields)
+	}
 	for _, banned := range []string{
 		"body", "statusCheckRollup", "latestReviews", "reviews",
-		"mergeStateStatus", "mergeable", "additions", "deletions",
-		"changedFiles", "headRefOid",
+		"additions", "deletions", "changedFiles", "headRefOid",
 	} {
 		if strings.Contains(joined, banned) {
 			t.Fatalf("first list must not request %s: %v", banned, prListFields)
 		}
 	}
+}
+
+func TestFetchMapsStateColorTokens(t *testing.T) {
+	type row struct {
+		name  string
+		extra string
+		token string
+		ci    domain.CIState
+	}
+	cases := []row{
+		{name: "draft", extra: `"isDraft":true,"state":"OPEN"`, token: "draft", ci: domain.CIUnknown},
+		{name: "merged", extra: `"isDraft":false,"state":"MERGED"`, token: "merged", ci: domain.CIUnknown},
+		{name: "conflict-is-not-review", extra: `"isDraft":false,"state":"OPEN","mergeable":"CONFLICTING"`, token: "paper", ci: domain.CIUnknown},
+		{name: "draft-unmergeable", extra: `"isDraft":true,"state":"OPEN","mergeable":"CONFLICTING"`, token: "draft", ci: domain.CIUnknown},
+		{name: "blocked-review", extra: `"isDraft":false,"state":"OPEN","reviewDecision":"CHANGES_REQUESTED"`, token: "warning", ci: domain.CIUnknown},
+		{name: "queued", extra: `"isDraft":false,"state":"OPEN","mergeStateStatus":"QUEUED"`, token: "paper", ci: domain.CIUnknown},
+		{name: "open-slim", extra: `"isDraft":false,"state":"OPEN"`, token: "paper", ci: domain.CIUnknown},
+		{name: "draft-slim", extra: `"isDraft":true,"state":"OPEN"`, token: "draft", ci: domain.CIUnknown},
+		{name: "approved-no-ci", extra: `"isDraft":false,"state":"OPEN","mergeable":"MERGEABLE","reviewDecision":"APPROVED","mergeStateStatus":"CLEAN"`, token: "ready", ci: domain.CIUnknown},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// A stack is 2+ PRs. The first layer carries the status fields.
+			raw := `[{` + slimListPRJSON(1, "a", "main", tc.extra) + `},{` + slimListPRJSON(2, "b", "a", `"isDraft":false,"state":"OPEN"`) + `}]`
+			run := ghOK(map[string][]byte{"pr list": []byte(raw)})
+			stacks, err := fetchWith(run, "archetype-labs/app")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(stacks) != 1 || len(stacks[0].PRs) != 2 {
+				t.Fatalf("want one 2-PR stack, got %+v", stacks)
+			}
+			pr := stacks[0].PRs[0]
+			state := domain.GetDisplayState(pr)
+			if got := domain.StateColorToken(state); got != tc.token {
+				t.Fatalf("token %q, want %q (state %s, pr %+v)", got, tc.token, state, pr)
+			}
+			if pr.CI.State != tc.ci {
+				t.Fatalf("CI must stay %s without statusCheckRollup, got %s", tc.ci, pr.CI.State)
+			}
+		})
+	}
+}
+
+func slimListPRJSON(number int, head, base, extra string) string {
+	s := fmt.Sprintf(`"number":%d,"title":"layer","url":"https://github.com/owner/demo/pull/%d","headRefName":%q,"baseRefName":%q,"author":{"login":"gm"},"labels":[]`, number, number, head, base)
+	if extra == "" {
+		return s
+	}
+	return s + "," + extra
 }
 
 func TestFetchWithGroupsChainFromGhJSON(t *testing.T) {
@@ -140,15 +201,44 @@ func TestFetchWithGroupsChainFromGhJSON(t *testing.T) {
 	}
 }
 
-func TestFetchMapsLabelsAndAuthor(t *testing.T) {
+func TestFetchDropsOnePRStacks(t *testing.T) {
 	run := ghOK(map[string][]byte{
 		"pr list": []byte(`[
-			{"number":1,"title":"bottom","url":"https://github.com/owner/demo/pull/1","headRefName":"a","baseRefName":"main","author":{"login":"gm","avatarUrl":"https://avatars.example/gm.png"},"labels":[{"name":"bug","color":"d73a4a"},{"name":"auth","color":"0e8a16"}],"isDraft":false,"state":"OPEN"}
+			{"number":1,"title":"solo","url":"https://github.com/owner/demo/pull/1","headRefName":"a","baseRefName":"main","author":{"login":"gm"},"labels":[],"isDraft":false,"state":"OPEN"}
 		]`),
 	})
 	stacks, err := fetchWith(run, "owner/demo")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(stacks) != 0 {
+		t.Fatalf("1-PR is not a stack: %+v", stacks)
+	}
+}
+
+func TestFetchMapsLabelsAndAuthor(t *testing.T) {
+	pngBytes := solidPNG(t, 200, 40, 40)
+	old := getURL
+	getURL = func(raw string) ([]byte, error) {
+		if raw != "https://avatars.example/gm.png" {
+			t.Fatalf("avatar url %q", raw)
+		}
+		return pngBytes, nil
+	}
+	t.Cleanup(func() { getURL = old })
+
+	run := ghOK(map[string][]byte{
+		"pr list": []byte(`[
+			{"number":1,"title":"bottom","url":"https://github.com/owner/demo/pull/1","headRefName":"a","baseRefName":"main","author":{"login":"gm","avatarUrl":"https://avatars.example/gm.png"},"labels":[{"name":"bug","color":"d73a4a"},{"name":"auth","color":"0e8a16"}],"isDraft":false,"state":"OPEN"},
+			{"number":2,"title":"top","url":"https://github.com/owner/demo/pull/2","headRefName":"b","baseRefName":"a","author":{"login":"gm"},"labels":[],"isDraft":false,"state":"OPEN"}
+		]`),
+	})
+	stacks, err := fetchWith(run, "owner/demo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stacks) != 1 || len(stacks[0].PRs) != 2 {
+		t.Fatalf("want one 2-PR stack, got %+v", stacks)
 	}
 	pr := stacks[0].PRs[0]
 	if len(pr.Labels) != 2 || pr.Labels[0].Name != "bug" || pr.Labels[0].Color != "#d73a4a" {
@@ -157,11 +247,11 @@ func TestFetchMapsLabelsAndAuthor(t *testing.T) {
 	if pr.Labels[1].Name != "auth" || pr.Labels[1].Color != "#0e8a16" {
 		t.Fatalf("labels %+v", pr.Labels)
 	}
-	if pr.Author != "gm" {
+	if pr.Author != "gm" || pr.AvatarURL != "https://avatars.example/gm.png" {
 		t.Fatalf("author %+v", pr)
 	}
-	if pr.AuthorColor != domain.LoginColor("gm") {
-		t.Fatalf("author ● is login-stable, got %q want %q", pr.AuthorColor, domain.LoginColor("gm"))
+	if pr.AuthorColor != "#c82828" {
+		t.Fatalf("sampled avatar color %q", pr.AuthorColor)
 	}
 	if domain.IsLowChromaHex(pr.AuthorColor) {
 		t.Fatalf("author ● must stay chromatic: %s", pr.AuthorColor)

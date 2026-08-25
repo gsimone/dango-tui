@@ -16,17 +16,17 @@ func TestMutantDisplayStateOrder(t *testing.T) {
 		Draft:  true,
 		CI:     domain.CISummary{State: domain.CIFailure, Failed: 1},
 	}
-	if got := domain.GetDisplayState(mergedDraft); got != domain.StateMerged {
-		t.Fatalf("real merged+draft+ci: %s", got)
+	if got := domain.GetDisplayState(mergedDraft); got != domain.StateCIFailure {
+		t.Fatalf("real fail-wins: %s", got)
 	}
-	draftFirst := func(pr domain.PullRequest) domain.PrDisplayState {
-		if pr.Draft {
-			return domain.StateDraft
+	mergedFirst := func(pr domain.PullRequest) domain.PrDisplayState {
+		if pr.Merged {
+			return domain.StateMerged
 		}
 		return domain.GetDisplayState(pr)
 	}
-	if draftFirst(mergedDraft) == domain.StateMerged {
-		t.Fatal("draft-first mutant must not survive")
+	if mergedFirst(mergedDraft) == domain.StateCIFailure {
+		t.Fatal("merged-before-fail mutant must not survive")
 	}
 
 	ciBeatsReview := domain.PullRequest{
@@ -46,23 +46,59 @@ func TestMutantDisplayStateOrder(t *testing.T) {
 		t.Fatal("review-before-ci mutant must not survive")
 	}
 
-	conflict := domain.PullRequest{
-		Mergeable:       domain.MergeableFalse(),
+	draftConflict := domain.PullRequest{
+		Draft:     true,
+		Mergeable: domain.MergeableFalse(),
+	}
+	if got := domain.GetDisplayState(draftConflict); got != domain.StateDraft {
+		t.Fatalf("real unmergeable draft: %s", got)
+	}
+	conflictIsReview := func(pr domain.PullRequest) domain.PrDisplayState {
+		if pr.Mergeable != nil && !*pr.Mergeable {
+			return domain.StateReviewBlocked
+		}
+		return domain.GetDisplayState(pr)
+	}
+	if conflictIsReview(draftConflict) == domain.StateDraft {
+		t.Fatal("CONFLICTING-as-review mutant must not survive")
+	}
+
+	approvedQueued := domain.PullRequest{
 		MergeQueueState: "QUEUED",
 		ReviewDecision:  "APPROVED",
-		CI:              domain.CISummary{State: domain.CISuccess},
 	}
-	if got := domain.GetDisplayState(conflict); got != domain.StateReviewBlocked {
-		t.Fatalf("real conflict: %s", got)
+	if got := domain.GetDisplayState(approvedQueued); got != domain.StateReady {
+		t.Fatalf("real approved-over-queue: %s", got)
 	}
-	queueFirst := func(pr domain.PullRequest) domain.PrDisplayState {
+	queueOverApproved := func(pr domain.PullRequest) domain.PrDisplayState {
 		if pr.MergeQueueState != "" {
 			return domain.StateQueued
 		}
 		return domain.GetDisplayState(pr)
 	}
-	if queueFirst(conflict) == domain.StateReviewBlocked {
-		t.Fatal("queue-before-conflict mutant must not survive")
+	if queueOverApproved(approvedQueued) == domain.StateReady {
+		t.Fatal("queue-before-approved mutant must not survive")
+	}
+}
+
+func TestMutantBallGlyphNeverFilledStatus(t *testing.T) {
+	if domain.BallGlyph(domain.StateCIFailure) == '●' || domain.BallGlyph(domain.StateOpen) == '●' {
+		t.Fatal("filled is not a status")
+	}
+	filledStatus := func(state domain.PrDisplayState) rune {
+		if state == domain.StateReviewBlocked {
+			return '◎'
+		}
+		if state == domain.StateQueued {
+			return '◌'
+		}
+		return '●'
+	}
+	if filledStatus(domain.StateCIFailure) == domain.BallGlyph(domain.StateCIFailure) {
+		t.Fatal("filled-as-status mutant must not survive")
+	}
+	if domain.BallGlyph(domain.StateDraft) != '○' {
+		t.Fatal("idle draft is hollow")
 	}
 }
 

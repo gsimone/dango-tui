@@ -31,7 +31,7 @@ go run ./cmd/dango
 ```bash
 go run ./cmd/dango --repo archetype-labs/app
 go run ./cmd/dango --repo testdata/test.json
-go run ./cmd/dango --frame 80x24      # print one frame and exit
+go run ./cmd/dango --frame 120x30     # print the product pane and exit
 ```
 
 Or build:
@@ -45,7 +45,9 @@ make build
 
 Nightly (not 0.1.0, no semver): after CI on `main`, plus 02:00 UTC and `workflow_dispatch`, the `Nightly` workflow replaces a single prerelease tag `nightly` with stripped `dango-linux-amd64` and `dango-darwin-arm64`. No darwin/amd64. PRs do not publish. `make dist` builds those locally.
 
-Provider comes from `dango.json` / `dango.yml` / `dango.yaml`. `--provider` overrides. Missing config file = no generated title. A set provider writes a short stack title (list name, in place) and a description (inspector only) after first paint. First paint is always the gh name. `dango.json` is not a stack dump.
+Provider comes from `dango.json` / `dango.yml` / `dango.yaml`. `--provider` overrides. Missing config file = no generated list title; the list keeps a short stack title (ticket id, or the gh title when it is already short). After first paint, the `describe` key in that local config file names the script that writes the two inspector lines for the selected stack (looked up from the launch directory, then its git root). Missing `describe` leaves that pane empty. `--repo owner/name` is live `gh`, not a remote config file. A set `--provider` may still swap a short stack title in place. `dango.json` is not a stack dump.
+
+A stack is two or more open PRs. A single open PR is not a stack and does not appear as a one-ball row. List names stay short (paper, leftover width, one line).
 
 The header mark is `●-●-● DANGO` over the repo slug and counts. Type is paper
 `#f2ebe0` or meta `#9a8f82`. Two-col list: name + ball chain. Inspector is the
@@ -104,7 +106,10 @@ CI on pull requests and pushes to `main` publishes coverage (total %) and real g
 - Live first frame: 3-row ░▒▓█ DANGO, then `●-●-●`, then `fetching archetype-labs/app` (meta). Dies when the list exists. A failed fetch stays here.
 - Header: `●-●-● DANGO`, then `archetype-labs/app  •  N stacks / M layers` (fixtures use `org/reponame`)
 - 2-column side pad, 1 blank row at the top
-- Stack list on the left; one `│` rule; inspector pane on the right
-- Inspector facts include status (status ink on the value only), labels in their GitHub hex, and author (`●` + login)
-- Selected row `#242018` with paper ink; everything else meta
-- **40×20 / 80×24 / 120×30 / 160×40** — column stays on-screen
+- Stack list on the left; one `│` rule; inspector pane on the right (left/right pad)
+- List names are short stack titles in paper, leftover measure, one line. Full GitHub title lives in the right pane.
+- Balls: `●` is the active layer only, never a status. Idle draft is `○` in meta `#8b8e93`. Open idle is `○` paper. Review is `◎`. Queued is `◌`. Active keeps status ink and becomes `●` (draft you are on is gray `●`). Fail > review > approved > open > draft > queued > merged. Selected stack is `▶` plus paper name — the row is not washed. Chain is packed (`○-○-◎`). No logo rainbow, no filled necklace.
+- Inspector facts include status (status ink on the value only), labels in their GitHub hex, and author (`●` + login). `●` is the dominant color from that user's GitHub avatar, never a picture. Fetch failure uses a stable login ink.
+- Splash shows a short SHA (module pseudo-version / `vcs.revision` / `-ldflags`). `go install @commit` must still print it.
+- Selected stack is `▶` plus paper name; the row is not washed. List titles stay paper; chrome is meta
+- **120×30** is the product: list + right inspector pane. Narrow widths keep a stacked card clipped to content + pad.

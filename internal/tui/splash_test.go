@@ -49,8 +49,11 @@ func TestSplashPaintsBeforeFetchAndDies(t *testing.T) {
 		Fetch: func(string) ([]domain.Stack, error) {
 			fetches++
 			return []domain.Stack{{
-				ID:  "s",
-				PRs: []domain.PullRequest{{Number: 1, Title: "landed layer"}},
+				ID: "s",
+				PRs: []domain.PullRequest{
+					{Number: 1, Title: "landed layer"},
+					{Number: 2, Title: "landed head"},
+				},
 			}}, nil
 		},
 	})
@@ -66,8 +69,8 @@ func TestSplashPaintsBeforeFetchAndDies(t *testing.T) {
 		t.Fatalf("View fetched %d times", fetches)
 	}
 	assertSplashFrame(t, frame, "fetching archetype-labs/app")
-	if !strings.Contains(frame, "deadbeefcafebabe0123456789abcdef01234567") {
-		t.Fatalf("SHA under fetching:\n%s", frame)
+	if !strings.Contains(frame, "deadbee") {
+		t.Fatalf("short SHA under fetching:\n%s", frame)
 	}
 	if strings.Contains(frame, "version") || strings.Contains(strings.ToLower(frame), "banner") {
 		t.Fatalf("SHA is one meta line, not a banner:\n%s", frame)
@@ -103,9 +106,7 @@ func TestSplashPaintsBeforeFetchAndDies(t *testing.T) {
 func TestFailedFetchStaysOnSplashWithArgv(t *testing.T) {
 	sha := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	withVCS(t, sha)
-	argv := live.FormatGHArgv(append([]string{"pr", "list", "--repo", "archetype-labs/app", "--state", "open", "--limit", "100", "--json"}, strings.Join([]string{
-		"number", "title", "url", "headRefName", "baseRefName", "author", "labels", "isDraft", "state",
-	}, ",")))
+	argv := live.FormatGHArgv(live.PRListArgs("archetype-labs/app"))
 	err502 := errors.New(argv + ": HTTP 502: Bad Gateway")
 	var copied string
 	old := copyText
@@ -136,8 +137,8 @@ func TestFailedFetchStaysOnSplashWithArgv(t *testing.T) {
 	if !strings.Contains(frame, "502") || !strings.Contains(frame, "pr list") {
 		t.Fatalf("loading line becomes the error:\n%s", frame)
 	}
-	if !strings.Contains(frame, sha) {
-		t.Fatalf("SHA stays under the error:\n%s", frame)
+	if !strings.Contains(frame, shortSHA(sha)) {
+		t.Fatalf("short SHA stays under the error:\n%s", frame)
 	}
 	if !strings.Contains(frame, "archetype-labs/app") {
 		t.Fatalf("error names the real repo:\n%s", frame)
@@ -153,8 +154,8 @@ func TestFailedFetchStaysOnSplashWithArgv(t *testing.T) {
 	}
 	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(".")})
 	m = next.(Model)
-	if !strings.Contains(copied, err502.Error()) || !strings.Contains(copied, sha) {
-		t.Fatalf("dot copies error plus SHA, got %q", copied)
+	if !strings.Contains(copied, err502.Error()) || !strings.Contains(copied, shortSHA(sha)) {
+		t.Fatalf("dot copies error plus short SHA, got %q", copied)
 	}
 	if !strings.Contains(copied, "--json") || !strings.Contains(copied, "isDraft") {
 		t.Fatalf("copied error must include exact argv: %q", copied)
@@ -173,7 +174,7 @@ func TestFailedFetchStaysOnSplashWithArgv(t *testing.T) {
 func TestSplashDotCopiesArgvWhileFetching(t *testing.T) {
 	sha := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	withVCS(t, sha)
-	want := live.FormatGHArgv(live.PRListArgs("archetype-labs/app")) + "\n" + sha
+	want := live.FormatGHArgv(live.PRListArgs("archetype-labs/app")) + "\n" + shortSHA(sha)
 	live.LastGHArgv = nil
 	var copied string
 	old := copyText
@@ -199,7 +200,7 @@ func TestSplashDotCopiesArgvWhileFetching(t *testing.T) {
 	if copied != want {
 		t.Fatalf("while fetching, copy exact argv plus SHA\ngot  %q\nwant %q", copied, want)
 	}
-	if !strings.Contains(copied, "archetype-labs/app") || !strings.Contains(copied, "--json") || !strings.Contains(copied, sha) {
+	if !strings.Contains(copied, "archetype-labs/app") || !strings.Contains(copied, "--json") || !strings.Contains(copied, shortSHA(sha)) {
 		t.Fatalf("argv+sha %q", copied)
 	}
 	if cmd == nil {
@@ -245,8 +246,8 @@ func TestSplashDotKeepsArgvOnLineWhenCopyFails(t *testing.T) {
 	if !strings.Contains(frame, want) && !strings.Contains(frame, "--json") {
 		t.Fatalf("argv visible:\n%s", frame)
 	}
-	if !strings.Contains(frame, sha) {
-		t.Fatalf("SHA stays on the splash:\n%s", frame)
+	if !strings.Contains(frame, shortSHA(sha)) {
+		t.Fatalf("short SHA stays on the splash:\n%s", frame)
 	}
 	if !m.splash() {
 		t.Fatal("stay on splash")
