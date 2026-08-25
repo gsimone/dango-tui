@@ -537,11 +537,10 @@ func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper
 	tight := place.Boxed
 	maxLine := max(1, w)
 	id := "#" + itoa(pr.Number)
+	landed := m.landedInspectorDesc()
 	hold := 0
-	if tight {
-		if desc := m.landedInspectorDesc(); desc != "" {
-			hold = min(inspectorDescLines, h)
-		}
+	if landed != "" {
+		hold = min(inspectorDescLines, h)
 	}
 	titleLimit := h
 	if hold > 0 {
@@ -555,13 +554,15 @@ func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper
 		c.text(x, y+row, line, paper, bg, maxLine)
 		row++
 	}
-	if !tight && row < titleLimit {
+	// Landed copy sits on the next row. A reserved empty slot on the
+	// wide live pane does too. Fixture cards keep the blank under title.
+	if !tight && row < titleLimit && landed == "" && !m.reserveInspectorDesc() {
 		row++
 	}
 	if hold > 0 && row > h-hold {
 		row = h - hold
 	}
-	row = m.paintStackDescription(c, x, y, row, h, maxLine, meta, bg, tight)
+	row = m.paintStackDescription(c, x, y, row, h, maxLine, paper, bg, tight)
 	if row >= h {
 		return
 	}
@@ -617,7 +618,7 @@ func (m Model) inspectorDescRows(innerW int) int {
 	return len(wrapDesc(desc, max(1, innerW))) + 1
 }
 
-func (m Model) paintStackDescription(c *canvas, x, y, row, h, maxLine int, meta, bg string, tight bool) int {
+func (m Model) paintStackDescription(c *canvas, x, y, row, h, maxLine int, ink, bg string, tight bool) int {
 	desc := m.landedInspectorDesc()
 	if m.reserveInspectorDesc() && !tight {
 		painted := 0
@@ -626,7 +627,7 @@ func (m Model) paintStackDescription(c *canvas, x, y, row, h, maxLine int, meta,
 				if painted >= inspectorDescLines || row >= h {
 					break
 				}
-				c.text(x, y+row, line, meta, bg, maxLine)
+				c.text(x, y+row, line, ink, bg, maxLine)
 				row++
 				painted++
 			}
@@ -640,8 +641,7 @@ func (m Model) paintStackDescription(c *canvas, x, y, row, h, maxLine int, meta,
 	if desc == "" {
 		return row
 	}
-	// A landed description always takes the next two rows, even when
-	// the stacked 80-col card is leftover-tight. Facts yield first.
+	// Landed lines win over facts when the card is leftover-tight.
 	if row >= h {
 		row = max(0, h-min(inspectorDescLines, h))
 	}
@@ -649,7 +649,7 @@ func (m Model) paintStackDescription(c *canvas, x, y, row, h, maxLine int, meta,
 		if row >= h {
 			break
 		}
-		c.text(x, y+row, line, meta, bg, maxLine)
+		c.text(x, y+row, line, ink, bg, maxLine)
 		row++
 	}
 	if !tight && row < h {

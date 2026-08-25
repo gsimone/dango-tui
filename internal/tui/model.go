@@ -2,6 +2,7 @@ package tui
 
 import (
 	"strings"
+	"testing"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -406,10 +407,18 @@ func (m *Model) copySplash() tea.Cmd {
 	return m.clearFeedback()
 }
 
+var feedbackTTL = 900 * time.Millisecond
+
+func init() {
+	if testing.Testing() {
+		feedbackTTL = time.Millisecond
+	}
+}
+
 func (m *Model) clearFeedback() tea.Cmd {
 	m.feedbackSeq++
 	token := m.feedbackSeq
-	return tea.Tick(900*time.Millisecond, func(time.Time) tea.Msg {
+	return tea.Tick(feedbackTTL, func(time.Time) tea.Msg {
 		return clearFeedbackMsg{token: token}
 	})
 }

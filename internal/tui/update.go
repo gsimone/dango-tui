@@ -212,6 +212,7 @@ func (m *Model) applySummary(msg summaryDoneMsg) tea.Cmd {
 	m.summaryDone[msg.id] = true
 	title := strings.TrimSpace(msg.title)
 	desc := strings.TrimSpace(msg.description)
+	var toast tea.Cmd
 	if title != "" || desc != "" || strings.TrimSpace(m.Describe) != "" {
 		idx := m.summaryStackIndex(msg.id)
 		if idx >= 0 {
@@ -221,6 +222,8 @@ func (m *Model) applySummary(msg summaryDoneMsg) tea.Cmd {
 			}
 			if desc != "" {
 				m.stacks[idx].Description = desc
+				m.State.Feedback = "described"
+				toast = m.clearFeedback()
 			} else if strings.TrimSpace(m.Describe) != "" {
 				m.stacks[idx].Description = ""
 			}
@@ -230,7 +233,7 @@ func (m *Model) applySummary(msg summaryDoneMsg) tea.Cmd {
 			m.summaryDone[m.stacks[idx].ID] = true
 		}
 	}
-	return m.startSelectedSummary()
+	return tea.Batch(toast, m.startSelectedSummary())
 }
 
 // summaryStackIndex is the live row a describe result belongs to.
