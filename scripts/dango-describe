@@ -1,0 +1,43 @@
+#!/bin/sh
+# Luna inspector for dango. Named by dango.json:
+#   {"describe":"scripts/dango-describe"}
+#
+# stdin:  {"titles":["PR title", ...]}
+# stdout: two short inspector sentences, one per line.
+# A missing Codex CLI, a failed exec, or empty output exits non-zero
+# with no stdout so the pane stays empty. Auth is the user's Codex login.
+# No API key.
+
+if ! command -v codex >/dev/null 2>&1; then
+	exit 1
+fi
+
+payload=$(cat) || exit 1
+case $payload in
+*'"titles"'*) ;;
+*) exit 1 ;;
+esac
+
+prompt="Write exactly two short inspector sentences about this pull-request stack from the PR titles. One sentence per line. Do not join the titles. Do not start with Covers. Do not repeat a raw GitHub title. No preamble, no labels, no markdown.
+
+${payload}"
+
+# Documented form. stderr is discarded so chrome never reaches the pane.
+out=$(codex exec -m gpt-5.6-luna "$prompt" 2>/dev/null) || exit 1
+
+# Keep the first two plain text lines. Drop JSON event-stream rows and blanks.
+cleaned=$(printf '%s\n' "$out" | awk '
+	BEGIN { n = 0 }
+	/^[[:space:]]*$/ { next }
+	/^[[:space:]]*\{/ { next }
+	/^[[:space:]]*\[/ { next }
+	{
+		line = $0
+		gsub(/^["`\047]+|["`\047]+$/, "", line)
+		if (line == "") next
+		print line
+		if (++n == 2) exit
+	}
+')
+[ -n "$cleaned" ] || exit 1
+printf '%s\n' "$cleaned"

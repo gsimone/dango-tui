@@ -5,7 +5,23 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestDoctorProbeTimeoutAllowsLunaExec(t *testing.T) {
+	if doctorProbeTimeout != 45*time.Second {
+		t.Fatalf("doctorProbeTimeout=%s; Luna exec needs ~45s, not 8s echo", doctorProbeTimeout)
+	}
+}
+
+func TestDoctorDescribeJSONIsNotEchoPaneHookOK(t *testing.T) {
+	if strings.Contains(doctorDescribeJSON, "pane-hook-ok") || strings.Contains(doctorDescribeJSON, "echo") {
+		t.Fatalf("doctor must not seed echo pane-hook-ok, got %q", doctorDescribeJSON)
+	}
+	if strings.Contains(doctorDescribeJSON, "describe") {
+		t.Fatalf("doctor write has no describe key, got %q", doctorDescribeJSON)
+	}
+}
 
 func TestParseDoctorNeedsNoRepo(t *testing.T) {
 	args, err := Parse([]string{"--doctor"})
@@ -23,8 +39,9 @@ func TestParseDoctorNeedsNoRepo(t *testing.T) {
 func TestDoctorWritesMissingCwdJSON(t *testing.T) {
 	dir := t.TempDir()
 	var buf strings.Builder
-	if err := Doctor(dir, &buf); err != nil {
-		t.Fatal(err)
+	err := Doctor(dir, &buf)
+	if err == nil {
+		t.Fatal("empty describe must exit 2")
 	}
 	got := buf.String()
 	wantPath := filepath.Join(dir, "dango.json")
@@ -40,17 +57,20 @@ func TestDoctorWritesMissingCwdJSON(t *testing.T) {
 	if !strings.Contains(got, "won: "+wantPath) {
 		t.Fatalf("winning path:\n%s", got)
 	}
-	if !strings.Contains(got, "describe: echo pane-hook-ok") {
-		t.Fatalf("describe argv:\n%s", got)
+	if !strings.Contains(got, "describe: none") {
+		t.Fatalf("missing describe stays none:\n%s", got)
 	}
-	if !strings.Contains(got, "stdout: pane-hook-ok") {
-		t.Fatalf("echo probe:\n%s", got)
+	if strings.Contains(got, "pane-hook-ok") || strings.Contains(got, `{"describe":"echo`) {
+		t.Fatalf("must not seed echo pane-hook-ok:\n%s", got)
 	}
 	raw, err := os.ReadFile(wantPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.TrimSpace(string(raw)) != `{"describe":"echo pane-hook-ok"}` {
+	if strings.Contains(string(raw), "pane-hook-ok") || strings.Contains(string(raw), "echo") {
+		t.Fatalf("wrote echo seed %q", raw)
+	}
+	if strings.TrimSpace(string(raw)) != `{}` {
 		t.Fatalf("wrote %q", raw)
 	}
 }
@@ -127,8 +147,9 @@ func TestDoctorCwdJSONWinsOverGitRoot(t *testing.T) {
 	}
 
 	var buf strings.Builder
-	if err := Doctor(child, &buf); err != nil {
-		t.Fatal(err)
+	err := Doctor(child, &buf)
+	if err == nil {
+		t.Fatal("cwd write with no describe must exit 2")
 	}
 	got := buf.String()
 	wrote := filepath.Join(child, "dango.json")
@@ -144,7 +165,10 @@ func TestDoctorCwdJSONWinsOverGitRoot(t *testing.T) {
 	if strings.Contains(got, "won: "+filepath.Join(root, "dango.json")) {
 		t.Fatalf("git root must not win:\n%s", got)
 	}
-	if !strings.Contains(got, "describe: echo pane-hook-ok") {
-		t.Fatalf("describe:\n%s", got)
+	if !strings.Contains(got, "describe: none") {
+		t.Fatalf("cwd write has no describe:\n%s", got)
+	}
+	if strings.Contains(got, "pane-hook-ok") {
+		t.Fatalf("must not seed echo pane-hook-ok:\n%s", got)
 	}
 }

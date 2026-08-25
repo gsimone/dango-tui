@@ -63,6 +63,25 @@ func execFetchDoneCmdsOnce(m tui.Model, cmd tea.Cmd) tui.Model {
 	return next.(tui.Model)
 }
 
+func testdataLunaDescribe(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		p := filepath.Join(dir, "testdata", "luna-describe")
+		if st, err := os.Stat(p); err == nil && !st.IsDir() {
+			return p
+		}
+		next := filepath.Dir(dir)
+		if next == dir {
+			t.Fatal("testdata/luna-describe not found")
+		}
+		dir = next
+	}
+}
+
 func testdataJSON(t *testing.T) string {
 	t.Helper()
 	dir, err := os.Getwd()
@@ -809,6 +828,59 @@ func TestLiveEchoDescribeRendersPaneHookOK(t *testing.T) {
 	}
 }
 
+func TestLiveFetchDoneCmdsLandFixtureDescribe(t *testing.T) {
+	fixture := testdataLunaDescribe(t)
+	stack := []domain.Stack{{
+		ID: "s",
+		PRs: []domain.PullRequest{
+			{Number: 1, Title: "alpha layer", Branch: "feat/alpha"},
+			{Number: 2, Title: "beta layer", Branch: "feat/beta"},
+		},
+	}}
+	for _, size := range []struct{ w, h int }{{80, 24}, {120, 30}} {
+		m := tui.New(tui.Options{
+			Repo:     "archetype-labs/app",
+			Describe: fixture,
+			Width:    size.w,
+			Height:   size.h,
+			Fetch: func(string) ([]domain.Stack, error) {
+				return append([]domain.Stack(nil), stack...), nil
+			},
+		})
+		cmd := m.Init()
+		if cmd == nil {
+			t.Fatal("live Init must fetch")
+		}
+		next, extra := m.Update(cmd())
+		m = next.(tui.Model)
+		first := frameOf(m)
+		if !strings.Contains(strings.Join(listRows(first), "\n"), "alpha layer") {
+			t.Fatalf("%dx%d first View after fetchDone must paint the list:\n%s", size.w, size.h, first)
+		}
+		if strings.Contains(first, "luna-line-one") || strings.Contains(first, "luna-line-two") {
+			t.Fatalf("%dx%d first View after fetchDone must not contain fixture lines:\n%s", size.w, size.h, first)
+		}
+		if extra == nil {
+			t.Fatalf("%dx%d fetchDone must return startSelectedSummary as a tea.Cmd", size.w, size.h)
+		}
+
+		m = execFetchDoneCmdsOnce(m, extra)
+		if !strings.Contains(m.Stacks()[0].Description, "luna-line-one") || !strings.Contains(m.Stacks()[0].Description, "luna-line-two") {
+			t.Fatalf("%dx%d fixture must land both lines, got %q", size.w, size.h, m.Stacks()[0].Description)
+		}
+		if strings.Contains(m.Stacks()[0].Description, "pane-hook-ok") {
+			t.Fatalf("%dx%d fixture must not be echo pane-hook-ok: %q", size.w, size.h, m.Stacks()[0].Description)
+		}
+		frame := frameOf(m)
+		if !strings.Contains(frame, "luna-line-one") || !strings.Contains(frame, "luna-line-two") {
+			t.Fatalf("%dx%d after fetchDone cmds, View must contain both fixture lines:\n%s", size.w, size.h, frame)
+		}
+		if !descUnderTitle(frame, "#1", "luna-line-one") || !descUnderTitle(frame, "#1", "luna-line-two") {
+			t.Fatalf("%dx%d fixture lines must sit under the title:\n%s", size.w, size.h, frame)
+		}
+	}
+}
+
 func TestLiveFetchDoneCmdsLandEchoPaneHookOK(t *testing.T) {
 	stack := []domain.Stack{{
 		ID: "s",
@@ -868,6 +940,37 @@ func descUnderTitle(frame, titleBit, desc string) bool {
 		}
 	}
 	return false
+}
+
+func TestLiveDeadFixtureScriptStaysEmpty(t *testing.T) {
+	m := tui.New(tui.Options{
+		Repo:     "archetype-labs/app",
+		Describe: filepath.Join(t.TempDir(), "testdata", "missing-luna-describe"),
+		Width:    120,
+		Height:   30,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{{
+				ID: "s",
+				PRs: []domain.PullRequest{
+					{Number: 1, Title: "alpha layer"},
+					{Number: 2, Title: "beta layer"},
+				},
+			}}, nil
+		},
+	})
+	m, extra := applyLiveFetch(m)
+	first := frameOf(m)
+	if strings.Contains(first, "luna-line-one") || strings.Contains(first, "missing") {
+		t.Fatalf("dead script must not paint before cmds:\n%s", first)
+	}
+	m = execFetchDoneCmdsOnce(m, extra)
+	if m.Stacks()[0].Description != "" {
+		t.Fatalf("dead script stays empty: %q", m.Stacks()[0].Description)
+	}
+	frame := frameOf(m)
+	if strings.Contains(frame, "luna-line-one") || strings.Contains(frame, "exit") || strings.Contains(frame, "not found") {
+		t.Fatalf("stderr / result must not land in the pane:\n%s", frame)
+	}
 }
 
 func TestLiveDeadDescribeStaysEmpty(t *testing.T) {

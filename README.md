@@ -47,6 +47,16 @@ Nightly (not 0.1.0, no semver): after CI on `main`, plus 02:00 UTC and `workflow
 
 Provider comes from `dango.json` / `dango.yml` / `dango.yaml`. `--provider` overrides. Missing config file = no generated list title; the list keeps a short stack title (ticket id, or the gh title when it is already short). After first paint, the `describe` key in that local config file names the script that writes the two inspector lines for the selected stack (looked up from the launch directory, then its git root). Missing `describe` leaves that pane empty. `--repo owner/name` is live `gh`, not a remote config file. A set `--provider` may still swap a short stack title in place. `dango.json` is not a stack dump.
 
+Luna example — this repo's inspector script. Relative argv is joined to the config file's directory:
+
+```json
+{
+  "describe": "scripts/dango-describe"
+}
+```
+
+That script reads `{"titles":[...]}` on stdin and prints two inspector sentences. It calls the user's Codex CLI (`codex exec -m gpt-5.6-luna`) with their existing login. A missing or failing script leaves the pane empty. `dango --doctor` does not invent a describe.
+
 A stack is two or more open PRs. A single open PR is not a stack and does not appear as a one-ball row. List names stay short (paper, leftover width, one line).
 
 The header mark is `●-●-● DANGO` over the repo slug and counts. Type is paper

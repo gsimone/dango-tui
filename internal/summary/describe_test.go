@@ -1,6 +1,7 @@
 package summary
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gsimone/dango-tui/internal/domain"
 )
@@ -270,6 +272,81 @@ func TestResolveDescribeArgvJoinsConfigDir(t *testing.T) {
 	}
 }
 
+func TestDescribeTimeoutAllowsLunaExec(t *testing.T) {
+	if describeTimeout != 45*time.Second {
+		t.Fatalf("describeTimeout=%s; Luna exec needs ~45s, not 8s echo", describeTimeout)
+	}
+}
+
+func testdataLunaDescribe(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		p := filepath.Join(dir, "testdata", "luna-describe")
+		if st, err := os.Stat(p); err == nil && !st.IsDir() {
+			return p
+		}
+		next := filepath.Dir(dir)
+		if next == dir {
+			t.Fatal("testdata/luna-describe not found")
+		}
+		dir = next
+	}
+}
+
+func TestExampleScriptSilentWhenCodexMissing(t *testing.T) {
+	root := filepath.Join("..", "..")
+	script := filepath.Join(root, "scripts", "dango-describe")
+	st, err := os.Stat(script)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Mode()&0111 == 0 {
+		t.Fatalf("scripts/dango-describe must be executable, mode %s", st.Mode())
+	}
+	if _, err := exec.LookPath("codex"); err == nil {
+		t.Skip("codex is on PATH; do not call live Luna")
+	}
+	cmd := exec.Command(script)
+	cmd.Stdin = strings.NewReader(`{"titles":["alpha layer","beta layer"]}`)
+	out, err := cmd.Output()
+	if err == nil {
+		t.Fatal("missing Codex CLI must exit non-zero")
+	}
+	if len(bytes.TrimSpace(out)) != 0 {
+		t.Fatalf("missing Codex must print no stdout, got %q", out)
+	}
+}
+
+func TestFixtureRequiresTitlesJSON(t *testing.T) {
+	cmd := exec.Command(testdataLunaDescribe(t))
+	cmd.Stdin = strings.NewReader(`{}`)
+	out, err := cmd.Output()
+	if err == nil || len(bytes.TrimSpace(out)) != 0 {
+		t.Fatalf("no titles must fail silent: %q %v", out, err)
+	}
+}
+
+func TestRunFixtureScriptPrintsTwoLines(t *testing.T) {
+	stack := sampleStack()
+	res := Run(Job{ID: "s", Describe: testdataLunaDescribe(t), Stack: stack})
+	if res.Err != nil {
+		t.Fatalf("fixture must exec: %v", res.Err)
+	}
+	if !strings.Contains(res.Description, "luna-line-one") || !strings.Contains(res.Description, "luna-line-two") {
+		t.Fatalf("fixture lines: %q", res.Description)
+	}
+	if strings.Contains(res.Description, "pane-hook-ok") {
+		t.Fatalf("fixture must not be echo pane-hook-ok: %q", res.Description)
+	}
+	if res.Description == Describe(stack) {
+		t.Fatal("product sentence is the script, not Describe()")
+	}
+}
+
 func TestProductGoHasNoCodexString(t *testing.T) {
 	root := filepath.Join("..", "..")
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
@@ -290,8 +367,11 @@ func TestProductGoHasNoCodexString(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if strings.Contains(string(raw), "codex") || strings.Contains(string(raw), "CODEX") {
-			t.Errorf("product source must not contain that CLI name: %s", path)
+		src := string(raw)
+		for _, needle := range []string{"codex", "CODEX", "openai", "OpenAI", "OPENAI", "luna", "Luna", "LUNA", "api_key", "API_KEY"} {
+			if strings.Contains(src, needle) {
+				t.Errorf("product source must not hardcode %q: %s", needle, path)
+			}
 		}
 		return nil
 	})
