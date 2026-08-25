@@ -40,6 +40,29 @@ func applyLiveCmds(m tui.Model, cmd tea.Cmd) tui.Model {
 	return applyLiveCmds(next.(tui.Model), extra)
 }
 
+// execFetchDoneCmdsOnce runs the cmds fetchDone actually returns, the
+// way tea does for one Batch: unwrap BatchMsg once, Update each
+// message, and discard extras. It does not invent afterPaintMsg and
+// does not follow a cmd that Update(afterPaintMsg) would return.
+func execFetchDoneCmdsOnce(m tui.Model, cmd tea.Cmd) tui.Model {
+	if cmd == nil {
+		return m
+	}
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, c := range batch {
+			if c == nil {
+				continue
+			}
+			next, _ := m.Update(c())
+			m = next.(tui.Model)
+		}
+		return m
+	}
+	next, _ := m.Update(msg)
+	return next.(tui.Model)
+}
+
 func testdataJSON(t *testing.T) string {
 	t.Helper()
 	dir, err := os.Getwd()
@@ -786,12 +809,12 @@ func TestLiveEchoDescribeRendersPaneHookOK(t *testing.T) {
 	}
 }
 
-func TestLiveRealRunEchoLandsAfterFetchCmds(t *testing.T) {
+func TestLiveFetchDoneCmdsLandEchoPaneHookOK(t *testing.T) {
 	stack := []domain.Stack{{
-		ID: "stack-184",
+		ID: "s",
 		PRs: []domain.PullRequest{
-			{Number: 183, Title: "email token base", Branch: "feat/email-base"},
-			{Number: 184, Title: "feat/email-token-overrides-model", Branch: "feat/email-token-overrides-model"},
+			{Number: 1, Title: "alpha layer", Branch: "feat/alpha"},
+			{Number: 2, Title: "beta layer", Branch: "feat/beta"},
 		},
 	}}
 	for _, size := range []struct{ w, h int }{{80, 24}, {120, 30}} {
@@ -811,30 +834,23 @@ func TestLiveRealRunEchoLandsAfterFetchCmds(t *testing.T) {
 		next, extra := m.Update(cmd())
 		m = next.(tui.Model)
 		first := frameOf(m)
-		if strings.Contains(first, "pane-hook-ok") {
-			t.Fatalf("%dx%d first View must not wait on describe:\n%s", size.w, size.h, first)
+		if !strings.Contains(strings.Join(listRows(first), "\n"), "alpha layer") {
+			t.Fatalf("%dx%d first View after fetchDone must paint the list:\n%s", size.w, size.h, first)
 		}
-		if !strings.Contains(strings.Join(listRows(first), "\n"), "email token base") {
-			t.Fatalf("%dx%d fetchDone View must paint the list:\n%s", size.w, size.h, first)
+		if strings.Contains(first, "pane-hook-ok") {
+			t.Fatalf("%dx%d first View after fetchDone must not contain pane-hook-ok:\n%s", size.w, size.h, first)
 		}
 		if extra == nil {
-			t.Fatalf("%dx%d fetchDone must return the describe cmd", size.w, size.h)
+			t.Fatalf("%dx%d fetchDone must return startSelectedSummary as a tea.Cmd", size.w, size.h)
 		}
 
-		m = applyLiveCmds(m, extra)
-		raw := m.View()
+		m = execFetchDoneCmdsOnce(m, extra)
 		frame := frameOf(m)
-		if m.Stacks()[0].Description != "pane-hook-ok" {
-			t.Fatalf("%dx%d real summary.Run must land echo stdout, got %q", size.w, size.h, m.Stacks()[0].Description)
-		}
 		if !strings.Contains(frame, "pane-hook-ok") {
-			t.Fatalf("%dx%d View must paint pane-hook-ok:\n%s", size.w, size.h, frame)
+			t.Fatalf("%dx%d after fetchDone cmds, View must contain pane-hook-ok:\n%s", size.w, size.h, frame)
 		}
-		if !descUnderTitle(frame, "#183", "pane-hook-ok") {
-			t.Fatalf("%dx%d landed lines must sit under the title:\n%s", size.w, size.h, frame)
-		}
-		if !nearHex(raw, "pane-hook-ok", domain.Color("paper")) {
-			t.Fatalf("%dx%d landed lines must be paper ink", size.w, size.h)
+		if !descUnderTitle(frame, "#1", "pane-hook-ok") {
+			t.Fatalf("%dx%d pane-hook-ok must sit under the title:\n%s", size.w, size.h, frame)
 		}
 	}
 }

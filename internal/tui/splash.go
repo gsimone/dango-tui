@@ -54,8 +54,7 @@ func (m Model) paintSplash(c *canvas, width, height int, surface, paper, meta, s
 	if sha != "" {
 		shaLines = 1
 	}
-	descLine := m.splashDescribeLine()
-	contentH := 5 + len(status) + shaLines + 1
+	contentH := 5 + len(status) + shaLines
 	startY := (height - contentH) / 2
 	if startY < 0 {
 		startY = 0
@@ -103,17 +102,4 @@ func (m Model) paintSplash(c *canvas, width, height int, surface, paper, meta, s
 		}
 		c.text(shaX, shaY, sha, meta, surface, max(1, width-shaX))
 	}
-	descY := startY + 5 + len(status) + shaLines
-	descX := (width - displayWidth(descLine)) / 2
-	if descX < 0 {
-		descX = 0
-	}
-	c.text(descX, descY, descLine, meta, surface, max(1, width-descX))
-}
-
-func (m Model) splashDescribeLine() string {
-	if d := strings.TrimSpace(m.Describe); d != "" {
-		return "describe: " + d
-	}
-	return "describe: none"
 }
