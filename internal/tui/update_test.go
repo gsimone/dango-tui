@@ -2,13 +2,16 @@ package tui
 
 import (
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/gsimone/dango-tui/internal/cli"
 	"github.com/gsimone/dango-tui/internal/domain"
 	"github.com/gsimone/dango-tui/internal/live"
 	"github.com/gsimone/dango-tui/internal/summary"
@@ -324,6 +327,181 @@ func TestDescriptionFillsInspectorInPlace(t *testing.T) {
 		if len(listNames(after)) != len(listNames(before)) {
 			t.Fatalf("%dx%d list rows changed: before %v after %v", size.w, size.h, listNames(before), listNames(after))
 		}
+	}
+}
+
+func TestDoctorSuccessLiveFetchUpdatePaintsPaneHookOK(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "dango.json"), []byte(`{"describe":"echo pane-hook-ok"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+
+	parsed, err := cli.Parse([]string{"--repo", "archetype-labs/app"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	args, err := cli.ResolveLaunch(parsed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if args.Describe != "echo pane-hook-ok" {
+		t.Fatalf("doctor-success describe: %q", args.Describe)
+	}
+
+	liveStack := domain.Stack{
+		ID:   "stack-184",
+		Name: "feat/email-token-overrides-model",
+		PRs: []domain.PullRequest{
+			{Number: 183, Title: "email token base", Branch: "feat/email-base"},
+			{Number: 184, Title: "feat/email-token-overrides-model", Branch: "feat/email-token-overrides-model"},
+		},
+	}
+	filler := func(id string, n int) domain.Stack {
+		return domain.Stack{
+			ID:   id,
+			Name: id,
+			PRs: []domain.PullRequest{
+				{Number: n, Title: "layer a " + id, Branch: "br-" + id + "-a"},
+				{Number: n + 1, Title: "layer b " + id, Branch: "br-" + id + "-b"},
+			},
+		}
+	}
+	stacks := []domain.Stack{
+		liveStack,
+		filler("stack-190", 190),
+		filler("stack-200", 200),
+		filler("stack-210", 210),
+		filler("stack-220", 220),
+	}
+
+	for _, size := range []struct{ w, h int }{{80, 24}, {120, 30}} {
+		m := New(Options{
+			Repo:        args.Repo,
+			Describe:    args.Describe,
+			DescribeDir: args.DescribeDir,
+			Width:       size.w,
+			Height:      size.h,
+			Fetch: func(string) ([]domain.Stack, error) {
+				out := make([]domain.Stack, len(stacks))
+				copy(out, stacks)
+				return out, nil
+			},
+			EnrichCI: func(string, []domain.Stack) []domain.Stack {
+				return stacks
+			},
+		})
+
+		got, cmd := m.Update(fetchDoneMsg{
+			stacks: append([]domain.Stack(nil), stacks...),
+			live:   true,
+			token:  m.fetchSeq,
+			at:     time.Now(),
+		})
+		m = got.(Model)
+		if cmd == nil {
+			t.Fatalf("%dx%d afterFetch must return a cmd on the live Update path", size.w, size.h)
+		}
+		if len(m.stacks) == 0 {
+			t.Fatalf("%dx%d fetchDone must store the live stacks", size.w, size.h)
+		}
+
+		// fetchDone schedules afterPaint; that Update starts describe.
+		m = applyCmd(m, cmd)
+		if strings.TrimSpace(m.stacks[0].Description) != "pane-hook-ok" {
+			t.Fatalf("%dx%d echo describe must write Description after fetchDone, got %q", size.w, size.h, m.stacks[0].Description)
+		}
+
+		// Explicit summaryDone on the live value-receiver path, including
+		// an id that does not match the stored stack (hyp 1).
+		got, _ = m.Update(summaryDoneMsg{
+			token:       m.fetchSeq,
+			id:          "not-the-live-id",
+			description: "pane-hook-ok",
+		})
+		m = got.(Model)
+		if strings.TrimSpace(m.stacks[0].Description) != "pane-hook-ok" {
+			t.Fatalf("%dx%d summaryDone must write the selected stack on id miss, got %q", size.w, size.h, m.stacks[0].Description)
+		}
+
+		view := stripANSI(m.View())
+		if !strings.Contains(view, "pane-hook-ok") {
+			t.Fatalf("%dx%d View must paint pane-hook-ok after fetchDone+summaryDone:\n%s", size.w, size.h, view)
+		}
+	}
+}
+
+func TestApplySummaryWritesSelectedStackOnIDMiss(t *testing.T) {
+	m := New(Options{
+		Repo:     "archetype-labs/app",
+		Describe: "echo pane-hook-ok",
+		Width:    80,
+		Height:   24,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{{
+				ID: "stack-184",
+				PRs: []domain.PullRequest{
+					{Number: 183, Title: "a"},
+					{Number: 184, Title: "b", Branch: "feat/email-token-overrides-model"},
+				},
+			}}, nil
+		},
+	})
+	got, _ := m.Update(fetchDoneMsg{
+		stacks: []domain.Stack{{
+			ID: "stack-184",
+			PRs: []domain.PullRequest{
+				{Number: 183, Title: "a"},
+				{Number: 184, Title: "b", Branch: "feat/email-token-overrides-model"},
+			},
+		}},
+		live:  true,
+		token: m.fetchSeq,
+		at:    time.Now(),
+	})
+	m = got.(Model)
+	got, _ = m.Update(summaryDoneMsg{token: m.fetchSeq, id: "stack-0", description: "pane-hook-ok"})
+	m = got.(Model)
+	if m.stacks[0].Description != "pane-hook-ok" {
+		t.Fatalf("id miss must still write the live selected stack, got %q", m.stacks[0].Description)
+	}
+	if !strings.Contains(stripANSI(m.View()), "pane-hook-ok") {
+		t.Fatalf("tight 80 View must still paint the landed lines:\n%s", stripANSI(m.View()))
+	}
+}
+
+func TestLandedDescPaintsWhenStackedTitleFillsTheCard(t *testing.T) {
+	long := strings.Repeat("feat/email-token-overrides-model ", 16)
+	stack := domain.Stack{
+		ID:          "stack-184",
+		Description: "pane-hook-ok",
+		PRs: []domain.PullRequest{
+			{Number: 183, Title: "email token base", Branch: "feat/email-base"},
+			{Number: 184, Title: strings.TrimSpace(long), Branch: "feat/email-token-overrides-model"},
+		},
+	}
+	m := New(Options{
+		Repo:     "archetype-labs/app",
+		Describe: "echo pane-hook-ok",
+		Width:    80,
+		Height:   24,
+		Fetch: func(string) ([]domain.Stack, error) {
+			return []domain.Stack{stack}, nil
+		},
+	})
+	got, _ := m.Update(fetchDoneMsg{
+		stacks: []domain.Stack{stack},
+		live:   true,
+		token:  m.fetchSeq,
+		at:     time.Now(),
+	})
+	m = got.(Model)
+	if m.stacks[0].Description != "pane-hook-ok" {
+		t.Fatalf("fetch must keep the landed description, got %q", m.stacks[0].Description)
+	}
+	view := stripANSI(m.View())
+	if !strings.Contains(view, "pane-hook-ok") {
+		t.Fatalf("tight 80 card must still paint the two landed lines:\n%s", view)
 	}
 }
 

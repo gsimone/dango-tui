@@ -213,23 +213,52 @@ func (m *Model) applySummary(msg summaryDoneMsg) tea.Cmd {
 	title := strings.TrimSpace(msg.title)
 	desc := strings.TrimSpace(msg.description)
 	if title != "" || desc != "" || strings.TrimSpace(m.Describe) != "" {
-		for i := range m.stacks {
-			if m.stacks[i].ID != msg.id {
-				continue
-			}
+		idx := m.summaryStackIndex(msg.id)
+		if idx >= 0 {
 			if title != "" {
-				m.stacks[i].Name = title
-				m.stacks[i].Summary = title
+				m.stacks[idx].Name = title
+				m.stacks[idx].Summary = title
 			}
 			if desc != "" {
-				m.stacks[i].Description = desc
+				m.stacks[idx].Description = desc
 			} else if strings.TrimSpace(m.Describe) != "" {
-				m.stacks[i].Description = ""
+				m.stacks[idx].Description = ""
 			}
-			break
+			if m.stacks[idx].ID == "" && msg.id != "" {
+				m.stacks[idx].ID = msg.id
+			}
+			m.summaryDone[m.stacks[idx].ID] = true
 		}
 	}
 	return m.startSelectedSummary()
+}
+
+// summaryStackIndex is the live row a describe result belongs to.
+// Matching ID wins. A miss still writes the selected stack — live
+// grouping can stamp stack-N / gh-stack-N after the job captured a
+// different id on the Update value-receiver copy.
+func (m *Model) summaryStackIndex(id string) int {
+	if id != "" {
+		for i := range m.stacks {
+			if m.stacks[i].ID == id {
+				return i
+			}
+		}
+	}
+	stack, ok := m.SelectedStack()
+	if !ok {
+		return -1
+	}
+	for i := range m.stacks {
+		if stackRefEquals(m.stacks[i], stack) {
+			return i
+		}
+	}
+	sel := m.State.Selection.StackIndex
+	if sel >= 0 && sel < len(m.stacks) {
+		return sel
+	}
+	return -1
 }
 
 func (m Model) refresh() (tea.Model, tea.Cmd) {

@@ -371,6 +371,17 @@ func (m Model) paintList(c *canvas, listWidth, top, bottom int, surface, _, pape
 		y += rowH
 		if StackedInspector(m.Width) && selectedStack && m.State.CardVisible {
 			inspH := m.stackedPaneHeight(listWidth)
+			floor := m.stackedDescFloor(listWidth)
+			if y+inspH > bottom {
+				inspH = max(1, bottom-y)
+			}
+			if floor > 0 && y+inspH < y+floor {
+				inspH = floor
+			}
+			if y+inspH > bottom && floor > 0 {
+				y = max(top+rowH, bottom-floor)
+				inspH = max(floor, bottom-y)
+			}
 			if y+inspH > bottom {
 				inspH = max(1, bottom-y)
 			}
@@ -526,19 +537,29 @@ func (m Model) paintInspectorPane(c *canvas, place CardPlacement, surface, paper
 	tight := place.Boxed
 	maxLine := max(1, w)
 	id := "#" + itoa(pr.Number)
+	hold := 0
+	if tight {
+		if desc := m.landedInspectorDesc(); desc != "" {
+			hold = min(inspectorDescLines, h)
+		}
+	}
+	titleLimit := h
+	if hold > 0 {
+		titleLimit = max(0, h-hold)
+	}
 	row := 0
 	for _, line := range wrapWords(id+" "+pr.Title, maxLine) {
-		if row >= h {
-			return
+		if row >= titleLimit {
+			break
 		}
 		c.text(x, y+row, line, paper, bg, maxLine)
 		row++
 	}
-	if row >= h {
-		return
-	}
-	if !tight {
+	if !tight && row < titleLimit {
 		row++
+	}
+	if hold > 0 && row > h-hold {
+		row = h - hold
 	}
 	row = m.paintStackDescription(c, x, y, row, h, maxLine, meta, bg, tight)
 	if row >= h {
@@ -567,6 +588,17 @@ func (m Model) reserveInspectorDesc() bool {
 	return m.Live && !StackedInspector(m.Width)
 }
 
+func (m Model) landedInspectorDesc() string {
+	if !m.Live && !m.File {
+		return ""
+	}
+	stack, ok := m.SelectedStack()
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(stack.Description)
+}
+
 func (m Model) inspectorDescRows(innerW int) int {
 	if m.reserveInspectorDesc() {
 		return inspectorDescLines + 1
@@ -586,10 +618,7 @@ func (m Model) inspectorDescRows(innerW int) int {
 }
 
 func (m Model) paintStackDescription(c *canvas, x, y, row, h, maxLine int, meta, bg string, tight bool) int {
-	desc := ""
-	if stack, ok := m.SelectedStack(); ok {
-		desc = strings.TrimSpace(stack.Description)
-	}
+	desc := m.landedInspectorDesc()
 	if m.reserveInspectorDesc() && !tight {
 		painted := 0
 		if desc != "" {
@@ -608,12 +637,17 @@ func (m Model) paintStackDescription(c *canvas, x, y, row, h, maxLine int, meta,
 		}
 		return row
 	}
-	if desc == "" || (!m.Live && !m.File) {
+	if desc == "" {
 		return row
+	}
+	// A landed description always takes the next two rows, even when
+	// the stacked 80-col card is leftover-tight. Facts yield first.
+	if row >= h {
+		row = max(0, h-min(inspectorDescLines, h))
 	}
 	for _, line := range wrapDesc(desc, maxLine) {
 		if row >= h {
-			return row
+			break
 		}
 		c.text(x, y+row, line, meta, bg, maxLine)
 		row++
@@ -710,12 +744,20 @@ func (m Model) stackedPaneHeight(listWidth int) int {
 	title := "#" + itoa(pr.Number) + " " + pr.Title
 	lines := len(wrapWords(title, innerW))
 	descLines := 0
-	if stack, ok := m.SelectedStack(); ok {
-		if d := strings.TrimSpace(stack.Description); d != "" && (m.Live || m.File) {
-			descLines = len(wrapDesc(d, innerW))
-		}
+	if d := m.landedInspectorDesc(); d != "" {
+		descLines = len(wrapDesc(d, innerW))
 	}
 	return 2*border + 2*padY + lines + descLines + len(inspectorFacts(pr))
+}
+
+// stackedDescFloor is the leftover-tight card: chrome + one title row
+// + the two landed description lines. Facts are dropped first.
+func (m Model) stackedDescFloor(listWidth int) int {
+	if m.landedInspectorDesc() == "" {
+		return 0
+	}
+	border, padY := 1, 1
+	return 2*border + 2*padY + 1 + inspectorDescLines
 }
 
 func (m Model) ballHit(x, y int) (stackIndex, prIndex int, ok bool) {

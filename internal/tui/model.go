@@ -248,18 +248,20 @@ func (m *Model) ensureSelectedStackID() (domain.Stack, bool) {
 		return domain.Stack{}, false
 	}
 	stack := filtered[sel.StackIndex]
-	if stack.ID != "" {
+	if stack.ID == "" {
+		stack.ID = "stack-" + itoa(sel.StackIndex)
+	}
+	for i := range m.stacks {
+		if !stackRefEquals(m.stacks[i], stack) {
+			continue
+		}
+		if m.stacks[i].ID == "" {
+			m.stacks[i].ID = stack.ID
+		} else {
+			stack.ID = m.stacks[i].ID
+		}
 		return stack, true
 	}
-	id := "stack-" + itoa(sel.StackIndex)
-	for i := range m.stacks {
-		if stackRefEquals(m.stacks[i], stack) {
-			m.stacks[i].ID = id
-			stack.ID = id
-			return stack, true
-		}
-	}
-	stack.ID = id
 	return stack, true
 }
 
@@ -295,7 +297,11 @@ func (m Model) startCIEnrich() tea.Cmd {
 }
 
 func (m *Model) afterFetch() tea.Cmd {
-	return tea.Batch(m.startSummaries(), m.startCIEnrich())
+	// Describe starts on the next Update (afterPaintMsg), after tea
+	// has stored the live stacks. Calling startSelectedSummary on the
+	// fetchDone value-receiver copy can capture a stack id that
+	// applySummary never finds.
+	return tea.Batch(func() tea.Msg { return afterPaintMsg{} }, m.startCIEnrich())
 }
 
 func (m Model) fetchBadge() string {
