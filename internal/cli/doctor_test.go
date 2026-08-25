@@ -75,6 +75,23 @@ func TestDoctorWritesMissingCwdJSON(t *testing.T) {
 	}
 }
 
+func TestDoctorBareDangoDescribeStaysPATHCommand(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "dango.json")
+	if err := os.WriteFile(path, []byte(`{"describe":"dango-describe"}`+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var buf strings.Builder
+	_ = Doctor(dir, &buf)
+	got := buf.String()
+	if !strings.Contains(got, "describe: dango-describe") {
+		t.Fatalf("bare name stays on PATH:\n%s", got)
+	}
+	if strings.Contains(got, "describe: "+filepath.Join(dir, "dango-describe")) {
+		t.Fatalf("must not join dango-describe to the config dir:\n%s", got)
+	}
+}
+
 func TestDoctorLeavesExistingFileAlone(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "dango.json")

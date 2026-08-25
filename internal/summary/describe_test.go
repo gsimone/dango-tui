@@ -270,6 +270,10 @@ func TestResolveDescribeArgvJoinsConfigDir(t *testing.T) {
 	if echo[0] != "echo" || echo[1] != "pane-hook-ok" {
 		t.Fatalf("echo stays on PATH: %v", echo)
 	}
+	bare := resolveDescribeArgv([]string{"dango-describe"}, "/tmp/cwd")
+	if len(bare) != 1 || bare[0] != "dango-describe" {
+		t.Fatalf("bare dango-describe stays on PATH: %v", bare)
+	}
 }
 
 func TestDescribeTimeoutAllowsLunaExec(t *testing.T) {

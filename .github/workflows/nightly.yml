@@ -10,7 +10,8 @@
 #
 # Binaries are `make build` flags (CGO_ENABLED=0 -ldflags="-s -w"), named
 # as the executable: dango-linux-amd64, dango-darwin-arm64.
-# No darwin/amd64. No semver / 0.1.0.
+# Also publishes scripts/dango-describe as the single `dango-describe` asset
+# (not per-platform). No darwin/amd64. No semver / 0.1.0.
 
 name: Nightly
 
@@ -49,17 +50,17 @@ jobs:
         run: |
           set -euo pipefail
           echo "===== wc -c (executable bytes, not a bundle) ====="
-          wc -c dist/dango-linux-amd64 dist/dango-darwin-arm64
+          wc -c dist/dango-linux-amd64 dist/dango-darwin-arm64 dist/dango-describe
           {
             echo "## Nightly assets"
             echo
             echo "| Asset | Bytes |"
             echo "| --- | ---: |"
-            for f in dist/dango-linux-amd64 dist/dango-darwin-arm64; do
+            for f in dist/dango-linux-amd64 dist/dango-darwin-arm64 dist/dango-describe; do
               printf '| `%s` | %s |\n' "${f#dist/}" "$(wc -c < "$f")"
             done
             echo
-            echo "Stripped Go executables (\`CGO_ENABLED=0 -ldflags=\"-s -w\"\`). Not a JS bundle."
+            echo "Stripped Go executables (\`CGO_ENABLED=0 -ldflags=\"-s -w\"\`) plus the Luna \`dango-describe\` script."
             echo "Replaces the single \`nightly\` prerelease. Not 0.1.0."
           } >> "${GITHUB_STEP_SUMMARY}"
 
@@ -80,7 +81,9 @@ jobs:
           Assets:
           - dango-linux-amd64
           - dango-darwin-arm64
+          - dango-describe
 
           Commit: ${sha}" \
             dist/dango-linux-amd64 \
-            dist/dango-darwin-arm64
+            dist/dango-darwin-arm64 \
+            dist/dango-describe

@@ -10,10 +10,13 @@ build:
 
 # Cross-compiled stripped executables for the nightly prerelease.
 # linux/amd64 and darwin/arm64 only. Same flags as `build`. Files are the binaries.
+# Also copies the in-repo Luna describe script as the single dango-describe asset.
 dist:
 	mkdir -p dist
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/dango-linux-amd64 ./cmd/dango
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/dango-darwin-arm64 ./cmd/dango
+	cp scripts/dango-describe dist/dango-describe
+	chmod 0755 dist/dango-describe
 
 test:
 	go test ./...

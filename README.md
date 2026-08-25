@@ -13,7 +13,7 @@ The product path is a Go binary (Go 1.24+) built with
 curl -fsSL https://raw.githubusercontent.com/gsimone/dango-tui/main/install.sh | bash
 ```
 
-That installs `dango` into `~/.local/bin` from the rolling `nightly` prerelease (linux/amd64 or darwin/arm64). Not a versioned 0.1.0. Other platforms are refused.
+That installs `dango` and `dango-describe` into `~/.local/bin` from the rolling `nightly` prerelease (linux/amd64 or darwin/arm64). Not a versioned 0.1.0. Other platforms are refused. A missing `dango-describe` asset fails the install — it does not leave only `dango`.
 
 ## Run
 
@@ -43,11 +43,19 @@ make build
 
 `make build` is `CGO_ENABLED=0 go build -ldflags="-s -w" -o dango ./cmd/dango`.
 
-Nightly (not 0.1.0, no semver): after CI on `main`, plus 02:00 UTC and `workflow_dispatch`, the `Nightly` workflow replaces a single prerelease tag `nightly` with stripped `dango-linux-amd64` and `dango-darwin-arm64`. No darwin/amd64. PRs do not publish. `make dist` builds those locally.
+Nightly (not 0.1.0, no semver): after CI on `main`, plus 02:00 UTC and `workflow_dispatch`, the `Nightly` workflow replaces a single prerelease tag `nightly` with stripped `dango-linux-amd64`, `dango-darwin-arm64`, and one `dango-describe` script (from `scripts/dango-describe`, not per-platform). No darwin/amd64. PRs do not publish. `make dist` builds those locally.
 
 Provider comes from `dango.json` / `dango.yml` / `dango.yaml`. `--provider` overrides. Missing config file = no generated list title; the list keeps a short stack title (ticket id, or the gh title when it is already short). After first paint, the `describe` key in that local config file names the script that writes the two inspector lines for the selected stack (looked up from the launch directory, then its git root). Missing `describe` leaves that pane empty. `--repo owner/name` is live `gh`, not a remote config file. A set `--provider` may still swap a short stack title in place. `dango.json` is not a stack dump.
 
-Luna example — this repo's inspector script. Relative argv is joined to the config file's directory:
+Luna example — after `curl | bash`, `dango-describe` is on PATH (same dir as `dango`). Bare PATH command:
+
+```json
+{
+  "describe": "dango-describe"
+}
+```
+
+In this repo, the source script is `scripts/dango-describe`. Relative argv is joined to the config file's directory:
 
 ```json
 {
